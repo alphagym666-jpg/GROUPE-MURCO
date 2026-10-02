@@ -28,9 +28,6 @@ jobs:
         env:
           # Optionnel: configuration Firebase intégrée (variable de dépôt FIREBASE_CONFIG)
           VITE_FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
