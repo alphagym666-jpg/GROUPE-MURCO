@@ -155,3 +155,35 @@ table.list tr.click:hover td { background: #f7f9fc; }
 @media (min-width: 861px) {
   .hide-desktop { display: none !important; }
 }
+
+.addr { position: relative; flex: 1; min-width: 0; }
+.addr-list { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(16, 24, 40, 0.15); z-index: 30; margin-top: 4px; overflow: hidden; }
+.addr-list button { display: block; width: 100%; text-align: left; padding: 10px 12px; border: 0; background: #fff; font: inherit; font-size: 0.9rem; cursor: pointer; color: var(--text); }
+.addr-list button:hover { background: #f4f6f9; }
+.addr-by { font-size: 0.7rem; color: var(--muted); text-align: right; padding: 4px 10px; }
+.map-embed { width: 100%; height: 240px; border: 0; border-radius: 10px; margin-top: 10px; }
+.sync-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,0.1); color: #d6e0ec; margin: 0 8px 12px; }
+.sync-pill.top { background: #eef4fd; color: var(--navy); margin: 0; }
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #999; }
+.sync-dot.ok { background: #2ecc71; } .sync-dot.busy { background: var(--orange); } .sync-dot.err { background: var(--red); }
+.code-input { text-transform: uppercase; font-weight: 700; color: var(--orange-d); }
+.line-min { font-size: 0.72rem; color: #9a5d00; }
+.svc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-top: 10px; }
+.svc-grid button { text-align: left; border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 7px 9px; cursor: pointer; font: inherit; font-size: 0.8rem; }
+.svc-grid button:hover { border-color: var(--orange); background: #fffaf0; }
+.svc-grid b { color: var(--orange-d); margin-right: 4px; }
+@media (max-width: 860px) {
+  .items-table tr { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 5px !important; }
+  .items-table input { padding: 7px 5px !important; }
+  .items-table .code-input { font-size: 15px; }
+  .items-table td:first-child { grid-column: auto; }
+  .items-table td.c-desc, .items-table td.c-amt { grid-column: span 3; }
+  .items-table td.c-qty { grid-column: span 2; }
+  .items-table td.c-amt { text-align: left !important; padding-top: 8px !important; }
+  .items-table td.c-del { text-align: right; padding-top: 6px !important; }
+}
+.totals div { gap: 12px; }
+.code-input { padding-left: 8px !important; padding-right: 4px !important; letter-spacing: 0.02em; }
+.items-table input[type='number'] { min-width: 0; }
+
+.items-table textarea { field-sizing: content; }

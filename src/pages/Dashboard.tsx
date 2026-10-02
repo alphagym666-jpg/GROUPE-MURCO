@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Link, useNavigate } from 'react-router-dom';
+import { SyncBadge } from '../components/SyncBadge';
 import { db } from '../lib/db';
 import { useSettings } from '../lib/hooks';
 import { docTotals, formatDate, km, kmAllowance, money, statusClass, statusLabel, todayISO } from '../lib/utils';
@@ -30,8 +31,9 @@ export default function Dashboard() {
   const missing = [
     !s.address && 'adresse de la compagnie',
     !s.homeAddress && 'adresse de domicile (départ du journal de bord)',
-    !s.tpsNumber && 'numéro de TPS',
-    !s.tvqNumber && 'numéro de TVQ',
+    s.chargeTaxes && !s.tpsNumber && 'numéro de TPS',
+    s.chargeTaxes && !s.tvqNumber && 'numéro de TVQ',
+    !s.postalCode && 'code postal',
     !s.googleClientId && 'connexion Gmail',
   ].filter(Boolean) as string[];
 
@@ -47,8 +49,9 @@ export default function Dashboard() {
     <>
       <div className="page-head">
         <div>
-          <h1>Bonjour 👋</h1>
+          <h1>Bonjour{s.ownerName ? ` ${s.ownerName.split(' ')[0]}` : ''} 👋</h1>
           <div className="muted small">{s.companyName} — {formatDate(todayISO())}</div>
+          <div className="hide-desktop" style={{ marginTop: 6 }}><SyncBadge top /></div>
         </div>
         <div className="actions">
           <button className="btn accent" onClick={() => nav('/doc/new?type=invoice')}>+ Facture</button>

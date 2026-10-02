@@ -4,11 +4,12 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Modal } from '../components/Modal';
 import { errMsg, useToast } from '../components/Toast';
 import { db, type Trip } from '../lib/db';
-import { currentPosition, directionsLink, drivingDistance, geocode, reverseGeocode } from '../lib/geo';
+import { AddressInput } from '../components/AddressInput';
+import { currentPosition, directionsLink, drivingDistance, embedDirectionsUrl, geocode, reverseGeocode } from '../lib/geo';
 import { useSettings } from '../lib/hooks';
 import { buildLogbookPdf } from '../lib/pdf';
 import { ensureHomeGeo } from '../lib/trips';
-import { downloadBlob, formatDate, km, kmAllowance, money, toCSV, todayISO } from '../lib/utils';
+import { downloadBlob, METHOD_LABEL, formatDate, km, kmAllowance, money, toCSV, todayISO } from '../lib/utils';
 
 const SOURCE_LABEL: Record<Trip['source'], string> = { 'auto-facture': '🧾 auto', 'auto-recu': '📷 auto', manuel: '✍️' };
 
@@ -103,7 +104,7 @@ export default function Logbook() {
                   <tr key={t.id} className="click" onClick={() => setEdit(t)}>
                     <td>{t.date}</td>
                     <td>{t.toLabel}<div className="small muted">{t.reason}</div></td>
-                    <td className="hide-mobile small">{SOURCE_LABEL[t.source]}{t.distanceMethod === 'estimation' ? ' ≈' : ''}</td>
+                    <td className="hide-mobile small">{SOURCE_LABEL[t.source]}{t.distanceMethod === 'google' ? ' · Google' : t.distanceMethod === 'estimation' ? ' ≈' : ''}</td>
                     <td className="num"><strong>{t.totalKm.toFixed(1)}</strong><div className="small muted">{t.roundTrip ? 'A/R' : 'aller'}</div></td>
                   </tr>
                 ))}
@@ -112,12 +113,12 @@ export default function Logbook() {
           </div>
         )}
       </div>
-      {edit && <TripModal trip={edit} clients={clients} onClose={() => setEdit(null)} notify={notify} />}
+      {edit && <TripModal trip={edit} clients={clients} onClose={() => setEdit(null)} notify={notify} mapsKey={s.googleMapsKey} />}
     </>
   );
 }
 
-function TripModal({ trip, clients, onClose, notify }: { trip: Trip; clients: { id?: number; name: string; address: string }[]; onClose: () => void; notify: ReturnType<typeof useToast> }) {
+function TripModal({ trip, clients, onClose, notify, mapsKey }: { trip: Trip; clients: { id?: number; name: string; address: string }[]; onClose: () => void; notify: ReturnType<typeof useToast>; mapsKey: string }) {
   const [t, setT] = useState<Trip>(trip);
   const [busy, setBusy] = useState(false);
   const up = (p: Partial<Trip>) => setT((x) => {
@@ -132,11 +133,11 @@ function TripModal({ trip, clients, onClose, notify }: { trip: Trip; clients: { 
       const home = await ensureHomeGeo();
       const fromGeo = t.fromLabel.trim() && t.fromLabel !== home.label ? (await geocode(t.fromLabel))?.geo : home.geo;
       if (!fromGeo) throw new Error('Adresse de départ introuvable.');
-      const to = await geocode(t.toLabel);
-      if (!to) throw new Error('Destination introuvable. Ajoute la ville.');
-      const r = await drivingDistance(fromGeo, to.geo);
-      up({ fromGeo, toGeo: to.geo, oneWayKm: r.km, distanceMethod: r.method, fromLabel: t.fromLabel || home.label });
-      notify(`${km(r.km)} aller${r.method === 'estimation' ? ' (estimation)' : ''}`);
+      const toGeo = t.toGeo ?? (await geocode(t.toLabel))?.geo;
+      if (!toGeo) throw new Error('Destination introuvable. Ajoute la ville.');
+      const r = await drivingDistance(fromGeo, toGeo);
+      up({ fromGeo, toGeo, oneWayKm: r.km, distanceMethod: r.method, durationMin: r.durationMin, fromLabel: t.fromLabel || home.label });
+      notify(`${km(r.km)} aller${r.method === 'google' ? ' (Google Maps)' : r.method === 'estimation' ? ' (estimation)' : ''}`);
     } catch (e) {
       notify(errMsg(e), 'err');
     } finally {
@@ -151,7 +152,7 @@ function TripModal({ trip, clients, onClose, notify }: { trip: Trip; clients: { 
       const label = await reverseGeocode(g);
       const home = await ensureHomeGeo();
       const r = await drivingDistance(home.geo, g);
-      up({ toLabel: label, toGeo: g, oneWayKm: r.km, distanceMethod: r.method, fromLabel: home.label, fromGeo: home.geo });
+      up({ toLabel: label, toGeo: g, oneWayKm: r.km, distanceMethod: r.method, durationMin: r.durationMin, fromLabel: home.label, fromGeo: home.geo });
     } catch (e) {
       notify(errMsg(e), 'err');
     } finally {
@@ -191,7 +192,7 @@ function TripModal({ trip, clients, onClose, notify }: { trip: Trip; clients: { 
         <label className="field full">Départ<input value={t.fromLabel} onChange={(e) => up({ fromLabel: e.target.value, fromGeo: undefined })} /></label>
         <label className="field full">Destination
           <div className="row" style={{ flexWrap: 'nowrap' }}>
-            <input value={t.toLabel} onChange={(e) => up({ toLabel: e.target.value, toGeo: undefined })} placeholder="adresse, ville" />
+            <AddressInput value={t.toLabel} onChange={(v) => up({ toLabel: v, toGeo: undefined })} onPick={(label, geo) => up({ toLabel: label, toGeo: geo })} placeholder="adresse, ville" />
             <button className="btn" onClick={here} disabled={busy} title="Ma position actuelle">📍 Ici</button>
           </div>
         </label>
@@ -204,7 +205,10 @@ function TripModal({ trip, clients, onClose, notify }: { trip: Trip; clients: { 
       </div>
       <div className="notice ok" style={{ marginTop: 12 }}>
         Total: <strong>{km(t.totalKm)}</strong>
-        {t.toLabel && <> · <a href={directionsLink(t.fromGeo ?? t.fromLabel, t.toGeo ?? t.toLabel)} target="_blank" rel="noreferrer">voir l’itinéraire</a></>}
+        {t.durationMin ? <> · ≈ {t.durationMin} min</> : null}
+        {t.toLabel && <> · <a href={directionsLink(t.fromGeo ?? t.fromLabel, t.toGeo ?? t.toLabel)} target="_blank" rel="noreferrer">ouvrir dans Google Maps</a></>}
+        <div className="small muted">{METHOD_LABEL[t.distanceMethod]}</div>
+        {mapsKey && t.toLabel && <iframe className="map-embed" title="Trajet" loading="lazy" src={embedDirectionsUrl(mapsKey, t.fromGeo ?? t.fromLabel, t.toGeo ?? t.toLabel)} />}
         <div className="small muted">{formatDate(t.date)}</div>
       </div>
       <div className="row" style={{ marginTop: 12 }}>

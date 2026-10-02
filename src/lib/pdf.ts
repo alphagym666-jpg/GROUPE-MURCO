@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Client, Doc, Settings, Trip, Expense } from './db';
-import { companyAddressLines, docTotals, formatDate, km, kmAllowance, money } from './utils';
+import { companyAddressLines, docTotals, lineAmount, lineHitsMinimum, formatDate, km, kmAllowance, money } from './utils';
 
 const NAVY: [number, number, number] = [15, 42, 68];
 const ORANGE: [number, number, number] = [245, 166, 35];
@@ -46,6 +46,7 @@ function header(pdf: jsPDF, s: Settings, title: string) {
   const info = [
     ...companyAddressLines(s),
     [s.phone, s.email].filter(Boolean).join('  |  '),
+    s.ownerName,
     s.website,
     s.rbqNumber ? `Licence RBQ: ${s.rbqNumber}` : '',
   ].filter(Boolean);
@@ -71,7 +72,7 @@ function footer(pdf: jsPDF, s: Settings) {
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(7.5);
     pdf.setTextColor(120);
-    const taxes = [s.neq && `NEQ: ${s.neq}`, s.tpsNumber && `TPS: ${s.tpsNumber}`, s.tvqNumber && `TVQ: ${s.tvqNumber}`]
+    const taxes = [s.neq && `NEQ: ${s.neq}`, s.chargeTaxes && s.tpsNumber && `TPS: ${s.tpsNumber}`, s.chargeTaxes && s.tvqNumber && `TVQ: ${s.tvqNumber}`]
       .filter(Boolean)
       .join('   ');
     pdf.text(t(`${s.legalName || s.companyName}   ${taxes}`), 15, H - 8);
@@ -91,7 +92,7 @@ export function buildDocPdf(doc: Doc, client: Client | undefined, s: Settings): 
   const meta: [string, string][] = [
     [isInvoice ? 'No de facture' : 'No de soumission', doc.number],
     ['Date', formatDate(doc.date)],
-    [isInvoice ? 'Échéance' : 'Valide jusqu’au', formatDate(doc.dueDate)],
+    [isInvoice ? 'Échéance' : 'Valide jusqu’au', isInvoice && (!doc.dueDate || doc.dueDate <= doc.date) ? 'Sur réception' : formatDate(doc.dueDate)],
   ];
   if (doc.jobDate) meta.push(['Date des travaux', formatDate(doc.jobDate)]);
   meta.forEach(([k, v], i) => {
@@ -137,16 +138,31 @@ export function buildDocPdf(doc: Doc, client: Client | undefined, s: Settings): 
     y += wrapped.length * 5 + 2;
   }
 
+  const items = doc.items.filter((it) => it.description.trim() || it.unitPrice || it.code);
+  const qty = (n: number) => t(new Intl.NumberFormat('fr-CA', { maximumFractionDigits: 2 }).format(n || 0));
   autoTable(pdf, {
     startY: y + 2,
-    head: [['Description', 'Qté', 'Prix unitaire', 'Montant']],
-    body: doc.items.map((it) => [t(it.description), String(it.quantity), m(it.unitPrice), m(it.quantity * it.unitPrice)]),
+    head: [['Code', 'Description', 'Qté', 'Unité', 'Prix / unité', 'Montant']],
+    body: items.map((it) => [
+      t(it.code ?? ''),
+      t(it.description) + (lineHitsMinimum(it) ? `\n(minimum ${m(it.minimum ?? 0)})` : ''),
+      qty(it.quantity),
+      t(it.unit ?? ''),
+      m(it.unitPrice),
+      m(lineAmount(it)),
+    ]),
     theme: 'striped',
     headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold' },
     styles: { fontSize: 9, cellPadding: 2.5 },
-    columnStyles: { 1: { halign: 'right', cellWidth: 18 }, 2: { halign: 'right', cellWidth: 32 }, 3: { halign: 'right', cellWidth: 32 } },
+    columnStyles: {
+      0: { cellWidth: 15, fontStyle: 'bold', textColor: [217, 138, 11] },
+      2: { halign: 'right', cellWidth: 16 },
+      3: { cellWidth: 18 },
+      4: { halign: 'right', cellWidth: 26 },
+      5: { halign: 'right', cellWidth: 28 },
+    },
     didParseCell: (h) => {
-      if (h.section === 'head' && h.column.index > 0) h.cell.styles.halign = 'right';
+      if (h.section === 'head' && [2, 4, 5].includes(h.column.index)) h.cell.styles.halign = 'right';
     },
     margin: { left: 15, right: 15, bottom: 20 },
   });
@@ -158,14 +174,18 @@ export function buildDocPdf(doc: Doc, client: Client | undefined, s: Settings): 
     pdf.addPage();
     ty = 20;
   }
-  const rows: [string, string, boolean?][] = [['Sous-total', m(tot.subtotal)]];
+  const rows: [string, string, boolean?][] = [];
+  if (tot.discount > 0) {
+    rows.push(['Sous-total', m(tot.lines)]);
+    rows.push(['Rabais', m(-tot.discount)]);
+  }
+  if (tot.discount > 0 || doc.applyTps || doc.applyTvq) rows.push([tot.discount > 0 ? 'Après rabais' : 'Sous-total', m(tot.subtotal)]);
   if (doc.applyTps) rows.push([`TPS (${pct(s.tpsRate)})`, m(tot.tps)]);
   if (doc.applyTvq) rows.push([`TVQ (${pct(s.tvqRate)})`, m(tot.tvq)]);
   rows.push(['TOTAL', m(tot.total), true]);
-  if (isInvoice && tot.paid > 0) {
-    rows.push(['Payé', m(-tot.paid)]);
-    rows.push(['SOLDE DÛ', m(tot.balance), true]);
-  }
+  if (tot.deposit > 0) rows.push(['Dépôt reçu', m(-tot.deposit)]);
+  if (isInvoice && tot.paid - tot.deposit > 0) rows.push(['Paiements reçus', m(-(tot.paid - tot.deposit))]);
+  if (tot.paid > 0) rows.push([isInvoice ? 'SOLDE À PAYER' : 'SOLDE', m(tot.balance), true]);
   pdf.setFontSize(10);
   rows.forEach(([k, v, bold]) => {
     if (bold) {
@@ -185,7 +205,11 @@ export function buildDocPdf(doc: Doc, client: Client | undefined, s: Settings): 
   ty += 4;
   pdf.setTextColor(40);
   pdf.setFontSize(8.5);
-  const notes = [doc.notes, isInvoice ? s.paymentInstructions : ''].filter((x) => x && x.trim());
+  const notes = [
+    doc.notes,
+    isInvoice && s.paymentInstructions ? `Modes de paiement : ${s.paymentInstructions}` : '',
+    isInvoice ? s.invoiceConditions : '',
+  ].filter((x) => x && x.trim());
   notes.forEach((n) => {
     const wrapped = pdf.splitTextToSize(t(n), W - 30) as string[];
     pdf.setFont('helvetica', 'normal');

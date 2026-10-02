@@ -48,12 +48,14 @@ export async function syncTripForDoc(docId: number, opts: { force?: boolean } = 
   // Si l'utilisateur a corrigé les km à la main, on respecte sa valeur.
   let oneWayKm = existing?.oneWayKm ?? 0;
   let method: Trip['distanceMethod'] = existing?.distanceMethod ?? 'route';
+  let durationMin = existing?.durationMin;
   const destChanged =
     !existing?.toGeo || existing.toGeo.lat !== dest.lat || existing.toGeo.lon !== dest.lon || existing.fromLabel !== home.label;
-  if (!existing || (existing.distanceMethod !== 'manuel' && destChanged)) {
+  if (!existing || opts.force || (existing.distanceMethod !== 'manuel' && destChanged)) {
     const r = await drivingDistance(home.geo, dest);
     oneWayKm = r.km;
     method = r.method;
+    durationMin = r.durationMin;
   }
   const roundTrip = existing?.roundTrip ?? s.autoTripRoundTrip;
   const trip: Trip = {
@@ -70,6 +72,7 @@ export async function syncTripForDoc(docId: number, opts: { force?: boolean } = 
     clientId: doc.clientId,
     docId,
     distanceMethod: method,
+    durationMin,
   };
   const id = await db.trips.put(trip);
   if (doc.tripId !== id) await db.docs.update(docId, { tripId: id });

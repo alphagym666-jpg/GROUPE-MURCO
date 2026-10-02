@@ -13,11 +13,14 @@ import ExpenseEditor from './pages/ExpenseEditor';
 import GmailPage from './pages/GmailPage';
 import Accountant from './pages/Accountant';
 import SettingsPage from './pages/SettingsPage';
+import Services from './pages/Services';
+import { SyncBadge } from './components/SyncBadge';
 
 const NAV = [
   { to: '/', label: 'Tableau de bord', short: 'Accueil', ico: '🏠', end: true },
   { to: '/factures', label: 'Factures', short: 'Factures', ico: '🧾' },
   { to: '/soumissions', label: 'Soumissions', short: 'Soumiss.', ico: '📝' },
+  { to: '/codes', label: 'Codes et prix', short: 'Codes', ico: '🏷️' },
   { to: '/clients', label: 'Clients', short: 'Clients', ico: '👥' },
   { to: '/km', label: 'Journal de bord (km)', short: 'Km', ico: '🚗' },
   { to: '/depenses', label: 'Reçus et dépenses', short: 'Reçus', ico: '📷' },
@@ -44,6 +47,7 @@ export default function App() {
               <small>Gestion d’entreprise</small>
             </div>
           </div>
+          <SyncBadge />
           <nav className="nav">
             {NAV.map((n) => (
               <NavLink key={n.to} to={n.to} end={n.end}>
@@ -59,6 +63,7 @@ export default function App() {
             <Route path="/factures" element={<DocList type="invoice" />} />
             <Route path="/soumissions" element={<DocList type="quote" />} />
             <Route path="/doc/:id" element={<DocEditor />} />
+            <Route path="/codes" element={<Services />} />
             <Route path="/clients" element={<Clients />} />
             <Route path="/clients/:id" element={<ClientDetail />} />
             <Route path="/km" element={<Logbook />} />

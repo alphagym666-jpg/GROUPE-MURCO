@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { AddressInput } from '../components/AddressInput';
 import { errMsg, useToast } from '../components/Toast';
 import { db, EXPENSE_CATEGORIES, type Expense } from '../lib/db';
 import { currentPosition, drivingDistance, geocode, mapsLink, reverseGeocode } from '../lib/geo';
@@ -191,7 +192,7 @@ export default function ExpenseEditor() {
 
           <h3 style={{ marginTop: 18 }}>📍 Où (pour calculer les km de chez toi)</h3>
           <div className="row" style={{ flexWrap: 'nowrap' }}>
-            <input value={e.locationLabel} placeholder="ex.: Petro-Canada, boul. Labelle, Blainville" onChange={(ev) => up({ locationLabel: ev.target.value, geo: undefined, kmFromHome: undefined })} />
+            <AddressInput value={e.locationLabel} placeholder="ex.: Petro-Canada, Sherrington" onChange={(v) => up({ locationLabel: v, geo: undefined, kmFromHome: undefined })} onPick={async (label, geo) => { setBusy('Calcul des km…'); try { const n = await locate(geo, 'adresse', e); setE({ ...n, locationLabel: label }); } finally { setBusy(''); } }} />
             <button className="btn" onClick={useAddress} disabled={!!busy}>🔎</button>
           </div>
           <div className="row" style={{ marginTop: 8 }}>

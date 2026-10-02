@@ -35,12 +35,12 @@ export async function buildAccountantZip(o: ExportOptions): Promise<{ blob: Blob
 
   // Factures
   const fInv = root.folder('01_Factures')!;
-  const invRows: unknown[][] = [['No', 'Date', 'Échéance', 'Client', 'Description', 'Lieu', 'Sous-total', 'TPS', 'TVQ', 'Total', 'Payé', 'Solde', 'Statut']];
+  const invRows: unknown[][] = [['No', 'Date', 'Échéance', 'Client', 'Description', 'Lieu', 'Montant des lignes', 'Rabais', 'Sous-total', 'TPS', 'TVQ', 'Total', 'Dépôt', 'Payé (incl. dépôt)', 'Solde', 'Statut', 'Codes']];
   for (const d of invoices) {
     const c = clients.get(d.clientId);
     fInv.file(docFileName(d, c), docPdfBlob(d, c, s));
     const tt = docTotals(d, s);
-    invRows.push([d.number, d.date, d.dueDate, c?.name, d.title, d.jobAddress, tt.subtotal, tt.tps, tt.tvq, tt.total, tt.paid, tt.balance, STATUS_LABELS[d.status]]);
+    invRows.push([d.number, d.date, d.dueDate, c?.name, d.title, d.jobAddress, tt.lines, tt.discount, tt.subtotal, tt.tps, tt.tvq, tt.total, tt.deposit, tt.paid, tt.balance, STATUS_LABELS[d.status], d.items.map((i) => i.code).filter(Boolean).join(' ')]);
   }
   root.file('Factures.csv', toCSV(invRows));
 
@@ -101,6 +101,7 @@ export async function buildBackup(): Promise<Blob> {
     trips: await db.trips.toArray(),
     expenses: expNoBlob,
     emails: await db.emails.toArray(),
+    services: await db.services.toArray(),
   };
   zip.file('data.json', JSON.stringify(data));
   return zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
@@ -121,8 +122,12 @@ export async function restoreBackup(file: Blob): Promise<void> {
       return rest;
     }),
   );
-  await db.transaction('rw', [db.settings, db.clients, db.docs, db.trips, db.expenses, db.emails], async () => {
+  await db.transaction('rw', [db.settings, db.clients, db.docs, db.trips, db.expenses, db.emails, db.services], async () => {
     await Promise.all([db.settings.clear(), db.clients.clear(), db.docs.clear(), db.trips.clear(), db.expenses.clear(), db.emails.clear()]);
+    if (data.services?.length) {
+      await db.services.clear();
+      await db.services.bulkPut(data.services);
+    }
     await db.settings.bulkPut(data.settings ?? []);
     await db.clients.bulkPut(data.clients ?? []);
     await db.docs.bulkPut(data.docs ?? []);

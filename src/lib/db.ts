@@ -5,9 +5,15 @@ export interface GeoPoint {
   lon: number;
 }
 
-export interface Settings {
+/** Champ technique de synchronisation: moment de la dernière modification (ms). */
+interface Synced {
+  _u?: number;
+}
+
+export interface Settings extends Synced {
   id: 'main';
   // Compagnie
+  ownerName: string;
   companyName: string;
   legalName: string;
   address: string;
@@ -26,6 +32,7 @@ export interface Settings {
   homeAddress: string;
   homeGeo?: GeoPoint;
   // Taxes
+  chargeTaxes: boolean;
   tpsRate: number;
   tvqRate: number;
   // Numérotation
@@ -38,12 +45,15 @@ export interface Settings {
   invoiceNotes: string;
   quoteNotes: string;
   paymentInstructions: string;
+  invoiceConditions: string;
   // Journal de bord
   autoTripFromInvoices: boolean;
   autoTripRoundTrip: boolean;
   kmRateFirst5000: number;
   kmRateAfter5000: number;
   vehicle: string;
+  // Google Maps (distances et adresses)
+  googleMapsKey: string;
   // Gmail / Comptable
   googleClientId: string;
   accountantName: string;
@@ -51,7 +61,7 @@ export interface Settings {
   emailSignature: string;
 }
 
-export interface Client {
+export interface Client extends Synced {
   id?: number;
   name: string;
   contact: string;
@@ -64,10 +74,34 @@ export interface Client {
 }
 
 export interface LineItem {
+  code?: string;
   description: string;
+  unit?: string;
   quantity: number;
   unitPrice: number;
+  minimum?: number; // montant minimum de la ligne
+  calc?: CalcRow[]; // mesures du calculateur (pi², pi lin)
 }
+
+export interface CalcRow {
+  label: string;
+  a: number; // longueur
+  b: number; // hauteur / largeur
+}
+
+/** Code de job / liste de prix (ex.: NDG = Nettoyage de gouttières, 1,50 $/pi lin, minimum 150 $). */
+export interface Service extends Synced {
+  id?: number;
+  code: string;
+  name: string;
+  unit: string;
+  price: number;
+  minimum: number;
+  notes: string;
+  order: number;
+}
+
+export const UNITS = ['pi lin', 'pi²', 'fenêtre', 'sac', 'heure', 'forfait', 'unité', 'jour', 'm²', 'porte'] as const;
 
 export type DocType = 'invoice' | 'quote';
 export type DocStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'accepted' | 'refused' | 'cancelled';
@@ -78,7 +112,7 @@ export interface Payment {
   method: string;
 }
 
-export interface Doc {
+export interface Doc extends Synced {
   id?: number;
   type: DocType;
   number: string;
@@ -92,6 +126,8 @@ export interface Doc {
   items: LineItem[];
   applyTps: boolean;
   applyTvq: boolean;
+  discount?: number; // rabais ($, avant taxes)
+  deposit?: number; // dépôt déjà reçu ($)
   notes: string;
   status: DocStatus;
   payments: Payment[];
@@ -103,7 +139,7 @@ export interface Doc {
   updatedAt: string;
 }
 
-export interface Trip {
+export interface Trip extends Synced {
   id?: number;
   date: string;
   fromLabel: string;
@@ -118,7 +154,8 @@ export interface Trip {
   docId?: number;
   expenseId?: number;
   source: 'auto-facture' | 'auto-recu' | 'manuel';
-  distanceMethod: 'route' | 'estimation' | 'manuel';
+  distanceMethod: 'google' | 'route' | 'estimation' | 'manuel';
+  durationMin?: number;
   createdAt: string;
 }
 
@@ -138,7 +175,7 @@ export const EXPENSE_CATEGORIES = [
   'Autre',
 ] as const;
 
-export interface Expense {
+export interface Expense extends Synced {
   id?: number;
   date: string;
   vendor: string;
@@ -159,10 +196,11 @@ export interface Expense {
   clientId?: number;
   docId?: number;
   tripId?: number;
+  photoSig?: string; // empreinte de la photo (synchronisation)
   createdAt: string;
 }
 
-export interface EmailLog {
+export interface EmailLog extends Synced {
   id?: number;
   date: string;
   to: string;
@@ -180,59 +218,176 @@ class MurcoDB extends Dexie {
   trips!: Table<Trip, number>;
   expenses!: Table<Expense, number>;
   emails!: Table<EmailLog, number>;
+  services!: Table<Service, number>;
 
   constructor() {
-    super('murco-gestion');
+    // Identifiants uniques globaux (pas d'auto-incrément) pour synchroniser plusieurs appareils.
+    super('murco');
     this.version(1).stores({
       settings: 'id',
-      clients: '++id, name, email',
-      docs: '++id, type, number, clientId, date, status, [type+date]',
-      trips: '++id, date, docId, expenseId, clientId',
-      expenses: '++id, date, category, docId, clientId',
-      emails: '++id, date, clientId, docId',
+      clients: 'id, name, email',
+      docs: 'id, type, number, clientId, date, status',
+      trips: 'id, date, docId, expenseId, clientId',
+      expenses: 'id, date, category, docId, clientId',
+      emails: 'id, date, clientId, docId',
+      services: 'id, code, order',
     });
   }
 }
 
 export const db = new MurcoDB();
 
+export const SYNC_TABLES = ['settings', 'clients', 'docs', 'trips', 'expenses', 'emails', 'services'] as const;
+export type SyncTable = (typeof SYNC_TABLES)[number];
+
+let lastId = 0;
+/** Identifiant numérique unique (horodatage + aléatoire), sans collision entre appareils. */
+export function genId(): number {
+  let id = Date.now() * 1024 + Math.floor(Math.random() * 1024);
+  if (id <= lastId) id = lastId + 1;
+  lastId = id;
+  return id;
+}
+
+export interface LocalChange {
+  table: SyncTable;
+  type: 'put' | 'delete';
+  keys: unknown[];
+  values?: unknown[];
+}
+type ChangeListener = (c: LocalChange) => void;
+const listeners = new Set<ChangeListener>();
+export function onLocalChange(fn: ChangeListener): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+/** Marque une transaction comme venant du nuage (pas d'horodatage, pas de renvoi). */
+export const REMOTE_FLAG = '__murcoRemote';
+
+/** Exécute des écritures sans horodatage ni renvoi au nuage (données venant du nuage). */
+export function remoteTx<T>(tables: Table[], fn: () => Promise<T>): Promise<T> {
+  return db.transaction('rw', tables, async (tx) => {
+    (tx.idbtrans as unknown as Record<string, unknown>)[REMOTE_FLAG] = true;
+    return fn();
+  });
+}
+
+// Intercepte toutes les écritures: attribue l'id, horodate (_u) et avertit la synchronisation.
+db.use({
+  stack: 'dbcore',
+  name: 'murco-sync',
+  create(down) {
+    return {
+      ...down,
+      table(name) {
+        const t = down.table(name);
+        if (!(SYNC_TABLES as readonly string[]).includes(name)) return t;
+        return {
+          ...t,
+          mutate(req) {
+            const remote = !!(req.trans as unknown as Record<string, unknown>)[REMOTE_FLAG];
+            if (!remote && (req.type === 'add' || req.type === 'put')) {
+              const now = Date.now();
+              const values = req.values.map((v) => ({ ...(v as object), id: (v as { id?: unknown }).id ?? genId(), _u: now }));
+              req = { ...req, values } as typeof req;
+              if (req.type === 'put' && req.changeSpec) req = { ...req, changeSpec: { ...req.changeSpec, _u: now } };
+            }
+            return t.mutate(req).then((res) => {
+              if (!remote && listeners.size) {
+                let change: LocalChange | null = null;
+                if (req.type === 'add' || req.type === 'put') {
+                  const keys = req.values.map((v) => (v as { id: unknown }).id);
+                  change = { table: name as SyncTable, type: 'put', keys, values: req.values as unknown[] };
+                } else if (req.type === 'delete') {
+                  change = { table: name as SyncTable, type: 'delete', keys: req.keys as unknown[] };
+                }
+                // Hors de la transaction en cours (la synchro fait ses propres écritures)
+                if (change) setTimeout(() => listeners.forEach((fn) => fn(change)), 0);
+              }
+              return res;
+            });
+          },
+        };
+      },
+    };
+  },
+});
+
 export const DEFAULT_SETTINGS: Settings = {
   id: 'main',
-  companyName: 'Groupe Murco Inc.',
-  legalName: 'Groupe Murco Inc.',
-  address: '',
-  city: '',
+  ownerName: 'Samuel Michea',
+  companyName: 'Groupe Murco',
+  legalName: '9568-5590 Québec inc.',
+  address: '16, rue Fortin',
+  city: 'Sherrington',
   province: 'QC',
   postalCode: '',
-  phone: '',
-  email: '',
+  phone: '514-232-1837',
+  email: 'info@groupemurco.com',
   website: '',
   neq: '',
   tpsNumber: '',
   tvqNumber: '',
   rbqNumber: '',
-  homeAddress: '',
+  homeAddress: '16, rue Fortin, Sherrington, QC',
+  chargeTaxes: false,
   tpsRate: 5,
   tvqRate: 9.975,
   invoicePrefix: 'F-',
   nextInvoiceNumber: 1001,
   quotePrefix: 'S-',
   nextQuoteNumber: 1001,
-  paymentTermsDays: 30,
+  paymentTermsDays: 0,
   quoteValidityDays: 30,
-  invoiceNotes: 'Merci de votre confiance!',
+  invoiceNotes: 'Merci de votre confiance !',
   quoteNotes: 'Cette soumission est valide 30 jours. Les travaux débuteront à la réception de votre acceptation.',
-  paymentInstructions: 'Paiement par virement Interac, chèque ou comptant.',
+  paymentInstructions: 'Virement Interac à info@groupemurco.com, comptant ou chèque.',
+  invoiceConditions: 'Paiement dû selon l’échéance indiquée. Chèque libellé à l’ordre de 9568-5590 Québec inc.',
   autoTripFromInvoices: true,
   autoTripRoundTrip: true,
   kmRateFirst5000: 0.72,
   kmRateAfter5000: 0.66,
   vehicle: '',
+  googleMapsKey: '',
   googleClientId: '',
   accountantName: '',
   accountantEmail: '',
-  emailSignature: 'Groupe Murco Inc.',
+  emailSignature: 'Samuel Michea\nGroupe Murco',
 };
+
+/** Liste de prix de départ (reprise de ton chiffrier). */
+export const DEFAULT_SERVICES: Omit<Service, 'id'>[] = [
+  { code: 'NDG', name: 'Nettoyage de gouttières', unit: 'pi lin', price: 1.5, minimum: 150, notes: 'Vider les feuilles, enlever la boue, rincer les descentes.' },
+  { code: 'PGM', name: 'Protège-gouttières — matériel', unit: 'pi lin', price: 4.5, minimum: 0, notes: 'Grillage en aluminium. Ton coût + ta marge.' },
+  { code: 'PGI', name: 'Protège-gouttières — installation', unit: 'pi lin', price: 4, minimum: 0, notes: 'Même nombre de pi lin que le matériel.' },
+  { code: 'LAP', name: 'Lavage à pression — revêtement', unit: 'pi²', price: 0.3, minimum: 200, notes: 'Vinyle, alu, brique. Pi² = longueur des murs × hauteur.' },
+  { code: 'LVE', name: 'Lavage de vitres extérieures', unit: 'fenêtre', price: 15, minimum: 100, notes: 'Nombre de fenêtres.' },
+  { code: 'SUP', name: 'Supplément hauteur (2e / 3e étage)', unit: 'fenêtre', price: 5, minimum: 0, notes: 'Nb de fenêtres en hauteur.' },
+  { code: 'RAM', name: 'Ramassage de feuilles / fermeture de terrain', unit: 'pi²', price: 0.04, minimum: 125, notes: 'Superficie du terrain.' },
+  { code: 'SAC', name: 'Sacs de feuilles (fourniture + disposition)', unit: 'sac', price: 3, minimum: 0, notes: '' },
+  { code: 'HR', name: 'Main-d’œuvre à l’heure', unit: 'heure', price: 55, minimum: 0, notes: 'Extras.' },
+  { code: 'DEP', name: 'Frais de déplacement', unit: 'forfait', price: 25, minimum: 0, notes: 'Clients plus loin.' },
+].map((x, i) => ({ ...x, order: i }));
+
+/** Ajoute la liste de prix de départ si elle est vide (premier démarrage). */
+export async function seedServices(): Promise<void> {
+  try {
+    if (localStorage.getItem('murco.seeded')) return;
+  } catch {
+    /* ignore */
+  }
+  // Identifiants fixes (1, 2, 3…) : le même code créé sur 2 appareils ne fait pas de doublon.
+  // _u = 0 : n'écrase jamais une liste déjà modifiée sur un autre appareil.
+  if ((await db.services.count()) === 0) {
+    await remoteTx([db.services], () => db.services.bulkPut(DEFAULT_SERVICES.map((x, i) => ({ ...x, id: i + 1, _u: 0 }))));
+  }
+  try {
+    localStorage.setItem('murco.seeded', '1');
+  } catch {
+    /* ignore */
+  }
+}
 
 export async function getSettings(): Promise<Settings> {
   const s = await db.settings.get('main');

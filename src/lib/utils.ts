@@ -1,4 +1,4 @@
-import type { Doc, DocStatus, Settings } from './db';
+import type { Doc, DocStatus, LineItem, Settings } from './db';
 
 export const money = (n: number) =>
   new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'CAD' }).format(Number.isFinite(n) ? n : 0);
@@ -33,21 +33,43 @@ export function formatDate(iso: string): string {
 }
 
 export interface Totals {
-  subtotal: number;
+  lines: number; // somme des lignes
+  discount: number;
+  subtotal: number; // après rabais, avant taxes
   tps: number;
   tvq: number;
   total: number;
-  paid: number;
+  deposit: number;
+  paid: number; // dépôt + paiements
   balance: number;
 }
 
-export function docTotals(doc: Pick<Doc, 'items' | 'applyTps' | 'applyTvq' | 'payments'>, s: Pick<Settings, 'tpsRate' | 'tvqRate'>): Totals {
-  const subtotal = round2(doc.items.reduce((sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0), 0));
+/** Montant d'une ligne: quantité × prix, avec le minimum par ligne s'il y en a un. */
+export function lineAmount(it: Pick<LineItem, 'quantity' | 'unitPrice' | 'minimum'>): number {
+  const q = Number(it.quantity) || 0;
+  const raw = q * (Number(it.unitPrice) || 0);
+  if (q > 0 && it.minimum && raw < it.minimum) return round2(it.minimum);
+  return round2(raw);
+}
+
+export function lineHitsMinimum(it: Pick<LineItem, 'quantity' | 'unitPrice' | 'minimum'>): boolean {
+  const q = Number(it.quantity) || 0;
+  return q > 0 && !!it.minimum && q * (Number(it.unitPrice) || 0) < it.minimum;
+}
+
+export function docTotals(
+  doc: Pick<Doc, 'items' | 'applyTps' | 'applyTvq' | 'payments' | 'discount' | 'deposit'>,
+  s: Pick<Settings, 'tpsRate' | 'tvqRate'>,
+): Totals {
+  const lines = round2(doc.items.reduce((sum, it) => sum + lineAmount(it), 0));
+  const discount = round2(Math.min(Number(doc.discount) || 0, lines));
+  const subtotal = round2(lines - discount);
   const tps = doc.applyTps ? round2((subtotal * s.tpsRate) / 100) : 0;
   const tvq = doc.applyTvq ? round2((subtotal * s.tvqRate) / 100) : 0;
   const total = round2(subtotal + tps + tvq);
-  const paid = round2((doc.payments ?? []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0));
-  return { subtotal, tps, tvq, total, paid, balance: round2(total - paid) };
+  const deposit = round2(Number(doc.deposit) || 0);
+  const paid = round2(deposit + (doc.payments ?? []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0));
+  return { lines, discount, subtotal, tps, tvq, total, deposit, paid, balance: round2(total - paid) };
 }
 
 export const STATUS_LABELS: Record<DocStatus, string> = {
@@ -140,3 +162,11 @@ export function kmAllowance(totalKm: number, s: Pick<Settings, 'kmRateFirst5000'
   const rest = Math.max(0, totalKm - 5000);
   return round2(first * s.kmRateFirst5000 + rest * s.kmRateAfter5000);
 }
+
+/** Origine de la distance d'un déplacement. */
+export const METHOD_LABEL: Record<string, string> = {
+  google: 'Distance Google Maps',
+  route: 'Distance routière (OpenStreetMap)',
+  manuel: 'Km entrés manuellement',
+  estimation: 'Estimation (service de routes indisponible)',
+};

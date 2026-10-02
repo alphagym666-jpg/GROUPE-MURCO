@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { errMsg, useToast } from '../components/Toast';
 import { getSettings, saveSettings, type Settings } from '../lib/db';
 import { buildBackup, restoreBackup } from '../lib/exportZip';
-import { geocode } from '../lib/geo';
+import { AddressInput } from '../components/AddressInput';
+import { drivingDistance, geocode, mapsLastError } from '../lib/geo';
+import { configFromLink, deviceLink, getFirebaseConfig, parseFirebaseConfig, resetPassword, saveFirebaseConfig, signInEmail, signInGoogle, signOutSync, useSyncState } from '../lib/sync';
+import { useSearchParams } from 'react-router-dom';
 import { connectGmail, isGmailConnected } from '../lib/gmail';
 import { downloadBlob, todayISO } from '../lib/utils';
 
@@ -19,9 +22,10 @@ async function logoToPng(file: File): Promise<string> {
 export default function SettingsPage() {
   const notify = useToast();
   const [s, setS] = useState<Settings | null>(null);
+  const [orig, setOrig] = useState<Settings | null>(null);
   const [homeCheck, setHomeCheck] = useState('');
   const restoreRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { getSettings().then(setS); }, []);
+  useEffect(() => { getSettings().then((x) => { setS(x); setOrig(x); }); }, []);
   if (!s) return null;
 
   const up = (p: Partial<Settings>) => setS({ ...s, ...p });
@@ -34,11 +38,16 @@ export default function SettingsPage() {
   );
 
   const save = async () => {
-    const before = await getSettings();
-    const patch = { ...s };
-    if (patch.homeAddress !== before.homeAddress) patch.homeGeo = undefined;
+    // N'enregistre que ce qui a changé (les autres champs ont pu être modifiés sur un autre appareil)
+    const patch: Partial<Settings> = {};
+    (Object.keys(s) as (keyof Settings)[]).forEach((k) => {
+      if (JSON.stringify(s[k]) !== JSON.stringify(orig?.[k])) (patch as Record<string, unknown>)[k] = s[k];
+    });
+    if ('homeAddress' in patch && !('homeGeo' in patch)) patch.homeGeo = undefined;
     await saveSettings(patch);
-    setS(patch);
+    const fresh = await getSettings();
+    setS(fresh);
+    setOrig(fresh);
     notify('Paramètres enregistrés ✔');
   };
 
@@ -75,8 +84,9 @@ export default function SettingsPage() {
           {s.logo && <button className="btn small danger" onClick={() => up({ logo: undefined })}>Retirer</button>}
         </div>
         <div className="form-grid">
+          {txt('ownerName', 'Ton nom')}
           {txt('companyName', 'Nom affiché')}
-          {txt('legalName', 'Raison sociale')}
+          {txt('legalName', 'Nom légal (bas de facture)')}
           {txt('address', 'Adresse', { full: true })}
           {txt('city', 'Ville')}
           {txt('province', 'Province')}
@@ -85,8 +95,8 @@ export default function SettingsPage() {
           {txt('email', 'Courriel', { type: 'email' })}
           {txt('website', 'Site web')}
           {txt('neq', 'NEQ')}
-          {txt('tpsNumber', 'No TPS', { placeholder: '123456789 RT0001' })}
-          {txt('tvqNumber', 'No TVQ', { placeholder: '1234567890 TQ0001' })}
+          {txt('tpsNumber', 'No TPS (laisse vide si pas inscrit)', { placeholder: '123456789 RT0001' })}
+          {txt('tvqNumber', 'No TVQ (laisse vide si pas inscrit)', { placeholder: '1234567890 TQ0001' })}
           {txt('rbqNumber', 'Licence RBQ (si applicable)')}
         </div>
       </div>
@@ -96,7 +106,7 @@ export default function SettingsPage() {
         <div className="form-grid">
           <label className="field full">Adresse du domicile
             <div className="row" style={{ flexWrap: 'nowrap' }}>
-              <input value={s.homeAddress} onChange={(e) => up({ homeAddress: e.target.value, homeGeo: undefined })} placeholder="ex.: 45 rue des Érables, Mirabel, QC J7J 1A1" />
+              <AddressInput value={s.homeAddress} onChange={(v) => up({ homeAddress: v, homeGeo: undefined })} onPick={(label, geo) => { up({ homeAddress: label, homeGeo: geo }); setHomeCheck(`✅ ${label}`); }} placeholder="ex.: 16, rue Fortin, Sherrington, QC" />
               <button className="btn" onClick={checkHome}>Vérifier</button>
             </div>
           </label>
@@ -113,6 +123,10 @@ export default function SettingsPage() {
 
       <div className="card">
         <h2>🧾 Taxes, numérotation et textes</h2>
+        <label className="check" style={{ marginBottom: 6 }}>
+          <input type="checkbox" checked={s.chargeTaxes} onChange={(e) => up({ chargeTaxes: e.target.checked })} /> Je charge la TPS/TVQ
+        </label>
+        <div className="small muted" style={{ marginBottom: 12 }}>« Oui » seulement si inscrit. Obligatoire dès 30 000 $ de revenus sur 4 trimestres. S’applique aux nouvelles factures.</div>
         <div className="form-grid">
           {txt('tpsRate', 'TPS %', { type: 'number' })}
           {txt('tvqRate', 'TVQ %', { type: 'number' })}
@@ -120,14 +134,19 @@ export default function SettingsPage() {
           {txt('nextInvoiceNumber', 'Prochain no de facture', { type: 'number' })}
           {txt('quotePrefix', 'Préfixe soumissions')}
           {txt('nextQuoteNumber', 'Prochain no de soumission', { type: 'number' })}
-          {txt('paymentTermsDays', 'Délai de paiement (jours)', { type: 'number' })}
+          {txt('paymentTermsDays', 'Délai de paiement (jours, 0 = sur réception)', { type: 'number' })}
           {txt('quoteValidityDays', 'Validité soumission (jours)', { type: 'number' })}
           <label className="field full">Notes par défaut — factures<textarea value={s.invoiceNotes} onChange={(e) => up({ invoiceNotes: e.target.value })} /></label>
           <label className="field full">Notes par défaut — soumissions<textarea value={s.quoteNotes} onChange={(e) => up({ quoteNotes: e.target.value })} /></label>
-          <label className="field full">Instructions de paiement<textarea value={s.paymentInstructions} onChange={(e) => up({ paymentInstructions: e.target.value })} /></label>
+          <label className="field full">Modes de paiement<textarea value={s.paymentInstructions} onChange={(e) => up({ paymentInstructions: e.target.value })} /></label>
+          <label className="field full">Conditions (bas de facture)<textarea value={s.invoiceConditions} onChange={(e) => up({ invoiceConditions: e.target.value })} /></label>
           <label className="field full">Signature des courriels<textarea value={s.emailSignature} onChange={(e) => up({ emailSignature: e.target.value })} /></label>
         </div>
       </div>
+
+      <MapsSection s={s} up={up} />
+
+      <SyncSection />
 
       <div className="card">
         <h2>✉️ Gmail</h2>
@@ -184,5 +203,162 @@ export default function SettingsPage() {
       </div>
       <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn accent" onClick={save}>💾 Enregistrer</button></div>
     </>
+  );
+}
+
+function MapsSection({ s, up }: { s: Settings; up: (p: Partial<Settings>) => void }) {
+  const notify = useToast();
+  const [result, setResult] = useState('');
+  const test = async () => {
+    if (!s.googleMapsKey.trim()) return notify('Colle ta clé Google Maps.', 'err');
+    await saveSettings({ googleMapsKey: s.googleMapsKey.trim() });
+    setResult('Test…');
+    try {
+      const a = await geocode(s.homeAddress || 'Sherrington, QC');
+      const b = await geocode('Saint-Jean-sur-Richelieu, QC');
+      if (!a || !b) throw new Error('Adresse introuvable');
+      const r = await drivingDistance(a.geo, b.geo);
+      setResult(r.method === 'google'
+        ? `✅ Google Maps fonctionne: domicile → Saint-Jean-sur-Richelieu = ${r.km} km${r.durationMin ? ` (${r.durationMin} min)` : ''}`
+        : `⚠️ Google n’a pas répondu (${mapsLastError || 'API non activée'}). Distance de secours: ${r.km} km.`);
+    } catch (e) {
+      setResult(`❌ ${errMsg(e)} ${mapsLastError}`);
+    }
+  };
+  return (
+    <div className="card">
+      <h2>🗺 Google Maps (km et adresses)</h2>
+      <p className="small muted">Avec ta clé Google Maps, les km du journal de bord sont calculés par Google Maps (même distance que dans l’app Google Maps), les adresses se complètent pendant que tu tapes et la carte du trajet s’affiche sur chaque facture.</p>
+      <div className="form-grid">
+        <label className="field full">Clé API Google Maps
+          <input value={s.googleMapsKey} placeholder="AIza…" onChange={(e) => up({ googleMapsKey: e.target.value })} />
+        </label>
+      </div>
+      <div className="row" style={{ marginTop: 10 }}>
+        <button className="btn primary" onClick={test}>Tester</button>
+        <span className="small">{result}</span>
+      </div>
+      <details style={{ marginTop: 12 }}>
+        <summary><strong>Comment obtenir la clé (~5 min, gratuit pour ton volume)</strong></summary>
+        <ol className="small" style={{ lineHeight: 1.6 }}>
+          <li>Va sur <a href="https://console.cloud.google.com/google/maps-apis/start" target="_blank" rel="noreferrer">console.cloud.google.com → Google Maps Platform</a> (même projet que Gmail/Firebase si tu veux).</li>
+          <li>Active ces API: <strong>Maps JavaScript API</strong>, <strong>Geocoding API</strong>, <strong>Routes API</strong>, <strong>Places API (New)</strong>, <strong>Maps Embed API</strong>.</li>
+          <li><em>Clés et identifiants → Créer une clé API</em>. Restreins-la à « Sites Web » avec l’adresse de ton app: <code>{location.origin}/*</code></li>
+          <li>Colle la clé ici, clique « Tester », puis « Enregistrer ». Elle se synchronise sur ton téléphone.</li>
+        </ol>
+        <p className="small muted">Google offre un crédit mensuel gratuit largement suffisant pour quelques centaines de factures par mois. Sans clé, l’app utilise OpenStreetMap (gratuit).</p>
+      </details>
+    </div>
+  );
+}
+
+function SyncSection() {
+  const notify = useToast();
+  const st = useSyncState();
+  const [params, setParams] = useSearchParams();
+  const [cfgText, setCfgText] = useState(() => {
+    const c = getFirebaseConfig();
+    return c ? JSON.stringify(c, null, 1) : '';
+  });
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Lien « connecter un autre appareil »
+  useEffect(() => {
+    const p = params.get('sync');
+    if (!p) return;
+    const cfg = configFromLink(p);
+    setParams({}, { replace: true });
+    if (cfg) {
+      saveFirebaseConfig(cfg);
+      notify('Configuration reçue ✔ — connecte-toi avec ton compte.');
+      setTimeout(() => location.reload(), 800);
+    }
+  }, [params, setParams, notify]);
+
+  const saveCfg = () => {
+    const cfg = parseFirebaseConfig(cfgText);
+    if (!cfg) return notify('Configuration invalide: colle le bloc « firebaseConfig » de Firebase.', 'err');
+    saveFirebaseConfig(cfg);
+    notify('Configuration enregistrée — redémarrage…');
+    setTimeout(() => location.reload(), 600);
+  };
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await fn();
+    } catch (e) {
+      notify(errMsg(e), 'err');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const link = deviceLink();
+
+  return (
+    <div className="card" id="sync">
+      <h2>🔄 Synchronisation (téléphone ↔ ordi)</h2>
+      {!st.configured ? (
+        <>
+          <p className="small muted">Synchronise automatiquement factures, clients, km, reçus (avec photos) et paramètres entre tous tes appareils, en temps réel. Ça marche aussi sans Internet: tout se met à jour au retour du réseau.</p>
+          <label className="field">Configuration Firebase (copiée de la console)
+            <textarea rows={6} value={cfgText} placeholder={'const firebaseConfig = {\n  apiKey: "…",\n  authDomain: "…",\n  projectId: "…",\n  appId: "…"\n};'} onChange={(e) => setCfgText(e.target.value)} />
+          </label>
+          <button className="btn primary" style={{ marginTop: 8 }} onClick={saveCfg}>Enregistrer la configuration</button>
+          <details style={{ marginTop: 12 }}>
+            <summary><strong>Comment créer ton espace Firebase (gratuit, ~10 min, une seule fois)</strong></summary>
+            <ol className="small" style={{ lineHeight: 1.6 }}>
+              <li>Va sur <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer">console.firebase.google.com</a> → « Créer un projet » (nom: murco). Google Analytics: pas nécessaire.</li>
+              <li><em>Créer → Authentication → Commencer</em>: active <strong>Adresse e-mail/Mot de passe</strong> (et Google si tu veux).</li>
+              <li><em>Authentication → Paramètres → Domaines autorisés</em>: ajoute <code>{location.hostname}</code>.</li>
+              <li><em>Créer → Firestore Database → Créer une base</em>, région <strong>northamerica-northeast1 (Montréal)</strong>, mode production.</li>
+              <li>Onglet <em>Règles</em> de Firestore: remplace tout par le contenu du fichier <code>firestore.rules</code> du projet, puis « Publier ».</li>
+              <li><em>⚙️ Paramètres du projet → Vos applications → &lt;/&gt; Web</em> → nom « Murco » → copie le bloc <code>firebaseConfig</code> et colle-le ci-dessus.</li>
+            </ol>
+          </details>
+        </>
+      ) : st.status === 'signedout' || (st.status === 'error' && !st.email) ? (
+        <>
+          <p className="small muted">Connecte-toi avec le même compte sur ton ordi et ton téléphone. La première fois, clique « Créer mon compte ».</p>
+          {st.error && <div className="notice err">{st.error}</div>}
+          <div className="form-grid">
+            <label className="field">Courriel<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+            <label className="field">Mot de passe<input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} /></label>
+          </div>
+          <div className="row" style={{ marginTop: 10 }}>
+            <button className="btn accent" disabled={busy} onClick={() => run(() => signInEmail(email, pw))}>Se connecter</button>
+            <button className="btn" disabled={busy} onClick={() => run(() => signInEmail(email, pw, true))}>Créer mon compte</button>
+            <button className="btn" disabled={busy} onClick={() => run(signInGoogle)}>Avec Google</button>
+            <button className="btn small" disabled={busy || !email} onClick={() => run(async () => { await resetPassword(email); notify('Courriel de réinitialisation envoyé.'); })}>Mot de passe oublié</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className={`notice ${st.status === 'error' ? 'err' : 'ok'}`}>
+            {st.status === 'ok' && <>✅ Synchronisé — compte <strong>{st.email}</strong>{st.lastSync && <> · dernière mise à jour {new Date(st.lastSync).toLocaleTimeString('fr-CA')}</>}</>}
+            {(st.status === 'syncing' || st.status === 'connecting') && <>⏳ Synchronisation en cours ({st.email})…</>}
+            {st.status === 'error' && <>❌ {st.error}</>}
+          </div>
+          {st.error && st.status !== 'error' && <div className="notice">{st.error}</div>}
+          {link && (
+            <>
+              <h3>Connecter ton téléphone (ou un autre ordi)</h3>
+              <p className="small muted">Envoie-toi ce lien (courriel ou texto), ouvre-le sur l’autre appareil, puis connecte-toi avec le même courriel et mot de passe.</p>
+              <div className="row" style={{ flexWrap: 'nowrap' }}>
+                <input readOnly value={link} onFocus={(e) => e.target.select()} />
+                <button className="btn" onClick={() => navigator.clipboard?.writeText(link).then(() => notify('Lien copié'))}>Copier</button>
+              </div>
+            </>
+          )}
+          <div className="row" style={{ marginTop: 12 }}>
+            <button className="btn small" onClick={() => run(signOutSync)}>Se déconnecter</button>
+            <button className="btn small danger" onClick={() => { if (confirm('Retirer la configuration de synchronisation de cet appareil? (tes données restent ici et dans le nuage)')) { saveFirebaseConfig(null); location.reload(); } }}>Retirer la configuration</button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

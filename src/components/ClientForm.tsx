@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { db, type Client } from '../lib/db';
+import { AddressInput } from './AddressInput';
 import { Modal } from './Modal';
 import { errMsg, useToast } from './Toast';
 
@@ -31,7 +32,9 @@ export function ClientFormModal({ initial, onClose, onSaved }: { initial?: Clien
         <label className="field">Personne contact<input value={c.contact} onChange={(e) => set('contact', e.target.value)} /></label>
         <label className="field">Téléphone<input type="tel" value={c.phone} onChange={(e) => set('phone', e.target.value)} /></label>
         <label className="field full">Courriel<input type="email" value={c.email} onChange={(e) => set('email', e.target.value)} /></label>
-        <label className="field full">Adresse (rue, ville, code postal)<input value={c.address} onChange={(e) => set('address', e.target.value)} /></label>
+        <label className="field full">Adresse (rue, ville, code postal)
+          <AddressInput value={c.address} onChange={(v) => set('address', v)} onPick={(label, geo) => setC((x) => ({ ...x, address: label, geo }))} />
+        </label>
         <label className="field full">Notes<textarea value={c.notes} onChange={(e) => set('notes', e.target.value)} /></label>
       </div>
       <div className="row" style={{ marginTop: 14, justifyContent: 'flex-end' }}>

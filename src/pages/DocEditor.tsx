@@ -1,16 +1,18 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { AddressInput } from '../components/AddressInput';
 import { ClientFormModal } from '../components/ClientForm';
+import { emptyLine, LineItems } from '../components/LineItems';
 import { Modal } from '../components/Modal';
 import { SendEmailModal } from '../components/SendEmailModal';
 import { errMsg, useToast } from '../components/Toast';
 import { db, getSettings, takeNextNumber, type Doc, type DocStatus, type DocType } from '../lib/db';
-import { directionsLink } from '../lib/geo';
+import { directionsLink, embedDirectionsUrl } from '../lib/geo';
 import { useSettings } from '../lib/hooks';
 import { docFileName, docPdfBlob } from '../lib/pdf';
 import { deleteDocCascade, syncTripForDoc } from '../lib/trips';
-import { addDays, docTotals, downloadBlob, formatDate, km, money, round2, STATUS_LABELS, statusClass, statusLabel, todayISO } from '../lib/utils';
+import { addDays, METHOD_LABEL, docTotals, downloadBlob, formatDate, km, money, round2, STATUS_LABELS, statusClass, statusLabel, todayISO } from '../lib/utils';
 
 function newDoc(type: DocType, clientId: number, s: Awaited<ReturnType<typeof getSettings>>): Doc {
   const date = todayISO();
@@ -24,9 +26,9 @@ function newDoc(type: DocType, clientId: number, s: Awaited<ReturnType<typeof ge
     jobDate: type === 'invoice' ? date : '',
     jobAddress: '',
     title: '',
-    items: [{ description: '', quantity: 1, unitPrice: 0 }],
-    applyTps: true,
-    applyTvq: true,
+    items: [emptyLine()],
+    applyTps: s.chargeTaxes,
+    applyTvq: s.chargeTaxes,
     notes: type === 'invoice' ? s.invoiceNotes : s.quoteNotes,
     status: 'draft',
     payments: [],
@@ -53,6 +55,7 @@ export default function DocEditor() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   const clients = useLiveQuery(() => db.clients.orderBy('name').toArray(), []) ?? [];
+  const services = useLiveQuery(() => db.services.orderBy('order').toArray(), []) ?? [];
   const trip = useLiveQuery(() => (doc?.tripId ? db.trips.get(doc.tripId) : undefined), [doc?.tripId]);
   const emails = useLiveQuery(() => (doc?.id ? db.emails.where('docId').equals(doc.id).toArray() : []), [doc?.id]) ?? [];
   const linked = useLiveQuery(async () => {
@@ -92,7 +95,6 @@ export default function DocEditor() {
     setDoc((d) => ({ ...d!, ...patch }));
     setDirty(true);
   };
-  const updItem = (i: number, patch: Partial<Doc['items'][number]>) => upd({ items: doc.items.map((it, j) => (j === i ? { ...it, ...patch } : it)) });
 
   /** Enregistre et retourne la version à jour (avec id et numéro). */
   const save = async (extra: Partial<Doc> = {}, quiet = false): Promise<Doc | null> => {
@@ -105,10 +107,10 @@ export default function DocEditor() {
       const toSave: Doc = {
         ...doc,
         ...extra,
-        items: doc.items.filter((it) => it.description.trim() || it.unitPrice),
+        items: doc.items.filter((it) => it.description.trim() || it.unitPrice || it.code),
         updatedAt: new Date().toISOString(),
       };
-      if (!toSave.items.length) toSave.items = [{ description: '', quantity: 1, unitPrice: 0 }];
+      if (!toSave.items.length) toSave.items = [emptyLine()];
       if (!toSave.number) toSave.number = await takeNextNumber(toSave.type);
       if (toSave.jobAddress.trim() !== savedAddress.trim()) toSave.jobGeo = undefined;
       const newId = await db.docs.put(toSave);
@@ -167,6 +169,7 @@ export default function DocEditor() {
       items: q.items.map((it) => ({ ...it })),
       applyTps: q.applyTps,
       applyTvq: q.applyTvq,
+      discount: q.discount,
       sourceQuoteId: q.id,
     };
     inv.number = await takeNextNumber('invoice');
@@ -183,7 +186,7 @@ export default function DocEditor() {
 
   const duplicate = async () => {
     const st = await getSettings();
-    const copy: Doc = { ...newDoc(doc.type, doc.clientId, st), title: doc.title, jobAddress: doc.jobAddress, items: doc.items.map((i) => ({ ...i })), applyTps: doc.applyTps, applyTvq: doc.applyTvq, notes: doc.notes };
+    const copy: Doc = { ...newDoc(doc.type, doc.clientId, st), title: doc.title, jobAddress: doc.jobAddress, items: doc.items.map((i) => ({ ...i })), applyTps: doc.applyTps, applyTvq: doc.applyTvq, discount: doc.discount, notes: doc.notes };
     copy.number = await takeNextNumber(copy.type);
     const nid = await db.docs.add(copy);
     notify(`Copie ${copy.number} créée`);
@@ -284,8 +287,8 @@ export default function DocEditor() {
           <label className="field full">
             📍 Lieu des travaux
             <div className="row" style={{ flexWrap: 'nowrap' }}>
-              <input value={doc.jobAddress} placeholder="ex.: 123 rue Principale, Laval, QC" onChange={(e) => upd({ jobAddress: e.target.value })} />
-              {client?.address && <button className="btn" onClick={() => upd({ jobAddress: client.address })} title="Adresse du client">= client</button>}
+              <AddressInput value={doc.jobAddress} placeholder="ex.: 123 rue Principale, Laval, QC" onChange={(v) => upd({ jobAddress: v })} onPick={(label, geo) => { setDoc((d) => ({ ...d!, jobAddress: label, jobGeo: geo })); setSavedAddress(label); setDirty(true); }} />
+              {client?.address && <button className="btn" onClick={() => { setDoc((d) => ({ ...d!, jobAddress: client.address, jobGeo: client.geo })); setSavedAddress(client.geo ? client.address : ''); setDirty(true); }} title="Adresse du client">= client</button>}
             </div>
           </label>
         </div>
@@ -293,36 +296,25 @@ export default function DocEditor() {
 
       <div className="card">
         <h2>Détails</h2>
-        <table className="list items-table">
-          <thead><tr><th>Description</th><th style={{ width: 90 }}>Qté</th><th style={{ width: 130 }}>Prix unitaire</th><th className="num" style={{ width: 110 }}>Montant</th><th style={{ width: 40 }}></th></tr></thead>
-          <tbody>
-            {doc.items.map((it, i) => (
-              <tr key={i}>
-                <td><textarea rows={1} style={{ minHeight: 38 }} value={it.description} placeholder="Main-d’œuvre, matériaux…" onChange={(e) => updItem(i, { description: e.target.value })} /></td>
-                <td><input type="number" inputMode="decimal" step="any" value={it.quantity} onChange={(e) => updItem(i, { quantity: Number(e.target.value) })} /></td>
-                <td><input type="number" inputMode="decimal" step="0.01" value={it.unitPrice} onChange={(e) => updItem(i, { unitPrice: Number(e.target.value) })} /></td>
-                <td className="num" style={{ paddingTop: 14 }}>{money(round2(it.quantity * it.unitPrice))}</td>
-                <td><button className="btn small danger" onClick={() => upd({ items: doc.items.filter((_, j) => j !== i) })} aria-label="Retirer">✕</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="row" style={{ marginTop: 10 }}>
-          <button className="btn" onClick={() => upd({ items: [...doc.items, { description: '', quantity: 1, unitPrice: 0 }] })}>+ Ligne</button>
-          <label className="check"><input type="checkbox" checked={doc.applyTps} onChange={(e) => upd({ applyTps: e.target.checked })} /> TPS {s.tpsRate} %</label>
-          <label className="check"><input type="checkbox" checked={doc.applyTvq} onChange={(e) => upd({ applyTvq: e.target.checked })} /> TVQ {s.tvqRate} %</label>
-        </div>
-        <div className="totals">
-          <div><span>Sous-total</span><span>{money(tot.subtotal)}</span></div>
-          {doc.applyTps && <div><span>TPS</span><span>{money(tot.tps)}</span></div>}
-          {doc.applyTvq && <div><span>TVQ</span><span>{money(tot.tvq)}</span></div>}
-          <div className="grand"><span>Total</span><span>{money(tot.total)}</span></div>
-          {isInvoice && tot.paid > 0 && (
-            <>
-              <div><span>Payé</span><span>−{money(tot.paid)}</span></div>
-              <div className="grand"><span>Solde dû</span><span>{money(tot.balance)}</span></div>
-            </>
-          )}
+        <LineItems items={doc.items} services={services} onChange={(items) => upd({ items })} />
+        <div className="grid two" style={{ marginTop: 16, alignItems: 'start' }}>
+          <div className="form-grid">
+            <label className="field">Rabais ($, avant taxes)<input type="number" inputMode="decimal" step="0.01" value={doc.discount || ''} placeholder="0" onChange={(e) => upd({ discount: Number(e.target.value) })} /></label>
+            <label className="field">Dépôt reçu ($)<input type="number" inputMode="decimal" step="0.01" value={doc.deposit || ''} placeholder="0" onChange={(e) => upd({ deposit: Number(e.target.value) })} /></label>
+            <label className="check"><input type="checkbox" checked={doc.applyTps} onChange={(e) => upd({ applyTps: e.target.checked })} /> TPS {s.tpsRate} %</label>
+            <label className="check"><input type="checkbox" checked={doc.applyTvq} onChange={(e) => upd({ applyTvq: e.target.checked })} /> TVQ {s.tvqRate} %</label>
+          </div>
+          <div className="totals">
+            {tot.discount > 0 && <div><span>Sous-total</span><span>{money(tot.lines)}</span></div>}
+            {tot.discount > 0 && <div><span>Rabais</span><span>−{money(tot.discount)}</span></div>}
+            {(tot.discount > 0 || doc.applyTps || doc.applyTvq) && <div><span>{tot.discount > 0 ? 'Après rabais' : 'Sous-total'}</span><span>{money(tot.subtotal)}</span></div>}
+            {doc.applyTps && <div><span>TPS</span><span>{money(tot.tps)}</span></div>}
+            {doc.applyTvq && <div><span>TVQ</span><span>{money(tot.tvq)}</span></div>}
+            <div className="grand"><span>Total</span><span>{money(tot.total)}</span></div>
+            {tot.deposit > 0 && <div><span>Dépôt reçu</span><span>−{money(tot.deposit)}</span></div>}
+            {tot.paid - tot.deposit > 0 && <div><span>Paiements reçus</span><span>−{money(tot.paid - tot.deposit)}</span></div>}
+            {tot.paid > 0 && <div className="grand"><span>Solde à payer</span><span>{money(tot.balance)}</span></div>}
+          </div>
         </div>
         <label className="field" style={{ marginTop: 12 }}>Notes (apparaissent sur le PDF)<textarea value={doc.notes} onChange={(e) => upd({ notes: e.target.value })} /></label>
       </div>
@@ -334,10 +326,11 @@ export default function DocEditor() {
             <>
               <div><strong>{km(trip.totalKm)}</strong> {trip.roundTrip ? '(aller-retour)' : '(aller)'} — {trip.date}</div>
               <div className="small muted">De: {trip.fromLabel}<br />À: {trip.toLabel}<br />Raison: {trip.reason}</div>
-              <div className="small muted">{trip.distanceMethod === 'route' ? 'Distance routière calculée' : trip.distanceMethod === 'manuel' ? 'Km entrés manuellement' : 'Estimation (service de routes indisponible)'}</div>
+              <div className="small muted">{METHOD_LABEL[trip.distanceMethod]}{trip.durationMin ? ` · ≈ ${trip.durationMin} min de route` : ''}</div>
+              {s.googleMapsKey && <iframe className="map-embed" title="Trajet" loading="lazy" src={embedDirectionsUrl(s.googleMapsKey, trip.fromGeo ?? trip.fromLabel, trip.toGeo ?? trip.toLabel)} />}
               <div className="row" style={{ marginTop: 8 }}>
                 <button className="btn small" onClick={recalcTrip}>↻ Recalculer</button>
-                <a className="btn small" href={directionsLink(trip.fromGeo ?? trip.fromLabel, trip.toGeo ?? trip.toLabel)} target="_blank" rel="noreferrer">🗺 Itinéraire</a>
+                <a className="btn small" href={directionsLink(trip.fromGeo ?? trip.fromLabel, trip.toGeo ?? trip.toLabel)} target="_blank" rel="noreferrer">🗺 Ouvrir dans Google Maps</a>
                 <Link className="btn small" to="/km">Journal →</Link>
               </div>
             </>
