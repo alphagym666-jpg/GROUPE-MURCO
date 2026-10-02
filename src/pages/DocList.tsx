@@ -83,7 +83,7 @@ export default function DocList({ type }: { type: DocType }) {
                       <td><strong>{d.number}</strong></td>
                       <td>
                         {data.clients.get(d.clientId)?.name ?? '—'}
-                        <div className="small muted">{d.title}{d.jobAddress ? ` · 📍 ${d.jobAddress}` : ''}</div>
+                        <div className="small muted">{d.title}{d.jobAddress ? ` · ${d.jobAddress}` : ''}</div>
                       </td>
                       <td className="hide-mobile">{d.date}</td>
                       <td><span className={statusClass(d)}>{statusLabel(d)}</span></td>

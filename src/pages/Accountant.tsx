@@ -95,7 +95,7 @@ export default function Accountant() {
       {stats && (
         <div className="card">
           <h2>2. Aperçu — {formatDate(from)} au {formatDate(to)}</h2>
-          {stats.drafts > 0 && <div className="notice">⚠️ {stats.drafts} facture(s) en brouillon dans cette période (non incluses dans les totaux).</div>}
+          {stats.drafts > 0 && <div className="notice">{stats.drafts} facture(s) en brouillon dans cette période (non incluses dans les totaux).</div>}
           <div className="grid kpi">
             <div className="card"><div className="label">Ventes av. taxes</div><div className="value">{money(stats.sales)}</div><div className="sub">{stats.inv} facture(s)</div></div>
             <div className="card"><div className="label">Dépenses av. taxes</div><div className="value">{money(stats.expSub)}</div><div className="sub">{stats.exp} reçu(s), {stats.photos} photo(s)</div></div>
@@ -114,7 +114,7 @@ export default function Accountant() {
         <h2>3. Sortir le dossier</h2>
         <div className="row">
           <button className="btn accent" onClick={download} disabled={busy}>{busy ? 'Préparation…' : '⬇ Télécharger le dossier (ZIP)'}</button>
-          <button className="btn primary" onClick={send} disabled={busy}>✉️ Envoyer au comptable</button>
+          <button className="btn primary" onClick={send} disabled={busy}>Envoyer au comptable</button>
         </div>
         {!s.accountantEmail && <div className="small muted" style={{ marginTop: 8 }}>Astuce: ajoute le courriel de ton comptable dans <Link to="/parametres">Paramètres</Link>.</div>}
       </div>

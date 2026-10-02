@@ -3,8 +3,10 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ClientFormModal } from '../components/ClientForm';
 import { SendEmailModal } from '../components/SendEmailModal';
-import { errMsg, useToast } from '../components/Toast';
+import { errMsg, useConfirm, useToast } from '../components/Toast';
 import { db } from '../lib/db';
+import { JOB_STATUS_LABEL } from '../lib/agenda';
+import { MediaGallery } from '../components/MediaGallery';
 import { mapsLink } from '../lib/geo';
 import { gmailThreadLink, isGmailConnected, searchMail, type MailSummary } from '../lib/gmail';
 import { useSettings } from '../lib/hooks';
@@ -16,6 +18,7 @@ export default function ClientDetail() {
   const nav = useNavigate();
   const s = useSettings();
   const notify = useToast();
+  const ask = useConfirm();
   const [editing, setEditing] = useState(false);
   const [writing, setWriting] = useState(false);
   const [mails, setMails] = useState<MailSummary[] | null>(null);
@@ -23,13 +26,14 @@ export default function ClientDetail() {
 
   const data = useLiveQuery(async () => {
     const client = await db.clients.get(cid);
+    const jobs = await db.jobs.where('clientId').equals(cid).toArray();
     const [docs, trips, expenses, emails] = await Promise.all([
       db.docs.where('clientId').equals(cid).toArray(),
       db.trips.where('clientId').equals(cid).toArray(),
       db.expenses.where('clientId').equals(cid).toArray(),
       db.emails.where('clientId').equals(cid).toArray(),
     ]);
-    return { client, docs: docs.sort((a, b) => b.date.localeCompare(a.date)), trips, expenses, emails };
+    return { client, docs: docs.sort((a, b) => b.date.localeCompare(a.date)), trips, expenses, emails, jobs: jobs.sort((a, b) => b.date.localeCompare(a.date)) };
   }, [cid]);
   if (!data) return null;
   if (!data.client) return <div className="empty">Client introuvable. <Link to="/clients">Retour</Link></div>;
@@ -54,7 +58,7 @@ export default function ClientDetail() {
 
   const remove = async () => {
     if (data.docs.length) return notify('Ce client a des factures/soumissions: supprime-les d’abord.', 'err');
-    if (!confirm(`Supprimer ${c.name}?`)) return;
+    if (!(await ask({ title: `Supprimer ${c.name}?`, confirm: 'Supprimer', danger: true }))) return;
     await db.clients.delete(cid);
     nav('/clients');
   };
@@ -67,10 +71,11 @@ export default function ClientDetail() {
           <h1>{c.name}</h1>
         </div>
         <div className="actions">
+          <button className="btn" onClick={() => nav(`/job/new?client=${cid}`)}>Planifier un job</button>
           <button className="btn accent" onClick={() => nav(`/doc/new?type=invoice&client=${cid}`)}>+ Facture</button>
           <button className="btn primary" onClick={() => nav(`/doc/new?type=quote&client=${cid}`)}>+ Soumission</button>
-          <button className="btn" onClick={() => setWriting(true)} disabled={!c.email}>✉️ Écrire</button>
-          <button className="btn" onClick={() => setEditing(true)}>✏️ Modifier</button>
+          <button className="btn" onClick={() => setWriting(true)} disabled={!c.email}>Écrire</button>
+          <button className="btn" onClick={() => setEditing(true)}>Modifier</button>
         </div>
       </div>
 
@@ -84,10 +89,10 @@ export default function ClientDetail() {
       <div className="grid two">
         <div className="card">
           <h2>Coordonnées</h2>
-          {c.contact && <div>👤 {c.contact}</div>}
-          {c.phone && <div>📞 <a href={`tel:${c.phone}`}>{c.phone}</a></div>}
-          {c.email && <div>✉️ <a href={`mailto:${c.email}`}>{c.email}</a></div>}
-          {c.address && <div>📍 <a href={mapsLink(c.geo, c.address)} target="_blank" rel="noreferrer">{c.address}</a></div>}
+          {c.contact && <div>{c.contact}</div>}
+          {c.phone && <div><a href={`tel:${c.phone}`}>{c.phone}</a></div>}
+          {c.email && <div><a href={`mailto:${c.email}`}>{c.email}</a></div>}
+          {c.address && <div><a href={mapsLink(c.geo, c.address)} target="_blank" rel="noreferrer">{c.address}</a></div>}
           {c.notes && <p className="small muted" style={{ whiteSpace: 'pre-wrap' }}>{c.notes}</p>}
           <button className="btn small danger" style={{ marginTop: 10 }} onClick={remove}>Supprimer le client</button>
         </div>
@@ -107,7 +112,7 @@ export default function ClientDetail() {
           {data.emails.length > 0 && (
             <div style={{ marginTop: 10 }}>
               <h3>Envoyés depuis l’app</h3>
-              {data.emails.map((e) => <div key={e.id} className="small">✉️ {new Date(e.date).toLocaleDateString('fr-CA')} — {e.subject}</div>)}
+              {data.emails.map((e) => <div key={e.id} className="small">{new Date(e.date).toLocaleDateString('fr-CA')} — {e.subject}</div>)}
             </div>
           )}
         </div>
@@ -120,7 +125,7 @@ export default function ClientDetail() {
             <tbody>
               {data.docs.map((d) => (
                 <tr key={d.id} className="click" onClick={() => nav(`/doc/${d.id}`)}>
-                  <td>{d.type === 'invoice' ? '🧾' : '📝'} <strong>{d.number}</strong><div className="small muted">{d.title}</div></td>
+                  <td>{d.type === 'invoice' ? '' : ''} <strong>{d.number}</strong><div className="small muted">{d.title}</div></td>
                   <td className="hide-mobile">{d.date}</td>
                   <td><span className={statusClass(d)}>{statusLabel(d)}</span></td>
                   <td className="num">{money(docTotals(d, s).total)}</td>
@@ -130,6 +135,21 @@ export default function ClientDetail() {
           </table>
         )}
       </div>
+
+      {data.jobs.length > 0 && (
+        <div className="card">
+          <h2>Jobs</h2>
+          <table className="list"><tbody>
+            {data.jobs.map((j) => (
+              <tr key={j.id} className="click" onClick={() => nav(`/job/${j.id}`)}>
+                <td>{j.date}{j.time ? ` · ${j.time}` : ''}</td><td>{j.title}</td><td><span className={`badge ${j.status === 'planifie' ? 'blue' : j.status === 'fait' ? 'green' : 'gray'}`}>{JOB_STATUS_LABEL[j.status]}</span></td>
+              </tr>
+            ))}
+          </tbody></table>
+        </div>
+      )}
+
+      <MediaGallery link={{ clientId: cid }} addKinds={['avant', 'apres', 'job']} title="Photos du client" />
 
       {data.trips.length > 0 && (
         <div className="card">

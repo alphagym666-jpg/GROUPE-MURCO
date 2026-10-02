@@ -3,8 +3,8 @@ import autoTable from 'jspdf-autotable';
 import type { Client, Doc, Settings, Trip, Expense } from './db';
 import { companyAddressLines, docTotals, lineAmount, lineHitsMinimum, formatDate, km, kmAllowance, money } from './utils';
 
-const NAVY: [number, number, number] = [15, 42, 68];
-const ORANGE: [number, number, number] = [245, 166, 35];
+const NAVY: [number, number, number] = [35, 38, 43]; // graphite Murco
+const ORANGE: [number, number, number] = [224, 144, 31]; // ambre Murco
 
 // jsPDF (polices standard) ne gère que le Latin-1: on remplace les caractères hors plage.
 function t(s: string | undefined | null): string {
@@ -80,7 +80,14 @@ function footer(pdf: jsPDF, s: Settings) {
   }
 }
 
-export function buildDocPdf(doc: Doc, client: Client | undefined, s: Settings): jsPDF {
+export interface PdfPhoto {
+  data: string;
+  w: number;
+  h: number;
+  label: string;
+}
+
+export function buildDocPdf(doc: Doc, client: Client | undefined, s: Settings, photos: PdfPhoto[] = []): jsPDF {
   const pdf = new jsPDF({ unit: 'mm', format: 'letter' });
   const W = pdf.internal.pageSize.getWidth();
   const isInvoice = doc.type === 'invoice';
@@ -219,17 +226,60 @@ export function buildDocPdf(doc: Doc, client: Client | undefined, s: Settings): 
 
   if (!isInvoice) {
     ty += 10;
-    if (ty > pdf.internal.pageSize.getHeight() - 30) {
+    if (ty > pdf.internal.pageSize.getHeight() - 45) {
       pdf.addPage();
       ty = 30;
     }
-    pdf.setDrawColor(120);
-    pdf.setLineWidth(0.3);
-    pdf.line(15, ty, 95, ty);
-    pdf.line(115, ty, W - 15, ty);
-    pdf.setFontSize(8);
-    pdf.text('Signature du client (acceptation)', 15, ty + 4);
-    pdf.text('Date', 115, ty + 4);
+    if (doc.signature) {
+      // Acceptation signée en ligne
+      if (doc.signature.image) {
+        try {
+          pdf.addImage(doc.signature.image, 'PNG', 15, ty - 18, 60, 18);
+        } catch {
+          /* image invalide */
+        }
+      }
+      pdf.setDrawColor(120);
+      pdf.setLineWidth(0.3);
+      pdf.line(15, ty, 95, ty);
+      pdf.setFontSize(8);
+      pdf.setTextColor(40);
+      pdf.text(t(`Acceptée en ligne par ${doc.signature.name}`), 15, ty + 4);
+      pdf.text(t(new Date(doc.signature.at).toLocaleString('fr-CA')), 115, ty + 4);
+    } else {
+      pdf.setDrawColor(120);
+      pdf.setLineWidth(0.3);
+      pdf.line(15, ty, 95, ty);
+      pdf.line(115, ty, W - 15, ty);
+      pdf.setFontSize(8);
+      pdf.text('Signature du client (acceptation)', 15, ty + 4);
+      pdf.text('Date', 115, ty + 4);
+    }
+  }
+
+  // Photos des travaux (2 par page)
+  if (photos.length) {
+    const H = pdf.internal.pageSize.getHeight();
+    const boxW = W - 30;
+    const boxH = (H - 60) / 2;
+    photos.forEach((ph, i) => {
+      if (i % 2 === 0) {
+        pdf.addPage();
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(12);
+        pdf.setTextColor(...NAVY);
+        pdf.text(t(`Photos des travaux - ${doc.number}`), 15, 18);
+      }
+      const top = 26 + (i % 2) * (boxH + 8);
+      const sc = Math.min(boxW / ph.w, (boxH - 8) / ph.h);
+      const w = ph.w * sc;
+      const h = ph.h * sc;
+      pdf.addImage(ph.data, 'JPEG', 15 + (boxW - w) / 2, top + 6, w, h);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9);
+      pdf.setTextColor(...ORANGE);
+      pdf.text(t(ph.label.toUpperCase()), 15, top + 3);
+    });
   }
 
   footer(pdf, s);

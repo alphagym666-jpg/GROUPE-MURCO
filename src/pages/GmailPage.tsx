@@ -9,10 +9,10 @@ import { pendingImport } from '../lib/receipt';
 import { toISODate } from '../lib/utils';
 
 const PRESETS = [
-  { label: '📥 Boîte de réception', q: 'in:inbox' },
-  { label: '🧾 Reçus / factures fournisseurs', q: 'has:attachment (facture OR reçu OR receipt OR invoice OR "bon de commande") newer_than:90d' },
-  { label: '👥 Mes clients', q: '__clients__' },
-  { label: '📤 Envoyés', q: 'in:sent' },
+  { label: 'Boîte de réception', q: 'in:inbox' },
+  { label: 'Reçus / factures fournisseurs', q: 'has:attachment (facture OR reçu OR receipt OR invoice OR "bon de commande") newer_than:90d' },
+  { label: 'Mes clients', q: '__clients__' },
+  { label: 'Envoyés', q: 'in:sent' },
 ];
 
 function emailOf(from: string) {
@@ -40,7 +40,7 @@ export default function GmailPage() {
     try {
       await connectGmail(s.googleClientId);
       setConnected(true);
-      notify('Gmail connecté ✔');
+      notify('Gmail connecté');
       run('in:inbox');
     } catch (e) {
       notify(errMsg(e), 'err');
@@ -131,7 +131,7 @@ export default function GmailPage() {
                     <div className="row" style={{ marginTop: 6 }}>
                       {m.attachments.map((a) => (
                         <button key={a.attachmentId} className="btn small" onClick={() => importAttachment(m, a)} disabled={!/^(image\/|application\/pdf)/.test(a.mimeType)}>
-                          📎 {a.filename} → reçu
+                          {a.filename} → reçu
                         </button>
                       ))}
                     </div>

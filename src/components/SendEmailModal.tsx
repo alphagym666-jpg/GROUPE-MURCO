@@ -42,7 +42,7 @@ export function SendEmailModal(p: Props) {
     try {
       const id = await sendEmail({ to, cc: cc || undefined, subject, body, attachments: p.attachments });
       await p.onSent({ gmailId: id, to, subject });
-      notify('Courriel envoyé par Gmail ✔');
+      notify('Courriel envoyé par Gmail');
       p.onClose();
     } catch (e) {
       notify(errMsg(e), 'err');
@@ -83,7 +83,7 @@ export function SendEmailModal(p: Props) {
         <label className="field">Message<textarea rows={8} value={body} onChange={(e) => setBody(e.target.value)} /></label>
         {p.attachments.length > 0 && (
           <div className="small muted">
-            📎 {p.attachments.map((a) => a.filename).join(', ')} ({(size / 1024 / 1024).toFixed(2)} Mo)
+            {p.attachments.map((a) => a.filename).join(', ')} ({(size / 1024 / 1024).toFixed(2)} Mo)
             {size > 24 * 1024 * 1024 && <div className="notice err">Plus de 25 Mo: Gmail risque de refuser. Réduis la période ou retire les photos.</div>}
           </div>
         )}

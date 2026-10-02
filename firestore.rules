@@ -1,9 +1,30 @@
 rules_version = '2';
-// Chaque utilisateur ne voit et ne modifie que ses propres données (users/{son uid}/...).
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Données privées: chaque utilisateur ne voit et ne modifie que les siennes (users/{son uid}/...).
     match /users/{uid}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Portail client: une copie de la soumission/facture lisible par quiconque a le lien (jeton secret).
+    match /portal/{token} {
+      allow get: if true;
+      // Le propriétaire liste ses propres pages (pour recevoir les signatures)
+      allow list: if request.auth != null && resource.data.owner == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.owner == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.owner == request.auth.uid;
+      allow update: if
+        (request.auth != null && resource.data.owner == request.auth.uid
+          && request.resource.data.owner == request.auth.uid)
+        // Le client peut seulement: marquer « vu » et signer une soumission non signée
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewedAt'])
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['signature', 'viewedAt'])
+            && resource.data.doc.kind == 'quote'
+            && (!('signature' in resource.data) || resource.data.signature == null)
+            && request.resource.data.signature.name is string
+            && request.resource.data.signature.name.size() > 1
+            && request.resource.data.signature.name.size() < 120
+            && (!('image' in request.resource.data.signature) || request.resource.data.signature.image.size() < 200000));
     }
   }
 }

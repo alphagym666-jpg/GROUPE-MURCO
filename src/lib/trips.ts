@@ -26,6 +26,8 @@ export async function syncTripForDoc(docId: number, opts: { force?: boolean } = 
   const s = await getSettings();
   const doc = await db.docs.get(docId);
   if (!doc) return null;
+  // Facture venant de l'agenda: le trajet est compté dans la route de la journée
+  if (doc.jobId && !opts.force) return null;
   if (!opts.force && !(doc.type === 'invoice' && s.autoTripFromInvoices)) return null;
   const client = await db.clients.get(doc.clientId);
   const address = doc.jobAddress?.trim() || client?.address?.trim();

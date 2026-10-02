@@ -61,7 +61,7 @@ export function LineItems({ items, services, onChange }: { items: LineItem[]; se
               <td className="c-qty">
                 <div className="row" style={{ flexWrap: 'nowrap', gap: 4 }}>
                   <input type="number" inputMode="decimal" step="any" value={it.quantity} aria-label="Quantité" onChange={(e) => upd(i, { quantity: Number(e.target.value) })} />
-                  <button className="btn small" title="Calculateur pi² / pi lin" onClick={() => setCalcFor(i)}>🧮</button>
+                  <button className="btn small" title="Calculateur pi² / pi lin" onClick={() => setCalcFor(i)}></button>
                 </div>
               </td>
               <td className="c-unit">
@@ -111,7 +111,7 @@ export function LineItems({ items, services, onChange }: { items: LineItem[]; se
 }
 
 /** Calculateur: pi² = longueur × hauteur (murs) ou longueur × largeur (terrain); pi lin = somme des longueurs. */
-function CalcModal({ line, onClose, onApply }: { line: LineItem; onClose: () => void; onApply: (qty: number, rows: CalcRow[]) => void }) {
+export function CalcModal({ line, onClose, onApply }: { line: LineItem; onClose: () => void; onApply: (qty: number, rows: CalcRow[]) => void }) {
   const [linear, setLinear] = useState(line.unit === 'pi lin');
   const [rows, setRows] = useState<CalcRow[]>(
     line.calc?.length ? line.calc : [{ label: 'Mur avant', a: 0, b: 0 }, { label: 'Mur arrière', a: 0, b: 0 }, { label: 'Côté gauche', a: 0, b: 0 }, { label: 'Côté droit', a: 0, b: 0 }],

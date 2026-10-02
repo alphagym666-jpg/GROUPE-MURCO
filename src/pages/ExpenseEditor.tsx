@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AddressInput } from '../components/AddressInput';
-import { errMsg, useToast } from '../components/Toast';
+import { errMsg, useConfirm, useToast } from '../components/Toast';
 import { db, EXPENSE_CATEGORIES, type Expense } from '../lib/db';
 import { currentPosition, drivingDistance, geocode, mapsLink, reverseGeocode } from '../lib/geo';
 import { useSettings } from '../lib/hooks';
@@ -21,6 +21,7 @@ export default function ExpenseEditor() {
   const isNew = id === 'new';
   const nav = useNavigate();
   const notify = useToast();
+  const ask = useConfirm();
   const s = useSettings();
   const [e, setE] = useState<Expense | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -90,7 +91,7 @@ export default function ExpenseEditor() {
       if (info.geo) {
         setBusy('Position trouvée dans la photo, calcul des km…');
         next = await locate(info.geo, 'photo', next);
-        notify(`📍 ${next.locationLabel}${next.kmFromHome !== undefined ? ` — ${km(next.kmFromHome)} de chez toi` : ''}`);
+        notify(`${next.locationLabel}${next.kmFromHome !== undefined ? ` — ${km(next.kmFromHome)} de chez toi` : ''}`);
       }
       setE(next);
     } catch (err) {
@@ -158,7 +159,7 @@ export default function ExpenseEditor() {
   };
 
   const remove = async () => {
-    if (!e.id || !confirm('Supprimer ce reçu?')) return;
+    if (!e.id || !(await ask({ title: 'Supprimer ce reçu?', message: 'La photo et le déplacement lié seront aussi supprimés.', confirm: 'Supprimer', danger: true }))) return;
     if (e.tripId) await db.trips.delete(e.tripId);
     await db.expenses.delete(e.id);
     nav('/depenses');
@@ -172,10 +173,10 @@ export default function ExpenseEditor() {
           <h1>{isNew ? 'Nouveau reçu' : 'Reçu'}</h1>
         </div>
         <div className="actions">
-          <button className="btn accent" onClick={save} disabled={!!busy}>💾 Enregistrer</button>
+          <button className="btn accent" onClick={save} disabled={!!busy}>Enregistrer</button>
         </div>
       </div>
-      {busy && <div className="notice info">⏳ {busy}</div>}
+      {busy && <div className="notice info">{busy}</div>}
 
       <div className="grid two">
         <div className="card">
@@ -183,21 +184,21 @@ export default function ExpenseEditor() {
           <input ref={camRef} type="file" accept="image/*" capture="environment" hidden onChange={(ev) => ev.target.files?.[0] && handleFile(ev.target.files[0], e)} />
           <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={(ev) => ev.target.files?.[0] && handleFile(ev.target.files[0], e)} />
           <div className="row">
-            <button className="btn accent" onClick={() => camRef.current?.click()}>📷 Prendre une photo</button>
-            <button className="btn" onClick={() => fileRef.current?.click()}>🖼 Choisir un fichier</button>
+            <button className="btn accent" onClick={() => camRef.current?.click()}>Prendre une photo</button>
+            <button className="btn" onClick={() => fileRef.current?.click()}>Choisir un fichier</button>
           </div>
           {photoUrl && (e.photoType === 'application/pdf'
-            ? <p><a href={photoUrl} target="_blank" rel="noreferrer">📄 Voir le PDF du reçu</a></p>
+            ? <p><a href={photoUrl} target="_blank" rel="noreferrer">Voir le PDF du reçu</a></p>
             : <a href={photoUrl} target="_blank" rel="noreferrer"><img src={photoUrl} className="photo-preview" style={{ marginTop: 12 }} alt="Reçu" /></a>)}
 
-          <h3 style={{ marginTop: 18 }}>📍 Où (pour calculer les km de chez toi)</h3>
+          <h3 style={{ marginTop: 18 }}>Où (pour calculer les km de chez toi)</h3>
           <div className="row" style={{ flexWrap: 'nowrap' }}>
             <AddressInput value={e.locationLabel} placeholder="ex.: Petro-Canada, Sherrington" onChange={(v) => up({ locationLabel: v, geo: undefined, kmFromHome: undefined })} onPick={async (label, geo) => { setBusy('Calcul des km…'); try { const n = await locate(geo, 'adresse', e); setE({ ...n, locationLabel: label }); } finally { setBusy(''); } }} />
-            <button className="btn" onClick={useAddress} disabled={!!busy}>🔎</button>
+            <button className="btn" onClick={useAddress} disabled={!!busy}></button>
           </div>
           <div className="row" style={{ marginTop: 8 }}>
-            <button className="btn small" onClick={useGps} disabled={!!busy}>📍 Je suis sur place (GPS)</button>
-            {e.geo && <a className="btn small" href={mapsLink(e.geo)} target="_blank" rel="noreferrer">🗺 Carte</a>}
+            <button className="btn small" onClick={useGps} disabled={!!busy}>Je suis sur place (GPS)</button>
+            {e.geo && <a className="btn small" href={mapsLink(e.geo)} target="_blank" rel="noreferrer">Carte</a>}
           </div>
           {e.kmFromHome !== undefined && (
             <div className="notice ok" style={{ marginTop: 10 }}>
@@ -247,7 +248,7 @@ export default function ExpenseEditor() {
             </label>
             <label className="field full">Notes / raison<textarea value={e.notes} onChange={(ev) => up({ notes: ev.target.value })} placeholder="ex.: Essence pour aller chez client Tremblay" /></label>
           </div>
-          {e.id && <button className="btn danger small" style={{ marginTop: 12 }} onClick={remove}>🗑 Supprimer</button>}
+          {e.id && <button className="btn danger small" style={{ marginTop: 12 }} onClick={remove}>Supprimer</button>}
         </div>
       </div>
     </>

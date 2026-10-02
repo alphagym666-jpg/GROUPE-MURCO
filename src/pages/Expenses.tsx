@@ -13,7 +13,7 @@ function Thumb({ e }: { e: Expense }) {
     return () => URL.revokeObjectURL(u);
   }, [e.photo, e.photoType]);
   if (url) return <img src={url} className="thumb" alt="" />;
-  return <div className="thumb" style={{ display: 'grid', placeItems: 'center' }}>{e.photo ? '📄' : '🧾'}</div>;
+  return <div className="thumb" style={{ display: 'grid', placeItems: 'center' }}>{e.photo ? '' : ''}</div>;
 }
 
 export default function Expenses() {
@@ -28,7 +28,7 @@ export default function Expenses() {
     <>
       <div className="page-head">
         <h1>Reçus et dépenses</h1>
-        <button className="btn accent" onClick={() => nav('/depenses/new')}>📷 Ajouter un reçu</button>
+        <button className="btn accent" onClick={() => nav('/depenses/new')}>Ajouter un reçu</button>
       </div>
       <div className="card">
         <div className="row" style={{ marginBottom: 12 }}>
@@ -55,9 +55,9 @@ export default function Expenses() {
                   <td>
                     <strong>{e.vendor || e.category}</strong>
                     <div className="small muted">{e.date} · {e.category}</div>
-                    {e.locationLabel && <div className="small muted">📍 {e.locationLabel}{e.kmFromHome !== undefined ? ` · ${km(e.kmFromHome)} de chez toi` : ''}</div>}
+                    {e.locationLabel && <div className="small muted">{e.locationLabel}{e.kmFromHome !== undefined ? ` · ${km(e.kmFromHome)} de chez toi` : ''}</div>}
                   </td>
-                  <td className="num"><strong>{money(e.total)}</strong>{e.tripId && <div className="small muted">🚗 au journal</div>}</td>
+                  <td className="num"><strong>{money(e.total)}</strong>{e.tripId && <div className="small muted">au journal</div>}</td>
                 </tr>
               ))}
             </tbody>

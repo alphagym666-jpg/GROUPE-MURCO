@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { db, getSettings, type Client } from './db';
-import { buildLogbookPdf, buildSummaryPdf, docFileName, docPdfBlob } from './pdf';
+import { makeDocPdf } from './docPdf';
+import { buildLogbookPdf, buildSummaryPdf, docFileName } from './pdf';
 import { docTotals, formatDate, safeFileName, STATUS_LABELS, toCSV } from './utils';
 
 export interface ExportOptions {
@@ -38,7 +39,7 @@ export async function buildAccountantZip(o: ExportOptions): Promise<{ blob: Blob
   const invRows: unknown[][] = [['No', 'Date', 'Échéance', 'Client', 'Description', 'Lieu', 'Montant des lignes', 'Rabais', 'Sous-total', 'TPS', 'TVQ', 'Total', 'Dépôt', 'Payé (incl. dépôt)', 'Solde', 'Statut', 'Codes']];
   for (const d of invoices) {
     const c = clients.get(d.clientId);
-    fInv.file(docFileName(d, c), docPdfBlob(d, c, s));
+    fInv.file(docFileName(d, c), await makeDocPdf(d, c, s));
     const tt = docTotals(d, s);
     invRows.push([d.number, d.date, d.dueDate, c?.name, d.title, d.jobAddress, tt.lines, tt.discount, tt.subtotal, tt.tps, tt.tvq, tt.total, tt.deposit, tt.paid, tt.balance, STATUS_LABELS[d.status], d.items.map((i) => i.code).filter(Boolean).join(' ')]);
   }
@@ -49,7 +50,7 @@ export async function buildAccountantZip(o: ExportOptions): Promise<{ blob: Blob
     const qRows: unknown[][] = [['No', 'Date', 'Client', 'Description', 'Sous-total', 'Total', 'Statut']];
     for (const d of quotes) {
       const c = clients.get(d.clientId);
-      fQ.file(docFileName(d, c), docPdfBlob(d, c, s));
+      fQ.file(docFileName(d, c), await makeDocPdf(d, c, s));
       const tt = docTotals(d, s);
       qRows.push([d.number, d.date, c?.name, d.title, tt.subtotal, tt.total, STATUS_LABELS[d.status]]);
     }
@@ -78,6 +79,18 @@ export async function buildAccountantZip(o: ExportOptions): Promise<{ blob: Blob
   trips.forEach((t) => tripRows.push([t.date, t.fromLabel, t.toLabel, t.reason, t.roundTrip ? 'Oui' : 'Non', t.oneWayKm, t.totalKm, t.distanceMethod]));
   fKm.file('Journal_de_bord.csv', toCSV(tripRows));
 
+  // Preuves de paiement (argent comptant, bordereaux de dépôt)
+  const proofs = (await db.media.where('kind').equals('paiement').toArray()).filter((m) => m.blob && inRange(m.takenAt.slice(0, 10)));
+  if (proofs.length && o.includePhotos) {
+    const fP = root.folder('05_Preuves_de_paiement')!;
+    const docsById = new Map(docs.map((d) => [d.id, d]));
+    for (const m of proofs) {
+      const d = m.docId ? docsById.get(m.docId) ?? (await db.docs.get(m.docId)) : undefined;
+      const ext = (m.type.split('/')[1] ?? 'jpg').replace('jpeg', 'jpg');
+      fP.file(`${m.takenAt.slice(0, 10)}_${d ? safeFileName(d.number) : 'paiement'}_${m.id}.${ext}`, m.blob!);
+    }
+  }
+
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
   return { blob, filename: `Murco_comptable_${o.from}_au_${o.to}.zip` };
 }
@@ -102,6 +115,12 @@ export async function buildBackup(): Promise<Blob> {
     expenses: expNoBlob,
     emails: await db.emails.toArray(),
     services: await db.services.toArray(),
+    jobs: await db.jobs.toArray(),
+    media: (await db.media.toArray()).map((m) => {
+      const { blob, ...rest } = m;
+      if (blob) photos.file(`media-${m.id}`, blob);
+      return { ...rest, hasBlob: !!blob };
+    }),
   };
   zip.file('data.json', JSON.stringify(data));
   return zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
@@ -122,8 +141,23 @@ export async function restoreBackup(file: Blob): Promise<void> {
       return rest;
     }),
   );
-  await db.transaction('rw', [db.settings, db.clients, db.docs, db.trips, db.expenses, db.emails, db.services], async () => {
+  const media = await Promise.all(
+    (data.media ?? []).map(async (m: Record<string, unknown>) => {
+      const { hasBlob, ...rest } = m;
+      const f = hasBlob ? zip.file(`photos/media-${m.id}`) : null;
+      return f ? { ...rest, blob: new Blob([await f.async('arraybuffer')], { type: (m.type as string) || 'image/jpeg' }) } : rest;
+    }),
+  );
+  await db.transaction('rw', [db.settings, db.clients, db.docs, db.trips, db.expenses, db.emails, db.services, db.jobs, db.media], async () => {
     await Promise.all([db.settings.clear(), db.clients.clear(), db.docs.clear(), db.trips.clear(), db.expenses.clear(), db.emails.clear()]);
+    if (data.jobs) {
+      await db.jobs.clear();
+      await db.jobs.bulkPut(data.jobs);
+    }
+    if (data.media) {
+      await db.media.clear();
+      await db.media.bulkPut(media);
+    }
     if (data.services?.length) {
       await db.services.clear();
       await db.services.bulkPut(data.services);

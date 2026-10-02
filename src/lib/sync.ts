@@ -29,7 +29,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { useSyncExternalStore } from 'react';
-import { db, onLocalChange, remoteTx, SYNC_TABLES, type Expense, type SyncTable } from './db';
+import { db, onLocalChange, remoteTx, SYNC_TABLES, type SyncTable } from './db';
 import { blobToBase64 } from './utils';
 
 /*
@@ -139,6 +139,20 @@ let user: User | null = null;
 let unsubs: Unsubscribe[] = [];
 let stopLocal: (() => void) | null = null;
 
+/** Accès Firestore pour les autres modules (portail client). */
+export function syncContext(): { fs: Firestore; uid: string } | null {
+  return fs && user ? { fs, uid: user.uid } : null;
+}
+const attachListeners = new Set<() => (() => void) | void>();
+/** Exécuté à chaque connexion au compte (ex.: écoute du portail client). */
+export function onSyncAttach(fn: () => (() => void) | void) {
+  attachListeners.add(fn);
+}
+const localDocHooks = new Set<(table: SyncTable, v: Record<string, unknown>) => void>();
+export function onSyncedPut(fn: (table: SyncTable, v: Record<string, unknown>) => void) {
+  localDocHooks.add(fn);
+}
+
 function base() {
   return `users/${user!.uid}`;
 }
@@ -235,18 +249,27 @@ type Rec = Record<string, unknown> & { id: number | string; _u?: number; _delete
 
 const keyOf = (table: SyncTable, id: string): number | string => (table === 'settings' ? id : Number(id));
 
+/** Tables qui contiennent un fichier (photo): champ du fichier, de l'empreinte, du nom et du type. */
+const BLOBS: Partial<Record<SyncTable, { field: string; sig: string; name: string; type: string }>> = {
+  expenses: { field: 'photo', sig: 'photoSig', name: 'photoName', type: 'photoType' },
+  media: { field: 'blob', sig: 'sig', name: 'name', type: 'type' },
+};
+
 function clean(table: SyncTable, v: Rec): Rec {
-  if (table !== 'expenses') return v;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { photo, ...rest } = v;
-  return rest as Rec;
+  const cfg = BLOBS[table];
+  if (!cfg) return v;
+  const rest = { ...v };
+  delete rest[cfg.field];
+  return rest;
 }
 
 const photoSig = (b: Blob) => `${b.size}-${b.type}`;
+const fileDocId = (table: SyncTable, id: unknown) => `${table}-${id}`;
 
 /** Réduit une photo pour qu'elle tienne dans un document Firestore (< 1 Mo). */
 async function shrinkForCloud(b: Blob): Promise<Blob> {
-  if (b.size < 650_000 || !b.type.startsWith('image/')) return b;
+  if (b.size < 650_000) return b;
+  if (!b.type.startsWith('image/')) throw new Error('Fichier trop lourd (max. 650 Ko)');
   const bmp = await createImageBitmap(b);
   for (const [max, q] of [[1400, 0.72], [1100, 0.62], [850, 0.55]] as const) {
     const sc = Math.min(1, max / Math.max(bmp.width, bmp.height));
@@ -263,18 +286,21 @@ async function shrinkForCloud(b: Blob): Promise<Blob> {
 async function pushRecord(table: SyncTable, v: Rec) {
   if (!fs || !user) return;
   const rec = { ...clean(table, v) };
-  if (table === 'expenses' && v.photo instanceof Blob) {
-    const sig = photoSig(v.photo);
-    if (rec.photoSig !== sig) {
-      rec.photoSig = sig;
+  const cfg = BLOBS[table];
+  const file = cfg ? v[cfg.field] : undefined;
+  if (cfg && file instanceof Blob) {
+    const sig = photoSig(file);
+    if (rec[cfg.sig] !== sig) {
+      rec[cfg.sig] = sig;
       // garde la même empreinte localement, sans changer l'horodatage
-      await remoteTx([db.expenses], () => db.expenses.update(v.id as number, { photoSig: sig }));
+      const t = db.table(table);
+      await remoteTx([t], () => t.update(v.id, { [cfg.sig]: sig }));
       try {
-        const small = await shrinkForCloud(v.photo);
-        await setDoc(doc(fs, base(), 'photos', String(v.id)), {
+        const small = await shrinkForCloud(file);
+        await setDoc(doc(fs, base(), 'files', fileDocId(table, v.id)), {
           data: await blobToBase64(small),
           type: small.type,
-          name: (v.photoName as string) ?? 'recu.jpg',
+          name: (v[cfg.name] as string) ?? 'photo.jpg',
           sig,
         });
       } catch (e) {
@@ -300,15 +326,15 @@ async function pushDelete(table: SyncTable, id: unknown) {
   await setDoc(doc(fs, base(), table, String(id)), { id, _deleted: true, _u: Date.now() });
 }
 
-async function fetchPhoto(id: number): Promise<{ photo: Blob; photoName: string; photoType: string } | null> {
+async function fetchFile(table: SyncTable, id: unknown): Promise<{ blob: Blob; name: string; type: string } | null> {
   if (!fs || !user) return null;
-  const snap = await getDoc(doc(fs, base(), 'photos', String(id)));
+  const snap = await getDoc(doc(fs, base(), 'files', fileDocId(table, id)));
   if (!snap.exists()) return null;
   const d = snap.data() as { data: string; type: string; name: string };
   const bin = atob(d.data);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return { photo: new Blob([bytes], { type: d.type }), photoName: d.name, photoType: d.type };
+  return { blob: new Blob([bytes], { type: d.type }), name: d.name, type: d.type };
 }
 
 /** Applique un enregistrement venant du nuage s'il est plus récent que la copie locale. */
@@ -328,13 +354,14 @@ async function applyRemote(table: SyncTable, remote: Rec) {
   }
   if (local && lu === ru) return;
   let rec: Rec = { ...remote, id: key };
-  if (table === 'expenses') {
-    const l = local as unknown as Expense | undefined;
-    if (l?.photo && l.photoSig === remote.photoSig) rec = { ...rec, photo: l.photo, photoName: l.photoName, photoType: l.photoType };
-    else if (remote.photoSig) {
-      const p = await fetchPhoto(key as number).catch(() => null);
-      if (p) rec = { ...rec, ...p };
-      else if (l?.photo) rec = { ...rec, photo: l.photo, photoName: l.photoName, photoType: l.photoType };
+  const cfg = BLOBS[table];
+  if (cfg) {
+    const keepLocal = () => ({ [cfg.field]: local![cfg.field], [cfg.name]: local![cfg.name], [cfg.type]: local![cfg.type] });
+    if (local?.[cfg.field] && local[cfg.sig] === remote[cfg.sig]) rec = { ...rec, ...keepLocal() };
+    else if (remote[cfg.sig]) {
+      const f = await fetchFile(table, key).catch(() => null);
+      if (f) rec = { ...rec, [cfg.field]: f.blob, [cfg.name]: f.name, [cfg.type]: f.type };
+      else if (local?.[cfg.field]) rec = { ...rec, ...keepLocal() };
     }
   }
   await remoteTx([t], () => t.put(rec));
@@ -357,9 +384,17 @@ function attach() {
   stopLocal = onLocalChange((c) => {
     const job =
       c.type === 'put'
-        ? Promise.all((c.values ?? []).map((v) => pushRecord(c.table, v as Rec)))
+        ? Promise.all((c.values ?? []).map(async (v) => {
+            await pushRecord(c.table, v as Rec);
+            localDocHooks.forEach((fn) => fn(c.table, v as Rec));
+          }))
         : Promise.all(c.keys.map((k) => pushDelete(c.table, k)));
     job.then(() => setState({ lastSync: Date.now() })).catch((e) => setState({ status: 'error', error: msg(e) }));
+  });
+
+  attachListeners.forEach((fn) => {
+    const stop = fn();
+    if (stop) unsubs.push(stop);
   });
 
   // Nuage → local (temps réel)

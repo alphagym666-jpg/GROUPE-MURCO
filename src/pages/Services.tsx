@@ -34,7 +34,7 @@ export default function Services() {
     const removed = (list ?? []).filter((r) => !keep.has(r.id)).map((r) => r.id!);
     if (removed.length) await db.services.bulkDelete(removed);
     setDirty(false);
-    notify('Liste de prix enregistrée ✔');
+    notify('Liste de prix enregistrée');
   };
 
   const move = (i: number, d: -1 | 1) => {
@@ -55,7 +55,7 @@ export default function Services() {
         </div>
         <div className="actions">
           <button className="btn" onClick={() => { setRows([...rows, { code: '', name: '', unit: 'forfait', price: 0, minimum: 0, notes: '', order: rows.length }]); setDirty(true); }}>+ Code</button>
-          <button className="btn accent" onClick={save} disabled={!dirty}>💾 Enregistrer</button>
+          <button className="btn accent" onClick={save} disabled={!dirty}>Enregistrer</button>
         </div>
       </div>
       <div className="card table-wrap">

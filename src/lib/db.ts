@@ -110,6 +110,14 @@ export interface Payment {
   date: string;
   amount: number;
   method: string;
+  mediaId?: number; // photo de l'argent comptant / du bordereau de dépôt
+  note?: string;
+}
+
+export interface Signature {
+  name: string;
+  at: string; // ISO
+  image?: string; // data URL PNG de la signature
 }
 
 export interface Doc extends Synced {
@@ -134,9 +142,60 @@ export interface Doc extends Synced {
   sourceQuoteId?: number;
   convertedInvoiceId?: number;
   tripId?: number;
+  jobId?: number; // job de l'agenda d'où vient la facture
+  depositMediaId?: number; // photo du dépôt reçu
+  pdfPhotos?: boolean; // joindre les photos avant/après au PDF
+  portalToken?: string; // lien client (portail)
+  signature?: Signature; // acceptation signée en ligne
+  viewedAt?: string; // vu par le client dans le portail
   sentAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export type JobStatus = 'planifie' | 'fait' | 'facture' | 'annule';
+export type Recurrence = 'none' | 'weekly' | 'monthly' | 'yearly' | 'months';
+
+/** Job à l'agenda (travaux planifiés). */
+export interface Job extends Synced {
+  id?: number;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:MM ('' = dans la journée)
+  durationMin: number;
+  clientId: number;
+  address: string;
+  geo?: GeoPoint;
+  title: string;
+  items: LineItem[];
+  notes: string;
+  status: JobStatus;
+  order: number; // ordre dans la route du jour
+  recurrence: Recurrence;
+  recurEveryMonths?: number;
+  nextJobId?: number;
+  docId?: number;
+  doneAt?: string;
+  remindedAt?: string;
+  createdAt: string;
+}
+
+export type MediaKind = 'avant' | 'apres' | 'job' | 'paiement' | 'autre';
+
+/** Photo (job avant/après, preuve de paiement comptant ou de dépôt…). */
+export interface Media extends Synced {
+  id?: number;
+  kind: MediaKind;
+  blob?: Blob;
+  type: string;
+  name: string;
+  sig?: string;
+  caption: string;
+  takenAt: string; // ISO
+  geo?: GeoPoint;
+  docId?: number;
+  jobId?: number;
+  clientId?: number;
+  createdAt: string;
 }
 
 export interface Trip extends Synced {
@@ -153,7 +212,9 @@ export interface Trip extends Synced {
   clientId?: number;
   docId?: number;
   expenseId?: number;
-  source: 'auto-facture' | 'auto-recu' | 'manuel';
+  source: 'auto-facture' | 'auto-recu' | 'auto-agenda' | 'manuel';
+  routeDate?: string; // trajet enchaîné de la journée (agenda)
+  jobId?: number;
   distanceMethod: 'google' | 'route' | 'estimation' | 'manuel';
   durationMin?: number;
   createdAt: string;
@@ -219,6 +280,8 @@ class MurcoDB extends Dexie {
   expenses!: Table<Expense, number>;
   emails!: Table<EmailLog, number>;
   services!: Table<Service, number>;
+  jobs!: Table<Job, number>;
+  media!: Table<Media, number>;
 
   constructor() {
     // Identifiants uniques globaux (pas d'auto-incrément) pour synchroniser plusieurs appareils.
@@ -232,12 +295,17 @@ class MurcoDB extends Dexie {
       emails: 'id, date, clientId, docId',
       services: 'id, code, order',
     });
+    this.version(2).stores({
+      trips: 'id, date, docId, expenseId, clientId, routeDate',
+      jobs: 'id, date, clientId, status, docId',
+      media: 'id, docId, jobId, clientId, kind',
+    });
   }
 }
 
 export const db = new MurcoDB();
 
-export const SYNC_TABLES = ['settings', 'clients', 'docs', 'trips', 'expenses', 'emails', 'services'] as const;
+export const SYNC_TABLES = ['settings', 'clients', 'docs', 'trips', 'expenses', 'emails', 'services', 'jobs', 'media'] as const;
 export type SyncTable = (typeof SYNC_TABLES)[number];
 
 let lastId = 0;

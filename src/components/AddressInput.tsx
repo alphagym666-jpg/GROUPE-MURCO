@@ -62,7 +62,7 @@ export function AddressInput({ value, onChange, onPick, placeholder, autoFocus }
         <div className="addr-list" role="listbox">
           {items.map((s) => (
             <button type="button" key={s.label} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(s)}>
-              📍 {s.label}
+              {s.label}
             </button>
           ))}
           <div className="addr-by">Google Maps</div>

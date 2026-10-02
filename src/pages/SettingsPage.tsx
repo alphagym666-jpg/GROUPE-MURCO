@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { errMsg, useToast } from '../components/Toast';
+import { errMsg, useConfirm, useToast } from '../components/Toast';
 import { getSettings, saveSettings, type Settings } from '../lib/db';
 import { buildBackup, restoreBackup } from '../lib/exportZip';
 import { AddressInput } from '../components/AddressInput';
@@ -21,6 +21,7 @@ async function logoToPng(file: File): Promise<string> {
 
 export default function SettingsPage() {
   const notify = useToast();
+  const ask = useConfirm();
   const [s, setS] = useState<Settings | null>(null);
   const [orig, setOrig] = useState<Settings | null>(null);
   const [homeCheck, setHomeCheck] = useState('');
@@ -48,19 +49,19 @@ export default function SettingsPage() {
     const fresh = await getSettings();
     setS(fresh);
     setOrig(fresh);
-    notify('Paramètres enregistrés ✔');
+    notify('Paramètres enregistrés');
   };
 
   const checkHome = async () => {
     setHomeCheck('Recherche…');
     try {
       const r = await geocode(s.homeAddress);
-      if (!r) return setHomeCheck('❌ Adresse introuvable — ajoute la ville et le code postal.');
+      if (!r) return setHomeCheck('Adresse introuvable — ajoute la ville et le code postal.');
       up({ homeGeo: r.geo });
       await saveSettings({ homeAddress: s.homeAddress, homeGeo: r.geo });
-      setHomeCheck(`✅ Trouvée: ${r.label}`);
+      setHomeCheck(`Trouvée: ${r.label}`);
     } catch (e) {
-      setHomeCheck(`❌ ${errMsg(e)}`);
+      setHomeCheck(`${errMsg(e)}`);
     }
   };
 
@@ -70,11 +71,11 @@ export default function SettingsPage() {
     <>
       <div className="page-head">
         <h1>Paramètres</h1>
-        <button className="btn accent" onClick={save}>💾 Enregistrer</button>
+        <button className="btn accent" onClick={save}>Enregistrer</button>
       </div>
 
       <div className="card">
-        <h2>🏢 Ma compagnie (apparaît sur les factures et soumissions)</h2>
+        <h2>Ma compagnie (apparaît sur les factures et soumissions)</h2>
         <div className="row" style={{ marginBottom: 12 }}>
           {s.logo ? <img src={s.logo} alt="Logo" style={{ maxHeight: 60, maxWidth: 200 }} /> : <span className="muted small">Aucun logo</span>}
           <label className="btn small">
@@ -102,11 +103,11 @@ export default function SettingsPage() {
       </div>
 
       <div className="card">
-        <h2>🏠 Domicile — point de départ du journal de bord</h2>
+        <h2>Domicile — point de départ du journal de bord</h2>
         <div className="form-grid">
           <label className="field full">Adresse du domicile
             <div className="row" style={{ flexWrap: 'nowrap' }}>
-              <AddressInput value={s.homeAddress} onChange={(v) => up({ homeAddress: v, homeGeo: undefined })} onPick={(label, geo) => { up({ homeAddress: label, homeGeo: geo }); setHomeCheck(`✅ ${label}`); }} placeholder="ex.: 16, rue Fortin, Sherrington, QC" />
+              <AddressInput value={s.homeAddress} onChange={(v) => up({ homeAddress: v, homeGeo: undefined })} onPick={(label, geo) => { up({ homeAddress: label, homeGeo: geo }); setHomeCheck(`${label}`); }} placeholder="ex.: 16, rue Fortin, Sherrington, QC" />
               <button className="btn" onClick={checkHome}>Vérifier</button>
             </div>
           </label>
@@ -122,7 +123,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="card">
-        <h2>🧾 Taxes, numérotation et textes</h2>
+        <h2>Taxes, numérotation et textes</h2>
         <label className="check" style={{ marginBottom: 6 }}>
           <input type="checkbox" checked={s.chargeTaxes} onChange={(e) => up({ chargeTaxes: e.target.checked })} /> Je charge la TPS/TVQ
         </label>
@@ -149,15 +150,15 @@ export default function SettingsPage() {
       <SyncSection />
 
       <div className="card">
-        <h2>✉️ Gmail</h2>
+        <h2>Gmail</h2>
         <div className="form-grid">
           {txt('googleClientId', 'ID client OAuth Google', { full: true, placeholder: 'xxxxxxxx.apps.googleusercontent.com' })}
         </div>
         <div className="row" style={{ marginTop: 10 }}>
           <button className="btn primary" disabled={!s.googleClientId} onClick={async () => {
-            try { await saveSettings({ googleClientId: s.googleClientId }); await connectGmail(s.googleClientId); notify('Gmail connecté ✔'); } catch (e) { notify(errMsg(e), 'err'); }
+            try { await saveSettings({ googleClientId: s.googleClientId }); await connectGmail(s.googleClientId); notify('Gmail connecté'); } catch (e) { notify(errMsg(e), 'err'); }
           }}>Tester la connexion</button>
-          <span className="small muted">{isGmailConnected() ? '🟢 Connecté' : '⚪ Non connecté'}</span>
+          <span className="small muted">{isGmailConnected() ? 'Connecté' : 'Non connecté'}</span>
         </div>
         <details style={{ marginTop: 12 }}>
           <summary><strong>Comment obtenir l’ID client (une seule fois, ~10 min)</strong></summary>
@@ -173,7 +174,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="card">
-        <h2>📦 Comptable</h2>
+        <h2>Comptable</h2>
         <div className="form-grid">
           {txt('accountantName', 'Nom du comptable')}
           {txt('accountantEmail', 'Courriel du comptable', { type: 'email' })}
@@ -181,27 +182,27 @@ export default function SettingsPage() {
       </div>
 
       <div className="card">
-        <h2>💾 Sauvegarde</h2>
+        <h2>Sauvegarde</h2>
         <p className="small muted">Tes données sont gardées sur cet appareil. Fais une sauvegarde régulièrement (ou pour transférer vers ton téléphone/ordinateur).</p>
         <div className="row">
           <button className="btn" onClick={async () => downloadBlob(await buildBackup(), `Murco_sauvegarde_${todayISO()}.zip`)}>⬇ Télécharger une sauvegarde</button>
           <button className="btn" onClick={() => restoreRef.current?.click()}>⬆ Restaurer</button>
           <input ref={restoreRef} type="file" accept=".zip" hidden onChange={async (e) => {
             const f = e.target.files?.[0];
-            if (!f || !confirm('Remplacer TOUTES les données actuelles par cette sauvegarde?')) return;
+            if (!f || !(await ask({ title: 'Restaurer cette sauvegarde?', message: 'Toutes les données actuelles de cet appareil seront remplacées.', confirm: 'Restaurer', danger: true }))) return;
             try { await restoreBackup(f); notify('Sauvegarde restaurée'); setS(await getSettings()); } catch (err) { notify(errMsg(err), 'err'); }
           }} />
         </div>
       </div>
 
       <div className="card">
-        <h2>📱 Installer sur ton téléphone</h2>
+        <h2>Installer sur ton téléphone</h2>
         <ul className="small" style={{ lineHeight: 1.6 }}>
           <li><strong>iPhone</strong>: ouvre le lien dans Safari → bouton Partager → « Sur l’écran d’accueil ».</li>
           <li><strong>Android</strong>: ouvre dans Chrome → menu ⋮ → « Installer l’application ».</li>
         </ul>
       </div>
-      <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn accent" onClick={save}>💾 Enregistrer</button></div>
+      <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn accent" onClick={save}>Enregistrer</button></div>
     </>
   );
 }
@@ -219,15 +220,15 @@ function MapsSection({ s, up }: { s: Settings; up: (p: Partial<Settings>) => voi
       if (!a || !b) throw new Error('Adresse introuvable');
       const r = await drivingDistance(a.geo, b.geo);
       setResult(r.method === 'google'
-        ? `✅ Google Maps fonctionne: domicile → Saint-Jean-sur-Richelieu = ${r.km} km${r.durationMin ? ` (${r.durationMin} min)` : ''}`
-        : `⚠️ Google n’a pas répondu (${mapsLastError || 'API non activée'}). Distance de secours: ${r.km} km.`);
+        ? `Google Maps fonctionne: domicile → Saint-Jean-sur-Richelieu = ${r.km} km${r.durationMin ? ` (${r.durationMin} min)` : ''}`
+        : `Google n’a pas répondu (${mapsLastError || 'API non activée'}). Distance de secours: ${r.km} km.`);
     } catch (e) {
-      setResult(`❌ ${errMsg(e)} ${mapsLastError}`);
+      setResult(`${errMsg(e)} ${mapsLastError}`);
     }
   };
   return (
     <div className="card">
-      <h2>🗺 Google Maps (km et adresses)</h2>
+      <h2>Google Maps (km et adresses)</h2>
       <p className="small muted">Avec ta clé Google Maps, les km du journal de bord sont calculés par Google Maps (même distance que dans l’app Google Maps), les adresses se complètent pendant que tu tapes et la carte du trajet s’affiche sur chaque facture.</p>
       <div className="form-grid">
         <label className="field full">Clé API Google Maps
@@ -254,6 +255,7 @@ function MapsSection({ s, up }: { s: Settings; up: (p: Partial<Settings>) => voi
 
 function SyncSection() {
   const notify = useToast();
+  const ask = useConfirm();
   const st = useSyncState();
   const [params, setParams] = useSearchParams();
   const [cfgText, setCfgText] = useState(() => {
@@ -272,7 +274,7 @@ function SyncSection() {
     setParams({}, { replace: true });
     if (cfg) {
       saveFirebaseConfig(cfg);
-      notify('Configuration reçue ✔ — connecte-toi avec ton compte.');
+      notify('Configuration reçue — connecte-toi avec ton compte.');
       setTimeout(() => location.reload(), 800);
     }
   }, [params, setParams, notify]);
@@ -300,7 +302,7 @@ function SyncSection() {
 
   return (
     <div className="card" id="sync">
-      <h2>🔄 Synchronisation (téléphone ↔ ordi)</h2>
+      <h2>Synchronisation (téléphone ↔ ordi)</h2>
       {!st.configured ? (
         <>
           <p className="small muted">Synchronise automatiquement factures, clients, km, reçus (avec photos) et paramètres entre tous tes appareils, en temps réel. Ça marche aussi sans Internet: tout se met à jour au retour du réseau.</p>
@@ -316,7 +318,7 @@ function SyncSection() {
               <li><em>Authentication → Paramètres → Domaines autorisés</em>: ajoute <code>{location.hostname}</code>.</li>
               <li><em>Créer → Firestore Database → Créer une base</em>, région <strong>northamerica-northeast1 (Montréal)</strong>, mode production.</li>
               <li>Onglet <em>Règles</em> de Firestore: remplace tout par le contenu du fichier <code>firestore.rules</code> du projet, puis « Publier ».</li>
-              <li><em>⚙️ Paramètres du projet → Vos applications → &lt;/&gt; Web</em> → nom « Murco » → copie le bloc <code>firebaseConfig</code> et colle-le ci-dessus.</li>
+              <li><em>Paramètres du projet → Vos applications → &lt;/&gt; Web</em> → nom « Murco » → copie le bloc <code>firebaseConfig</code> et colle-le ci-dessus.</li>
             </ol>
           </details>
         </>
@@ -338,9 +340,9 @@ function SyncSection() {
       ) : (
         <>
           <div className={`notice ${st.status === 'error' ? 'err' : 'ok'}`}>
-            {st.status === 'ok' && <>✅ Synchronisé — compte <strong>{st.email}</strong>{st.lastSync && <> · dernière mise à jour {new Date(st.lastSync).toLocaleTimeString('fr-CA')}</>}</>}
-            {(st.status === 'syncing' || st.status === 'connecting') && <>⏳ Synchronisation en cours ({st.email})…</>}
-            {st.status === 'error' && <>❌ {st.error}</>}
+            {st.status === 'ok' && <>Synchronisé — compte <strong>{st.email}</strong>{st.lastSync && <> · dernière mise à jour {new Date(st.lastSync).toLocaleTimeString('fr-CA')}</>}</>}
+            {(st.status === 'syncing' || st.status === 'connecting') && <>Synchronisation en cours ({st.email})…</>}
+            {st.status === 'error' && <>{st.error}</>}
           </div>
           {st.error && st.status !== 'error' && <div className="notice">{st.error}</div>}
           {link && (
@@ -355,7 +357,7 @@ function SyncSection() {
           )}
           <div className="row" style={{ marginTop: 12 }}>
             <button className="btn small" onClick={() => run(signOutSync)}>Se déconnecter</button>
-            <button className="btn small danger" onClick={() => { if (confirm('Retirer la configuration de synchronisation de cet appareil? (tes données restent ici et dans le nuage)')) { saveFirebaseConfig(null); location.reload(); } }}>Retirer la configuration</button>
+            <button className="btn small danger" onClick={async () => { if (await ask({ title: 'Retirer la synchronisation de cet appareil?', message: 'Tes données restent ici et dans le nuage.', confirm: 'Retirer', danger: true })) { saveFirebaseConfig(null); location.reload(); } }}>Retirer la configuration</button>
           </div>
         </>
       )}

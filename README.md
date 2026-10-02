@@ -12,16 +12,16 @@ Tout est relié ensemble.
 
 | Module | Fonctionnalités |
 |---|---|
-| **Factures** | Numérotation automatique (F-1001…), PDF avec ton logo, rabais, dépôt, paiements partiels, statut « en retard », TPS/TVQ seulement si tu es inscrit |
-| **Codes de job** | Tape `NDG`, `LAP`, `LVE`… → le service, l'unité, le prix et le **minimum par ligne** s'affichent. Liste de prix modifiable (page « Codes et prix »). **Calculateur pi² / pi lin** intégré à chaque ligne |
-| **Soumissions** | PDF avec ligne de signature, une fois acceptée: **1 clic → facture** |
-| **Journal de bord automatique** | Chaque facture avec un *lieu des travaux* ajoute le trajet **domicile → job (aller-retour)** avec la raison = la job faite. **Distance calculée par Google Maps** (avec carte du trajet et bouton « Ouvrir dans Google Maps »), sinon OpenStreetMap. Export PDF/Excel conforme (date, destination, raison, km) |
-| **Synchronisation** | Ordi ↔ téléphone en temps réel (Firebase, gratuit). Fonctionne hors-ligne; tout se met à jour au retour du réseau. Photos des reçus incluses |
-| **Reçus et dépenses** | Photo du reçu avec la caméra du téléphone. La **position GPS de la photo** (ou ta position actuelle, ou une adresse) sert à calculer **combien de km de chez toi** (ex.: le plein d'essence) et l'ajoute au journal. TPS/TVQ calculées depuis le total |
-| **Clients** | Fiche avec toutes ses factures, soumissions, déplacements, dépenses et courriels Gmail |
-| **Gmail** | Envoi des factures/soumissions en PDF directement de ton Gmail, lecture des courriels des clients, **import des pièces jointes (factures fournisseurs) comme reçus** |
-| **Dossier comptable** | Un clic: ZIP avec sommaire (ventes, TPS/TVQ à remettre, dépenses par catégorie, km), toutes les factures PDF, les reçus classés par catégorie, le journal de bord, et fichiers Excel/CSV. Téléchargement ou envoi direct au comptable par Gmail |
-| **Mobile** | S'installe comme une application (iPhone/Android), fonctionne hors-ligne |
+| **Facture express** | Sur le cell, en 30 secondes: client → touche les codes → quantité → « Créer et partager » (texto, Messenger, courriel). **Dictée vocale**: « NDG 120 pieds et lavage de vitres 12 fenêtres chez Tremblay ». Payé comptant sur place avec photo de l'argent |
+| **Factures et soumissions** | Codes de job (NDG, LAP, LVE…) avec prix et minimum par ligne, calculateur pi² / pi lin, rabais, dépôt (avec photo), paiements avec photo de preuve, PDF avec photos avant/après |
+| **Lien client (portail)** | Le client ouvre un lien sans compte: voit sa soumission, **l'accepte et la signe au doigt**; la signature revient dans l'app et la soumission passe « Acceptée ». Pour une facture: comment payer (Interac) |
+| **Agenda des jobs** | Calendrier, ordre de la journée optimisé, **route du jour dans Google Maps**, jobs récurrents (gouttières chaque automne…), rappels au client par texto/courriel, job → facture en 1 clic |
+| **Journal de bord automatique** | Route de la journée domicile → jobs → domicile quand les jobs sont « Faits »; sinon aller-retour par facture. Distances Google Maps. Export PDF/Excel |
+| **Photos** | Avant / après sur chaque job et facture, preuves de paiement comptant et bordereaux de dépôt, reçus de dépenses (GPS de la photo → km depuis la maison) |
+| **Tableau de bord** | Jobs du jour, factures à encaisser avec **relance** en 1 clic, revenus des 12 derniers mois, ventes par code de job, soumissions vues/signées |
+| **Synchronisation** | Ordi ↔ cell en temps réel (Firebase, gratuit), hors-ligne, photos incluses |
+| **Dossier comptable** | ZIP: sommaire, factures PDF, reçus par catégorie, preuves de paiement, journal de bord, fichiers Excel/CSV |
+| **Pro** | Recherche rapide partout (Ctrl+K), bouton + sur le cell, mode sombre, annulation après suppression, fonctionne hors-ligne |
 
 ## Démarrer
 
@@ -50,7 +50,8 @@ Ensuite sur le téléphone:
 2. **Authentication → Commencer** → active **Adresse e-mail/Mot de passe** (et Google si désiré).
 3. **Authentication → Paramètres → Domaines autorisés** → ajoute `alphagym666-jpg.github.io`.
 4. **Firestore Database → Créer une base** → région `northamerica-northeast1 (Montréal)`, mode production.
-   Onglet **Règles**: colle le contenu de [`firestore.rules`](firestore.rules) → **Publier**.
+   Onglet **Règles**: colle le contenu de [`firestore.rules`](firestore.rules) → **Publier**
+   (ces règles protègent tes données et permettent au client de seulement voir/signer sa soumission).
 5. **⚙️ Paramètres du projet → Vos applications → `</>` Web** → copie le bloc `firebaseConfig`.
 6. Dans l'app: **Paramètres → Synchronisation** → colle le bloc → **Créer mon compte**.
 7. Pour le téléphone: copie le « lien pour connecter ton téléphone » (dans Paramètres), ouvre-le sur le téléphone, connecte-toi avec le même courriel/mot de passe.
@@ -93,6 +94,7 @@ React + TypeScript + Vite, Dexie (IndexedDB), Firebase (Auth + Firestore) pour l
 Google Maps (Routes, Geocoding, Places, Embed) avec repli OpenStreetMap, jsPDF, JSZip, exifr (GPS des photos),
 Google Identity Services + Gmail API.
 
+Tests: `npm test` (analyse de la dictée).
 Tester la synchronisation en local: `npx firebase-tools emulators:start --only auth,firestore --project demo-murco`,
 puis dans Paramètres → Synchronisation, coller `{"apiKey":"x","projectId":"demo-murco","authDomain":"x","emulator":true}`.
 Pour publier dans l'App Store / Play Store plus tard: envelopper avec Capacitor (`npx cap init`).

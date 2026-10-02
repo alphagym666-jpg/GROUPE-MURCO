@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Modal } from '../components/Modal';
-import { errMsg, useToast } from '../components/Toast';
+import { errMsg, useConfirm, useToast } from '../components/Toast';
 import { db, type Trip } from '../lib/db';
 import { AddressInput } from '../components/AddressInput';
 import { currentPosition, directionsLink, drivingDistance, embedDirectionsUrl, geocode, reverseGeocode } from '../lib/geo';
@@ -11,7 +11,7 @@ import { buildLogbookPdf } from '../lib/pdf';
 import { ensureHomeGeo } from '../lib/trips';
 import { downloadBlob, METHOD_LABEL, formatDate, km, kmAllowance, money, toCSV, todayISO } from '../lib/utils';
 
-const SOURCE_LABEL: Record<Trip['source'], string> = { 'auto-facture': '🧾 auto', 'auto-recu': '📷 auto', manuel: '✍️' };
+const SOURCE_LABEL: Record<Trip['source'], string> = { 'auto-facture': 'auto', 'auto-recu': 'auto', 'auto-agenda': 'route', manuel: '' };
 
 export default function Logbook() {
   const s = useSettings();
@@ -120,6 +120,7 @@ export default function Logbook() {
 
 function TripModal({ trip, clients, onClose, notify, mapsKey }: { trip: Trip; clients: { id?: number; name: string; address: string }[]; onClose: () => void; notify: ReturnType<typeof useToast>; mapsKey: string }) {
   const [t, setT] = useState<Trip>(trip);
+  const ask = useConfirm();
   const [busy, setBusy] = useState(false);
   const up = (p: Partial<Trip>) => setT((x) => {
     const n = { ...x, ...p };
@@ -168,7 +169,7 @@ function TripModal({ trip, clients, onClose, notify, mapsKey }: { trip: Trip; cl
   };
 
   const remove = async () => {
-    if (!t.id || !confirm('Supprimer ce déplacement?')) return;
+    if (!t.id || !(await ask({ title: 'Supprimer ce déplacement?', confirm: 'Supprimer', danger: true }))) return;
     await db.trips.delete(t.id);
     if (t.docId) await db.docs.update(t.docId, { tripId: undefined });
     if (t.expenseId) await db.expenses.update(t.expenseId, { tripId: undefined });
@@ -193,14 +194,14 @@ function TripModal({ trip, clients, onClose, notify, mapsKey }: { trip: Trip; cl
         <label className="field full">Destination
           <div className="row" style={{ flexWrap: 'nowrap' }}>
             <AddressInput value={t.toLabel} onChange={(v) => up({ toLabel: v, toGeo: undefined })} onPick={(label, geo) => up({ toLabel: label, toGeo: geo })} placeholder="adresse, ville" />
-            <button className="btn" onClick={here} disabled={busy} title="Ma position actuelle">📍 Ici</button>
+            <button className="btn" onClick={here} disabled={busy} title="Ma position actuelle">Ici</button>
           </div>
         </label>
         <label className="field full">Raison (affaires) *<input value={t.reason} onChange={(e) => up({ reason: e.target.value })} placeholder="ex.: Achat matériaux chez Rona pour job Tremblay" /></label>
         <label className="field">Km (aller)
           <input type="number" step="0.1" inputMode="decimal" value={t.oneWayKm} onChange={(e) => up({ oneWayKm: Number(e.target.value), distanceMethod: 'manuel' })} />
         </label>
-        <label className="field">&nbsp;<button className="btn" onClick={calc} disabled={busy || !t.toLabel}>{busy ? 'Calcul…' : '🧮 Calculer les km'}</button></label>
+        <label className="field">&nbsp;<button className="btn" onClick={calc} disabled={busy || !t.toLabel}>{busy ? 'Calcul…' : 'Calculer les km'}</button></label>
         <label className="check full"><input type="checkbox" checked={t.roundTrip} onChange={(e) => up({ roundTrip: e.target.checked })} /> Aller-retour</label>
       </div>
       <div className="notice ok" style={{ marginTop: 12 }}>
