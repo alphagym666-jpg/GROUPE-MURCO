@@ -1,7 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks';
+import { Banknote, Bell, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db, type DocType } from '../lib/db';
+import { RelanceModal } from '../components/RelanceModal';
+import { SwipeRow } from '../components/SwipeRow';
+import { useToast } from '../components/Toast';
+import { db, type Doc, type DocType } from '../lib/db';
+import { PaymentModal } from './DocEditor';
 import { useSettings } from '../lib/hooks';
 import { docTotals, money, statusClass, statusLabel, todayISO } from '../lib/utils';
 
@@ -27,6 +32,9 @@ export default function DocList({ type }: { type: DocType }) {
   const s = useSettings();
   const [filter, setFilter] = useState('all');
   const [q, setQ] = useState('');
+  const notify = useToast();
+  const [pay, setPay] = useState<Doc | null>(null);
+  const [relance, setRelance] = useState<Doc | null>(null);
   const data = useLiveQuery(async () => {
     const [docs, clients] = await Promise.all([db.docs.where('type').equals(type).toArray(), db.clients.toArray()]);
     return { docs: docs.sort((a, b) => b.date.localeCompare(a.date) || b.number.localeCompare(a.number)), clients: new Map(clients.map((c) => [c.id!, c])) };
@@ -64,7 +72,41 @@ export default function DocList({ type }: { type: DocType }) {
         {rows.length === 0 ? (
           <div className="empty">Aucune {isInvoice ? 'facture' : 'soumission'} ici.</div>
         ) : (
-          <div className="table-wrap">
+          <>
+          <div className="doc-cards hide-desktop">
+            {rows.map((d) => {
+              const tt = docTotals(d, s);
+              const c = data.clients.get(d.clientId);
+              const open = d.status === 'sent' || d.status === 'partial';
+              const late = open && d.dueDate < today;
+              return (
+                <SwipeRow key={d.id} onTap={() => nav(`/doc/${d.id}`)}
+                  left={isInvoice && open ? { label: 'Payée', icon: <Banknote size={18} />, tone: 'green', run: () => setPay(d) } : undefined}
+                  right={open ? { label: 'Relancer', icon: <Bell size={18} />, tone: 'amber', run: () => setRelance(d) } : undefined}>
+                  <div className={`doc-card ${late ? 'late' : ''}`}>
+                    <span className="cp-avatar">{(c?.name ?? '?').slice(0, 1).toUpperCase()}</span>
+                    <span className="grow">
+                      <strong>{c?.name ?? '—'}</strong>
+                      <small>{d.number}{d.title ? ` · ${d.title}` : ''}</small>
+                      <span className="row" style={{ gap: 6, marginTop: 3 }}>
+                        <span className={statusClass(d)}>{statusLabel(d)}</span>
+                        {late && <span className="badge red">En retard</span>}
+                      </span>
+                    </span>
+                    <span className="doc-amt">
+                      <b>{money(tt.total)}</b>
+                      {isInvoice && tt.paid > 0 && tt.balance > 0 && <small>solde {money(tt.balance)}</small>}
+                      <small>{d.date}</small>
+                    </span>
+                    <ChevronRight size={16} className="muted" />
+                  </div>
+                </SwipeRow>
+              );
+            })}
+            <div className="doc-cards-foot"><span>{rows.length} {isInvoice ? 'facture' : 'soumission'}{rows.length > 1 ? 's' : ''}</span><strong>{money(total)}</strong></div>
+            {rows.some((d) => d.status === 'sent' || d.status === 'partial') && <div className="small muted swipe-hint">Astuce: glisse une {isInvoice ? 'facture vers la droite pour la marquer payée, vers la gauche' : 'soumission vers la gauche'} pour relancer le client.</div>}
+          </div>
+          <div className="table-wrap hide-mobile">
             <table className="list">
               <thead>
                 <tr>
@@ -100,8 +142,19 @@ export default function DocList({ type }: { type: DocType }) {
               </tfoot>
             </table>
           </div>
+          </>
         )}
       </div>
+      {pay && (
+        <PaymentModal balance={docTotals(pay, s).balance} link={{ docId: pay.id, clientId: pay.clientId }} onClose={() => setPay(null)} onSave={async (p) => {
+          const payments = [...pay.payments, p];
+          const tt = docTotals({ ...pay, payments }, s);
+          await db.docs.update(pay.id!, { payments, status: tt.balance <= 0.004 ? 'paid' : 'partial' });
+          notify(tt.balance <= 0.004 ? `${pay.number} payée — ${money(p.amount)}` : `Paiement de ${money(p.amount)} — solde ${money(tt.balance)}`);
+          setPay(null);
+        }} />
+      )}
+      {relance && <RelanceModal doc={relance} client={data.clients.get(relance.clientId)} onClose={() => setRelance(null)} />}
     </>
   );
 }

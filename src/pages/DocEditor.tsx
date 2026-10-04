@@ -1,8 +1,8 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AddressInput } from '../components/AddressInput';
-import { ClientFormModal } from '../components/ClientForm';
+import { ClientPicker } from '../components/ClientPicker';
 import { emptyLine, LineItems } from '../components/LineItems';
 import { Modal } from '../components/Modal';
 import { SendEmailModal } from '../components/SendEmailModal';
@@ -62,7 +62,16 @@ export default function DocEditor() {
   const [savedAddress, setSavedAddress] = useState('');
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [showClient, setShowClient] = useState(false);
+  // Arrivée depuis « Job terminée → envoyer par courriel »: ouvrir l'envoi tout de suite
+  const autoSend = useRef(false);
+  const openEmailRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    if (params.get('envoyer') === 'courriel' && loadedFor === loadKey && !autoSend.current) {
+      autoSend.current = true;
+      openEmailRef.current();
+    }
+  }, [loadedFor, loadKey, params]);
+  const [moreOpen, setMoreOpen] = useState(() => !matchMedia('(max-width: 860px)').matches);
   const [emailPdf, setEmailPdf] = useState<Blob | null>(null);
   const [showPay, setShowPay] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -119,6 +128,15 @@ export default function DocEditor() {
 
   const upd = (patch: Partial<Doc>) => {
     setDoc((d) => ({ ...d!, ...patch }));
+    setDirty(true);
+  };
+  /** Changer la date garde le même délai d'échéance (et la date des travaux si elle suivait). */
+  const changeDate = (date: string) => {
+    if (!date) return;
+    setDoc((d) => {
+      const days = Math.round((new Date(d!.dueDate + 'T12:00:00').getTime() - new Date(d!.date + 'T12:00:00').getTime()) / 864e5);
+      return { ...d!, date, dueDate: addDays(date, Number.isFinite(days) ? days : 0), jobDate: d!.jobDate === d!.date ? date : d!.jobDate };
+    });
     setDirty(true);
   };
 
@@ -182,6 +200,7 @@ export default function DocEditor() {
     const d = await ready();
     if (d) setEmailPdf(await pdfBlob(d));
   };
+  openEmailRef.current = () => void openEmail();
   /** Partage du PDF (texto, Messenger, courriel…) avec la feuille de partage du téléphone. */
   const share = async () => {
     const d = await ready();
@@ -313,39 +332,10 @@ export default function DocEditor() {
 
       <div className="card">
         <div className="form-grid">
-          <label className="field full">
+          <div className="field full">
             Client *
-            <div className="row" style={{ flexWrap: 'nowrap' }}>
-              <select value={doc.clientId || ''} onChange={(e) => upd({ clientId: Number(e.target.value) })}>
-                <option value="">— Choisir un client —</option>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <button className="btn" onClick={() => setShowClient(true)}>+ Nouveau</button>
-            </div>
-          </label>
-          <label className="field">Date<input type="date" value={doc.date} onChange={(e) => upd({ date: e.target.value })} /></label>
-          <label className="field">{isInvoice ? 'Échéance' : 'Valide jusqu’au'}<input type="date" value={doc.dueDate} onChange={(e) => upd({ dueDate: e.target.value })} /></label>
-          <label className="field">Date des travaux<input type="date" value={doc.jobDate} onChange={(e) => upd({ jobDate: e.target.value })} /></label>
-          <label className="field">Projet
-            <select value={doc.projectId ?? ''} onChange={(e) => upd({ projectId: e.target.value ? Number(e.target.value) : undefined })}>
-              <option value="">—</option>
-              {projects.filter((p) => !doc.clientId || p.clientId === doc.clientId || p.id === doc.projectId).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </label>
-          <label className="field">Vendeur
-            <select value={doc.salesRepId ?? ''} onChange={(e) => upd({ salesRepId: e.target.value ? Number(e.target.value) : undefined })}>
-              <option value="">Moi</option>
-              {members.filter((m) => m.active && (m.role === 'vendeur' || m.role === 'admin' || m.id === doc.salesRepId)).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-          </label>
-          <label className="field">
-            Statut
-            <select value={doc.status} onChange={(e) => upd({ status: e.target.value as DocStatus })}>
-              {(isInvoice ? ['draft', 'sent', 'partial', 'paid', 'cancelled'] : ['draft', 'sent', 'accepted', 'refused', 'cancelled']).map((k) => (
-                <option key={k} value={k}>{STATUS_LABELS[k as DocStatus]}</option>
-              ))}
-            </select>
-          </label>
+            <ClientPicker value={doc.clientId} onChange={(id) => upd({ clientId: id })} autoFocus={isNew && !doc.clientId} />
+          </div>
           <label className="field full">Description de la job (sert aussi de raison dans le journal de bord)
             <input value={doc.title} placeholder="ex.: Installation de céramique salle de bain" onChange={(e) => upd({ title: e.target.value })} />
           </label>
@@ -390,6 +380,39 @@ export default function DocEditor() {
         </div>
         <label className="field" style={{ marginTop: 12 }}>Notes (apparaissent sur le PDF)<textarea value={doc.notes} onChange={(e) => upd({ notes: e.target.value })} /></label>
       </div>
+
+      <details className="card more-opts" open={moreOpen} onToggle={(e) => setMoreOpen((e.target as HTMLDetailsElement).open)}>
+        <summary>
+          <span><strong>Plus d’options</strong>
+            <small>{formatDate(doc.date)} · {isInvoice ? (doc.dueDate === doc.date ? 'payable sur réception' : `échéance ${formatDate(doc.dueDate)}`) : `valide jusqu’au ${formatDate(doc.dueDate)}`} · {STATUS_LABELS[doc.status]}{doc.projectId ? ' · projet' : ''}</small>
+          </span>
+        </summary>
+        <div className="form-grid" style={{ marginTop: 12 }}>
+          <label className="field">Date<input type="date" value={doc.date} onChange={(e) => changeDate(e.target.value)} /></label>
+          <label className="field">{isInvoice ? 'Échéance' : 'Valide jusqu’au'}<input type="date" value={doc.dueDate} onChange={(e) => upd({ dueDate: e.target.value })} /></label>
+          <label className="field">Date des travaux<input type="date" value={doc.jobDate} onChange={(e) => upd({ jobDate: e.target.value })} /></label>
+          <label className="field">Projet
+            <select value={doc.projectId ?? ''} onChange={(e) => upd({ projectId: e.target.value ? Number(e.target.value) : undefined })}>
+              <option value="">—</option>
+              {projects.filter((p) => !doc.clientId || p.clientId === doc.clientId || p.id === doc.projectId).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
+          <label className="field">Vendeur
+            <select value={doc.salesRepId ?? ''} onChange={(e) => upd({ salesRepId: e.target.value ? Number(e.target.value) : undefined })}>
+              <option value="">Moi</option>
+              {members.filter((m) => m.active && (m.role === 'vendeur' || m.role === 'admin' || m.id === doc.salesRepId)).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </label>
+          <label className="field">
+            Statut
+            <select value={doc.status} onChange={(e) => upd({ status: e.target.value as DocStatus })}>
+              {(isInvoice ? ['draft', 'sent', 'partial', 'paid', 'cancelled'] : ['draft', 'sent', 'accepted', 'refused', 'cancelled']).map((k) => (
+                <option key={k} value={k}>{STATUS_LABELS[k as DocStatus]}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </details>
 
       {doc.id && isInvoice && <ProfitCard doc={doc} onChange={(p) => upd(p)} />}
 
@@ -464,7 +487,6 @@ export default function DocEditor() {
         </div>
       </div>
 
-      {showClient && <ClientFormModal onClose={() => setShowClient(false)} onSaved={(cid) => upd({ clientId: cid })} />}
 
       {emailPdf && doc.id && (
         <SendEmailModal
@@ -501,7 +523,7 @@ export default function DocEditor() {
   );
 }
 
-function PaymentModal({ balance, link, onClose, onSave }: { balance: number; link: { docId?: number; clientId?: number }; onClose: () => void; onSave: (p: Doc['payments'][number]) => void }) {
+export function PaymentModal({ balance, link, onClose, onSave }: { balance: number; link: { docId?: number; clientId?: number }; onClose: () => void; onSave: (p: Doc['payments'][number]) => void }) {
   const [amount, setAmount] = useState(balance);
   const [date, setDate] = useState(todayISO());
   const [method, setMethod] = useState('Virement Interac');

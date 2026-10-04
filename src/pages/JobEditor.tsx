@@ -3,7 +3,8 @@ import { Bell, Camera, Check, ChevronLeft, FileText, Navigation, Plus, Save, Tra
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AddressInput } from '../components/AddressInput';
-import { ClientFormModal } from '../components/ClientForm';
+import { ClientPicker } from '../components/ClientPicker';
+import { JobDoneSheet } from '../components/JobDoneSheet';
 import { LineItems } from '../components/LineItems';
 import { MediaGallery } from '../components/MediaGallery';
 import { ReminderModal } from '../components/ReminderModal';
@@ -29,7 +30,8 @@ export default function JobEditor() {
   const loadKey = `${id}|${params.toString()}`;
   const [loadedFor, setLoadedFor] = useState('');
   const [savedAddress, setSavedAddress] = useState('');
-  const [showClient, setShowClient] = useState(false);
+  const [doneSheet, setDoneSheet] = useState<number | null>(null);
+  const [moreOpen, setMoreOpen] = useState(() => !matchMedia('(max-width: 860px)').matches);
   const [remind, setRemind] = useState(false);
   const [busy, setBusy] = useState(false);
   const clients = useLiveQuery(() => db.clients.orderBy('name').toArray(), []) ?? [];
@@ -117,7 +119,8 @@ export default function JobEditor() {
     if (!x?.id) return;
     const r = await completeJob(x.id, st.role === 'owner' || st.role === 'admin');
     setJ({ ...x, status: 'fait', nextJobId: r.next?.id ?? x.nextJobId });
-    notify(`Job terminé${r.next ? ` · prochain planifié le ${formatDate(r.next.date)}` : ''}`);
+    if (r.next) notify(`Job terminé · prochain planifié le ${formatDate(r.next.date)}`);
+    setDoneSheet(r.trips.reduce((a, t) => a + t.totalKm, 0));
   };
 
   const invoice = async () => {
@@ -158,25 +161,14 @@ export default function JobEditor() {
 
       <div className="card">
         <div className="form-grid">
-          <label className="field full">Client *
-            <div className="row" style={{ flexWrap: 'nowrap' }}>
-              <select value={j.clientId > 0 ? j.clientId : ''} onChange={(e) => up({ clientId: Number(e.target.value) })}>
-                <option value="">— Choisir un client —</option>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <button className="btn" onClick={() => setShowClient(true)}><Plus size={16} /> Nouveau</button>
-            </div>
-          </label>
+          <div className="field full">Client *
+            {full ? <ClientPicker value={j.clientId > 0 ? j.clientId : 0} onChange={(id) => up({ clientId: id })} autoFocus={isNew && !(j.clientId > 0)} /> : <strong style={{ color: 'var(--ink)' }}>{client?.name ?? '—'}</strong>}
+          </div>
           <label className="field">Date<input type="date" value={j.date} onChange={(e) => up({ date: e.target.value })} /></label>
           <label className="field">Heure<input type="time" value={j.time} onChange={(e) => up({ time: e.target.value })} /></label>
           <label className="field">Durée prévue
             <select value={j.durationMin} onChange={(e) => up({ durationMin: Number(e.target.value) })}>
               {[30, 60, 90, 120, 180, 240, 360, 480].map((m) => <option key={m} value={m}>{m < 60 ? `${m} min` : `${m / 60} h`}</option>)}
-            </select>
-          </label>
-          <label className="field">Statut
-            <select value={j.status} onChange={(e) => up({ status: e.target.value as JobStatus })}>
-              {(Object.keys(JOB_STATUS_LABEL) as JobStatus[]).map((k) => <option key={k} value={k}>{JOB_STATUS_LABEL[k]}</option>)}
             </select>
           </label>
           <label className="field full">Description de la job
@@ -203,6 +195,16 @@ export default function JobEditor() {
               </div>
             </div>
           )}
+          <label className="field full">Notes (pour toi)<textarea value={j.notes} placeholder="Code de porte, chien, échelle de 32 pi…" onChange={(e) => up({ notes: e.target.value })} /></label>
+        </div>
+        <details className="more-inline" open={moreOpen} onToggle={(e) => setMoreOpen((e.target as HTMLDetailsElement).open)}>
+          <summary><strong>Plus d’options</strong> <small>{JOB_STATUS_LABEL[j.status]}{j.recurrence !== 'none' ? ` · ${RECURRENCE_LABEL[j.recurrence]}` : ''}{j.projectId ? ' · projet' : ''}</small></summary>
+          <div className="form-grid" style={{ marginTop: 10 }}>
+          <label className="field">Statut
+            <select value={j.status} onChange={(e) => up({ status: e.target.value as JobStatus })}>
+              {(Object.keys(JOB_STATUS_LABEL) as JobStatus[]).map((k) => <option key={k} value={k}>{JOB_STATUS_LABEL[k]}</option>)}
+            </select>
+          </label>
           {full && (
             <label className="field">Projet
               <select value={j.projectId ?? ''} onChange={(e) => up({ projectId: e.target.value ? Number(e.target.value) : undefined })}>
@@ -219,8 +221,8 @@ export default function JobEditor() {
           {j.recurrence === 'months' && (
             <label className="field">Aux combien de mois<input type="number" min={1} max={24} value={j.recurEveryMonths ?? 6} onChange={(e) => up({ recurEveryMonths: Number(e.target.value) })} /></label>
           )}
-          <label className="field full">Notes (pour toi)<textarea value={j.notes} placeholder="Code de porte, chien, échelle de 32 pi…" onChange={(e) => up({ notes: e.target.value })} /></label>
-        </div>
+          </div>
+        </details>
         {j.recurrence !== 'none' && <div className="small muted" style={{ marginTop: 8 }}>Quand ce job est marqué « Fait », le prochain se planifie tout seul.</div>}
       </div>
 
@@ -248,7 +250,7 @@ export default function JobEditor() {
         {full && <button className="btn danger" onClick={remove}><Trash2 size={16} /> Supprimer</button>}
       </div>
 
-      {showClient && <ClientFormModal onClose={() => setShowClient(false)} onSaved={(cid) => up({ clientId: cid })} />}
+      {doneSheet !== null && j.id && <JobDoneSheet job={j} client={client} canBill={full} routeKm={doneSheet} onClose={() => setDoneSheet(null)} />}
       {remind && j.id && <ReminderModal job={j} client={client} onClose={() => setRemind(false)} />}
     </>
   );

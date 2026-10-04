@@ -1,7 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ChevronRight, FileText, Phone } from 'lucide-react';
 import { ClientFormModal } from '../components/ClientForm';
+import { SwipeRow } from '../components/SwipeRow';
 import { db } from '../lib/db';
 import { useSettings } from '../lib/hooks';
 import { docTotals, money } from '../lib/utils';
@@ -29,7 +31,30 @@ export default function Clients() {
         {rows.length === 0 ? (
           <div className="empty">Aucun client. Ajoute ton premier client!</div>
         ) : (
-          <table className="list">
+          <>
+          <div className="doc-cards hide-desktop">
+            {rows.map((c) => {
+              const inv = data.docs.filter((d) => d.clientId === c.id && d.status !== 'draft' && d.status !== 'cancelled');
+              const due = inv.filter((d) => d.status !== 'paid').reduce((a, d) => a + docTotals(d, s).balance, 0);
+              return (
+                <SwipeRow key={c.id} onTap={() => nav(`/clients/${c.id}`)}
+                  left={c.phone ? { label: 'Appeler', icon: <Phone size={18} />, tone: 'green', run: () => { location.href = `tel:${c.phone}`; } } : undefined}
+                  right={{ label: 'Facturer', icon: <FileText size={18} />, tone: 'blue', run: () => nav(`/doc/new?type=invoice&client=${c.id}`) }}>
+                  <div className="doc-card">
+                    <span className="cp-avatar">{c.name.slice(0, 1).toUpperCase()}</span>
+                    <span className="grow">
+                      <strong>{c.name}</strong>
+                      <small>{[c.phone, c.address].filter(Boolean).join(' · ') || '—'}</small>
+                    </span>
+                    {due > 0 && <span className="doc-amt"><b>{money(due)}</b><small>à recevoir</small></span>}
+                    <ChevronRight size={16} className="muted" />
+                  </div>
+                </SwipeRow>
+              );
+            })}
+            <div className="small muted swipe-hint">Astuce: glisse un client vers la droite pour l’appeler, vers la gauche pour lui faire une facture.</div>
+          </div>
+          <table className="list hide-mobile">
             <thead><tr><th>Client</th><th className="hide-mobile">Contact</th><th className="num">Facturé</th><th className="num">À recevoir</th></tr></thead>
             <tbody>
               {rows.map((c) => {
@@ -47,6 +72,7 @@ export default function Clients() {
               })}
             </tbody>
           </table>
+          </>
         )}
       </div>
       {adding && <ClientFormModal onClose={() => setAdding(false)} onSaved={(id) => nav(`/clients/${id}`)} />}

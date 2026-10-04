@@ -1,27 +1,23 @@
 import { useLiveQuery } from 'dexie-react-hooks';
+import { CountUp } from '../components/CountUp';
+import { Onboarding } from '../components/Onboarding';
+import { RelanceModal } from '../components/RelanceModal';
 import {
   AlertTriangle, Bell, CalendarDays, CalendarPlus, Camera, Car, CircleCheck, ClipboardList, Clock, Eye, FileText, Inbox, MapPin, Phone, Plus, Search, Star, Zap,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Modal } from '../components/Modal';
-import { SendEmailModal } from '../components/SendEmailModal';
 import { SyncBadge } from '../components/SyncBadge';
-import { useToast } from '../components/Toast';
-import { smsLink } from '../lib/agenda';
 import { db, type Client, type Doc } from '../lib/db';
-import { makeDocPdf } from '../lib/docPdf';
 import { useSettings } from '../lib/hooks';
-import { docFileName } from '../lib/pdf';
 import { OPEN_STAGES } from '../lib/crm';
-import { addDays, docTotals, formatDate, km, kmAllowance, lineAmount, money, statusClass, statusLabel, todayISO } from '../lib/utils';
+import { addDays, docTotals, km, kmAllowance, lineAmount, money, statusClass, statusLabel, todayISO } from '../lib/utils';
 
 const MONTHS = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
 
 export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
   const s = useSettings();
   const nav = useNavigate();
-  const notify = useToast();
   const today = todayISO();
   const year = today.slice(0, 4);
   const [relance, setRelance] = useState<{ doc: Doc; client?: Client; pdf?: Blob; mode: 'choose' | 'mail' } | null>(null);
@@ -77,8 +73,6 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
 
   const missing = [!s.postalCode && 'code postal', s.chargeTaxes && !s.tpsNumber && 'numéro de TPS', !s.googleMapsKey && 'clé Google Maps'].filter(Boolean) as string[];
 
-  const relanceText = (d: Doc, c?: Client) =>
-    `Bonjour ${c?.contact || c?.name || ''}, petit rappel: la facture ${d.number} de ${money(tt(d).balance)} était payable le ${formatDate(d.dueDate)}. ${s.paymentInstructions} Merci! ${s.ownerName.split(' ')[0] || s.companyName}`;
 
   const hour = new Date().getHours();
   const hello = hour < 12 ? 'Bon matin' : hour < 18 ? 'Bonjour' : 'Bonsoir';
@@ -106,15 +100,16 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
         <button onClick={() => nav('/doc/new?type=quote')}><ClipboardList size={22} /> Soumission</button>
       </div>
 
-      {missing.length > 0 && <div className="notice">À compléter: <strong>{missing.join(', ')}</strong>. <Link to="/parametres">Paramètres →</Link></div>}
+      <Onboarding s={s} />
+      {s.setupHidden && missing.length > 0 && <div className="notice">À compléter: <strong>{missing.join(', ')}</strong>. <Link to="/parametres">Paramètres →</Link></div>}
 
       <div className="grid kpi">
-        <div className="card hot"><div className="label">Ventes {year}</div><div className="value">{money(sum(yInv, 'subtotal'))}</div><div className="sub">ce mois-ci: {money(sum(mInv, 'subtotal'))}</div></div>
-        <div className="card"><div className="label">À recevoir</div><div className="value">{money(sum(unpaid, 'balance'))}</div><div className="sub">{unpaid.length} facture(s){overdue.length ? ` · ${overdue.length} en retard` : ''}</div></div>
-        <div className="card"><div className="label">Km {year}</div><div className="value">{km(yKm)}</div><div className="sub">≈ {money(kmAllowance(yKm, s))} déductibles</div></div>
+        <div className="card hot"><div className="label">Ventes {year}</div><div className="value"><CountUp value={sum(yInv, 'subtotal')} format={money} /></div><div className="sub">ce mois-ci: {money(sum(mInv, 'subtotal'))}</div></div>
+        <div className="card"><div className="label">À recevoir</div><div className="value"><CountUp value={sum(unpaid, 'balance')} format={money} /></div><div className="sub">{unpaid.length} facture(s){overdue.length ? ` · ${overdue.length} en retard` : ''}</div></div>
+        <div className="card"><div className="label">Km {year}</div><div className="value"><CountUp value={yKm} format={(n) => km(Math.round(n))} /></div><div className="sub">≈ {money(kmAllowance(yKm, s))} déductibles</div></div>
         <div className="card">
           <div className="label">{s.chargeTaxes ? 'Taxes à remettre' : `Dépenses ${year}`}</div>
-          <div className="value">{s.chargeTaxes ? money(tpsNet + tvqNet) : money(yExp.reduce((a, e) => a + e.subtotal, 0))}</div>
+          <div className="value"><CountUp value={s.chargeTaxes ? tpsNet + tvqNet : yExp.reduce((a, e) => a + e.subtotal, 0)} format={money} /></div>
           <div className="sub">{s.chargeTaxes ? `TPS ${money(tpsNet)} · TVQ ${money(tvqNet)}` : `${yExp.length} reçu(s)`}</div>
         </div>
       </div>
@@ -272,29 +267,7 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
         <Link className="btn" to="/depenses/new"><Camera size={16} /> Reçu</Link>
       </div>
 
-      {relance?.mode === 'choose' && (
-        <Modal title={`Relancer — ${relance.doc.number}`} onClose={() => setRelance(null)}>
-          <p style={{ marginTop: 0 }}>{relanceText(relance.doc, relance.client)}</p>
-          <div className="row" style={{ justifyContent: 'flex-end' }}>
-            {relance.client?.phone && <a className="btn" href={smsLink(relance.client.phone, relanceText(relance.doc, relance.client))}>Texto</a>}
-            <button className="btn accent" onClick={async () => setRelance({ ...relance, pdf: await makeDocPdf(relance.doc, relance.client, s), mode: 'mail' })}>Courriel avec la facture</button>
-          </div>
-        </Modal>
-      )}
-      {relance?.mode === 'mail' && relance.pdf && (
-        <SendEmailModal
-          title={`Relance — ${relance.doc.number}`}
-          to={relance.client?.email ?? ''}
-          subject={`Rappel — facture ${relance.doc.number} (${s.companyName})`}
-          body={relanceText(relance.doc, relance.client)}
-          attachments={[{ filename: docFileName(relance.doc, relance.client), mimeType: 'application/pdf', blob: relance.pdf }]}
-          onClose={() => setRelance(null)}
-          onSent={async ({ gmailId, to, subject }) => {
-            await db.emails.add({ date: new Date().toISOString(), to, subject, clientId: relance.doc.clientId, docId: relance.doc.id, gmailId, kind: 'facture' });
-            notify('Relance envoyée');
-          }}
-        />
-      )}
+      {relance && <RelanceModal doc={relance.doc} client={relance.client} onClose={() => setRelance(null)} />}
     </>
   );
 }

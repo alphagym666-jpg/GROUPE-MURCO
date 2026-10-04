@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { JobDoneSheet } from '../components/JobDoneSheet';
 import { Modal } from '../components/Modal';
 import { ReminderModal } from '../components/ReminderModal';
 import { errMsg, useToast } from '../components/Toast';
@@ -444,11 +445,13 @@ function DayView({ ctx, date, jobs, trips, busy, run, s, onRemind, onPostpone, i
       await Promise.all(list.map((x, n) => db.jobs.update(x.id!, { order: n })));
       if (list.some((x) => x.status !== 'planifie')) await syncDayRoute(date);
     });
+  const [doneJob, setDoneJob] = useState<{ job: Job; km: number } | null>(null);
   const done = (j: Job) =>
     run('Fait', async () => {
       const r = await completeJob(j.id!, ctx.canEdit);
-      const kmTxt = r.trips.length ? ` · route du jour ${km(r.trips.reduce((a, t) => a + t.totalKm, 0))}` : '';
-      notify(`Job terminé${kmTxt}${r.next ? ` · prochain le ${formatDate(r.next.date)}` : ''}`);
+      const routeKm = r.trips.reduce((a, t) => a + t.totalKm, 0);
+      if (r.next) notify(`Job terminé · prochain planifié le ${formatDate(r.next.date)}`);
+      setDoneJob({ job: { ...j, status: 'fait' }, km: routeKm });
     });
   const invoice = (j: Job) =>
     run('Facture', async () => {
@@ -457,6 +460,7 @@ function DayView({ ctx, date, jobs, trips, busy, run, s, onRemind, onPostpone, i
 
   return (
     <div className="grid two ag-day" style={{ alignItems: 'start' }}>
+      {doneJob && <JobDoneSheet job={doneJob.job} client={ctx.data.clients.get(doneJob.job.clientId)} canBill={ctx.showMoney} routeKm={doneJob.km} onClose={() => setDoneJob(null)} />}
       <div className="card" style={{ padding: 10 }}>
         {w && (
           <div className={`wx-banner ${badWeather(w) ? 'bad' : ''}`}>

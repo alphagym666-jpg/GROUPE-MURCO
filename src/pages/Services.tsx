@@ -1,12 +1,17 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
+import { markSetupDone } from '../components/Onboarding';
 import { useToast } from '../components/Toast';
+import { useSettings } from '../lib/hooks';
 import { db, UNITS, type Service } from '../lib/db';
 import { money } from '../lib/utils';
 
 /** Liste de prix: le CODE est ce que tu tapes dans la facture. */
 export default function Services() {
   const notify = useToast();
+  const settings = useSettings();
+  // Ouvrir ses codes et prix coche l'étape « Démarrage »
+  useEffect(() => { if (settings.companyName) void markSetupDone('codes', settings); }, [settings]);
   const list = useLiveQuery(() => db.services.orderBy('order').toArray(), []);
   const [rows, setRows] = useState<Service[]>([]);
   const [dirty, setDirty] = useState(false);

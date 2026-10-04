@@ -59,6 +59,8 @@ export interface Settings extends Synced {
   // Avis clients et formulaire de demande
   googleReviewUrl: string;
   leadForm: boolean;
+  setupDone?: string[]; // étapes de démarrage cochées à la main (ex.: codes vérifiés)
+  setupHidden?: boolean; // liste « Démarrage » masquée
   leadFormIntro: string;
   // Paiement par carte (Stripe, via les fonctions Firebase)
   cardPayments: boolean;

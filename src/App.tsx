@@ -248,6 +248,7 @@ function Shell() {
               <span className={`tb-dot ${st.status === 'ok' ? 'ok' : st.status === 'error' ? 'err' : ''}`} />
             </NavLink>
           </header>
+          <div className="page-anim" key={'/' + path.split('/')[1]}>
           <Routes>
             <Route path="/" element={full ? <Dashboard onSearch={() => setCmd(true)} /> : <Navigate to={role === 'vendeur' ? '/demandes' : '/pointage'} replace />} />
             <Route path="/demandes" element={<Leads />} />
@@ -275,6 +276,7 @@ function Shell() {
             <Route path="/parametres" element={<SettingsPage />} />
             <Route path="*" element={full ? <Dashboard onSearch={() => setCmd(true)} /> : <Navigate to="/agenda" replace />} />
           </Routes>
+          </div>
         </main>
 
         {update.available && (

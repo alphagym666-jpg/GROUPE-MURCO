@@ -1,3 +1,4 @@
+import { haptic } from '../lib/feel';
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
 import { Modal } from './Modal';
 
@@ -19,6 +20,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const notify = useCallback<Notify>((msg, kind = 'ok', action) => {
     const key = Date.now();
     setToast({ msg, kind, key, action });
+    haptic(kind === 'err' ? 'error' : 'light');
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setToast((t) => (t?.key === key ? null : t)), action ? 6500 : kind === 'err' ? 6000 : 3000);
   }, []);

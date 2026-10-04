@@ -29,6 +29,14 @@ export default function SettingsPage() {
   const restoreRef = useRef<HTMLInputElement>(null);
   useEffect(() => { getSettings().then((x) => { setS(x); setOrig(x); }); }, []);
   const st = useSyncState();
+  const [params] = useSearchParams();
+  // Arrivée depuis la liste « Démarrage »: aller directement à la bonne section
+  useEffect(() => {
+    const sec = params.get('s');
+    if (!sec || !s) return;
+    const t = setTimeout(() => document.getElementById(sec)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+    return () => clearTimeout(t);
+  }, [params, s]);
   if (st.role === 'employe' || st.role === 'vendeur') {
     // Les membres de l'équipe ne voient que leur connexion
     return (
@@ -85,7 +93,7 @@ export default function SettingsPage() {
         <button className="btn accent" onClick={save}>Enregistrer</button>
       </div>
 
-      <div className="card">
+      <div className="card" id="compagnie">
         <h2>Ma compagnie (apparaît sur les factures et soumissions)</h2>
         <div className="row" style={{ marginBottom: 12 }}>
           {s.logo ? <img src={s.logo} alt="Logo" style={{ maxHeight: 60, maxWidth: 200 }} /> : <span className="muted small">Aucun logo</span>}
@@ -113,7 +121,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card" id="domicile">
         <h2>Domicile — point de départ du journal de bord</h2>
         <div className="form-grid">
           <label className="field full">Adresse du domicile
@@ -269,7 +277,7 @@ function MapsSection({ s, up }: { s: Settings; up: (p: Partial<Settings>) => voi
     }
   };
   return (
-    <div className="card">
+    <div className="card" id="maps">
       <h2>Google Maps (km et adresses)</h2>
       <p className="small muted">Avec ta clé Google Maps, les km du journal de bord sont calculés par Google Maps (même distance que dans l’app Google Maps), les adresses se complètent pendant que tu tapes et la carte du trajet s’affiche sur chaque facture.</p>
       <div className="form-grid">
