@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  AlertTriangle, Bell, CalendarDays, Camera, Car, CircleCheck, ClipboardList, Clock, Eye, FileText, Inbox, MapPin, Phone, Plus, Search, Star, Zap,
+  AlertTriangle, Bell, CalendarDays, CalendarPlus, Camera, Car, CircleCheck, ClipboardList, Clock, Eye, FileText, Inbox, MapPin, Phone, Plus, Search, Star, Zap,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -93,10 +93,17 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
         </div>
         <div className="actions">
           <button className="btn hide-mobile" onClick={onSearch}><Search size={17} /> Rechercher <span className="small muted">Ctrl K</span></button>
-          <button className="btn accent" onClick={() => nav('/express')}><Zap size={17} /> Facture express</button>
+          <button className="btn accent hide-mobile" onClick={() => nav('/express')}><Zap size={17} /> Facture express</button>
           <button className="btn primary hide-mobile" onClick={() => nav('/doc/new?type=quote')}><ClipboardList size={17} /> Soumission</button>
           <button className="btn hide-mobile" onClick={() => nav('/depenses/new')}><Camera size={17} /> Reçu</button>
         </div>
+      </div>
+
+      <div className="quick-tiles">
+        <button onClick={() => nav('/express')}><Zap size={22} /> Facture express</button>
+        <button onClick={() => nav('/job/new')}><CalendarPlus size={22} /> Job</button>
+        <button onClick={() => nav('/depenses/new')}><Camera size={22} /> Reçu</button>
+        <button onClick={() => nav('/doc/new?type=quote')}><ClipboardList size={22} /> Soumission</button>
       </div>
 
       {missing.length > 0 && <div className="notice">À compléter: <strong>{missing.join(', ')}</strong>. <Link to="/parametres">Paramètres →</Link></div>}

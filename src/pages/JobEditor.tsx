@@ -138,10 +138,10 @@ export default function JobEditor() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow"><Link to={`/agenda?d=${j.date}`} className="row" style={{ gap: 4 }}><ChevronLeft size={14} /> Agenda</Link></div>
+          <div className="eyebrow"><Link to={`/agenda?d=${j.date}`} className="back-link"><ChevronLeft size={16} /> Agenda</Link></div>
           <h1>{isNew ? 'Nouveau job' : client?.name ?? 'Job'} {j.id && <span className={`badge ${j.status === 'planifie' ? 'blue' : j.status === 'fait' ? 'green' : 'gray'}`} style={{ verticalAlign: 'middle' }}>{JOB_STATUS_LABEL[j.status]}</span>}</h1>
         </div>
-        <div className="actions">
+        <div className="actions editor-bar">
           <button className="btn accent" onClick={() => save()} disabled={busy}><Save size={17} /> Enregistrer</button>
           {j.id && j.status === 'planifie' && <button className="btn" onClick={markDone}><Check size={17} /> Fait</button>}
           {full && j.id && (j.docId ? <Link className="btn primary" to={`/doc/${j.docId}`}><FileText size={17} /> Voir la facture</Link> : <button className="btn primary" onClick={invoice}><FileText size={17} /> Facturer</button>)}

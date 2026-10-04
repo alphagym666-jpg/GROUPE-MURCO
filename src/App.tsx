@@ -1,6 +1,7 @@
 import {
-  CalendarDays, Camera, FolderOpen, TrendingUp, Inbox, Clock, Briefcase, UsersRound, Car, ClipboardList, FileText, Home, Mail, Menu, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Users, Zap, ImagePlus, type LucideIcon,
+  CalendarDays, Camera, Download, FolderOpen, TrendingUp, Inbox, Clock, Briefcase, UsersRound, Car, ClipboardList, FileText, Home, LayoutGrid, Mail, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Timer, Users, X, Zap, ImagePlus, type LucideIcon,
 } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { CommandPalette } from './components/CommandPalette';
@@ -34,6 +35,8 @@ import Timesheets from './pages/Timesheets';
 import Team from './pages/Team';
 import Projects, { ProjectDetail } from './pages/Projects';
 import { useSyncState, type Role } from './lib/sync';
+import { db } from './lib/db';
+import { APK_URL, useAppUpdate } from './lib/update';
 
 interface NavItem {
   to: string;
@@ -67,21 +70,35 @@ const NAV: NavItem[] = [
 
 const canSee = (n: { roles?: Role[] }, role: Role) => role === 'owner' || role === 'admin' || !!n.roles?.includes(role);
 
-const MOBILE_MAIN: Record<Role, string[]> = {
-  owner: ['/', '/agenda', '/demandes', '/factures'],
-  admin: ['/', '/agenda', '/demandes', '/factures'],
-  vendeur: ['/demandes', '/agenda', '/soumissions', '/pointage'],
-  employe: ['/agenda', '/pointage', '/parametres'],
+// Barre du bas sur cellulaire: '+' = bouton Créer au centre, 'menu' = toutes les sections
+const MOBILE_TABS: Record<Role, string[]> = {
+  owner: ['/', '/agenda', '+', '/factures', 'menu'],
+  admin: ['/', '/agenda', '+', '/factures', 'menu'],
+  vendeur: ['/demandes', '/agenda', '+', '/soumissions', 'menu'],
+  employe: ['/agenda', '/pointage', '+', 'menu'],
 };
 
+const EXTRA: NavItem[] = [{ to: '/temps', label: 'Feuilles de temps', short: 'Heures', icon: Timer }];
+
+const MENU_GROUPS: { title: string; items: string[] }[] = [
+  { title: 'Ventes', items: ['/demandes', '/soumissions', '/factures', '/clients', '/projets'] },
+  { title: 'Terrain', items: ['/agenda', '/pointage', '/equipe', '/temps'] },
+  { title: 'Argent et papiers', items: ['/depenses', '/km', '/classeur', '/rapports', '/comptable'] },
+  { title: 'Outils', items: ['/', '/codes', '/gmail', '/parametres'] },
+];
+
+/** Routes d'édition: sur cellulaire, la barre du bas laisse place aux boutons de la page. */
+const isEditorRoute = (p: string) => /^\/(doc|job)\//.test(p) || /^\/depenses\/.+/.test(p);
+
 const QUICK: { label: string; icon: LucideIcon; to: string; roles?: Role[] }[] = [
-  { label: 'Punch in / out', icon: Clock, to: '/pointage', roles: ['employe', 'vendeur'] },
-  { label: 'Photo de job', icon: ImagePlus, to: '/job/new?photo=1', roles: ['employe', 'vendeur'] },
-  { label: 'Nouvelle demande', icon: Inbox, to: '/demandes?new=1', roles: ['vendeur'] },
   { label: 'Facture express', icon: Zap, to: '/express' },
+  { label: 'Punch in / out', icon: Clock, to: '/pointage', roles: ['employe', 'vendeur'] },
   { label: 'Planifier un job', icon: CalendarDays, to: '/job/new' },
   { label: 'Photo de reçu', icon: Camera, to: '/depenses/new' },
+  { label: 'Photo de job', icon: ImagePlus, to: '/job/new?photo=1', roles: ['employe', 'vendeur'] },
   { label: 'Soumission', icon: ClipboardList, to: '/doc/new?type=quote', roles: ['vendeur'] },
+  { label: 'Nouvelle demande', icon: Inbox, to: '/demandes?new=1', roles: ['vendeur'] },
+  { label: 'Facture complète', icon: FileText, to: '/doc/new?type=invoice' },
 ];
 
 const THEME_LABEL: Record<ThemePref, string> = { system: 'Thème: auto', dark: 'Thème: sombre', light: 'Thème: clair' };
@@ -116,6 +133,11 @@ function Shell() {
   const [cmd, setCmd] = useState(false);
   const [theme, setThemeState] = useState<ThemePref>(getTheme());
   const ThemeIcon = THEME_ICON[theme];
+  const update = useAppUpdate();
+  const newLeads = useLiveQuery(() => db.leads.where('stage').equals('nouveau').count(), []) ?? 0;
+  const editor = isEditorRoute(loc.pathname);
+  const findNav = (to: string) => NAV.find((n) => n.to === to) ?? EXTRA.find((n) => n.to === to);
+  const leadsVisible = canSee(NAV[1], role);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -171,7 +193,7 @@ function Shell() {
           </div>
         </aside>
 
-        <main className="main" onClick={() => (more || fab) && (setMore(false), setFab(false))}>
+        <main className={`main ${editor ? 'is-editor' : ''}`}>
           <Routes>
             <Route path="/" element={full ? <Dashboard onSearch={() => setCmd(true)} /> : <Navigate to={role === 'vendeur' ? '/demandes' : '/pointage'} replace />} />
             <Route path="/demandes" element={<Leads />} />
@@ -201,43 +223,90 @@ function Shell() {
           </Routes>
         </main>
 
-        {!loc.pathname.startsWith('/express') && (
-          <button className={`fab ${fab ? 'open' : ''}`} aria-label="Créer" aria-expanded={fab} onClick={() => { setFab((x) => !x); setMore(false); }}>
-            <Plus size={28} />
-          </button>
-        )}
-        {fab && (
-          <div className="fab-menu hide-desktop">
-            {QUICK.filter((q) => canSee(q, role)).map((q) => (
-              <button key={q.to} onClick={() => nav(q.to)}>
-                <q.icon size={18} /> {q.label}
-              </button>
-            ))}
+        {update.available && (
+          <div className="update-bar">
+            <Download size={18} />
+            <span>Nouvelle version de l’app disponible</span>
+            <a className="btn small accent" href={APK_URL} target="_blank" rel="noreferrer" onClick={update.dismiss}>Mettre à jour</a>
+            <button className="icon-btn" aria-label="Plus tard" onClick={update.dismiss}><X size={16} /></button>
           </div>
         )}
 
-        <nav className="bottomnav">
-          {MOBILE_MAIN[role].map((to) => NAV.find((n) => n.to === to)!).map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.end}>
-              <n.icon size={22} />
-              {n.short}
-            </NavLink>
-          ))}
-          <button onClick={() => { setMore((m) => !m); setFab(false); }} aria-expanded={more}>
-            <Menu size={22} />
-            Plus
-          </button>
-        </nav>
+        {!editor && (
+          <nav className={`bottomnav cols-${MOBILE_TABS[role].length}`}>
+            {MOBILE_TABS[role].map((to) => {
+              if (to === '+') {
+                return (
+                  <button key="+" className={`tab-create ${fab ? 'open' : ''}`} aria-label="Menu Créer" aria-expanded={fab} onClick={() => { setFab((x) => !x); setMore(false); }}>
+                    <span><Plus size={26} /></span>
+                  </button>
+                );
+              }
+              if (to === 'menu') {
+                return (
+                  <button key="menu" className={more ? 'active' : ''} aria-expanded={more} onClick={() => { setMore((m) => !m); setFab(false); }}>
+                    <span className="tab-ico"><LayoutGrid size={22} />{leadsVisible && newLeads > 0 && !MOBILE_TABS[role].includes('/demandes') && <i className="tab-badge">{newLeads}</i>}</span>
+                    Menu
+                  </button>
+                );
+              }
+              const n = findNav(to)!;
+              return (
+                <NavLink key={n.to} to={n.to} end={n.end}>
+                  <span className="tab-ico"><n.icon size={22} />{n.to === '/demandes' && newLeads > 0 && <i className="tab-badge">{newLeads}</i>}</span>
+                  {n.short}
+                </NavLink>
+              );
+            })}
+          </nav>
+        )}
+
+        {fab && (
+          <div className="sheet-wrap hide-desktop" onClick={() => setFab(false)}>
+            <div className="sheet" role="dialog" aria-label="Créer" onClick={(e) => e.stopPropagation()}>
+              <div className="sheet-grip" />
+              <div className="sheet-title">Créer</div>
+              <div className="create-grid">
+                {QUICK.filter((q) => canSee(q, role)).map((q) => (
+                  <button key={q.to} onClick={() => nav(q.to)}>
+                    <span className="ci"><q.icon size={22} /></span>
+                    {q.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {more && (
-          <div className="more-menu hide-desktop">
-            {NAV.filter((n) => canSee(n, role) && !MOBILE_MAIN[role].includes(n.to)).map((n) => (
-              <NavLink key={n.to} to={n.to} className={loc.pathname.startsWith(n.to) ? 'active' : ''}>
-                <n.icon size={18} />
-                {n.label}
-              </NavLink>
-            ))}
-            <button onClick={() => { setMore(false); setCmd(true); }}><Search size={18} /> Rechercher</button>
-            <button onClick={() => setThemeState(cycleTheme())}><ThemeIcon size={18} /> {THEME_LABEL[theme]}</button>
+          <div className="sheet-wrap hide-desktop" onClick={() => setMore(false)}>
+            <div className="sheet tall" role="dialog" aria-label="Menu" onClick={(e) => e.stopPropagation()}>
+              <div className="sheet-grip" />
+              <div className="sheet-head">
+                <img src={s.logo || './icon.svg'} alt="" />
+                <div><strong>{s.companyName}</strong><SyncBadge /></div>
+                <button className="icon-btn" aria-label="Fermer" onClick={() => setMore(false)}><X size={20} /></button>
+              </div>
+              <button className="sheet-search" onClick={() => { setMore(false); setCmd(true); }}><Search size={18} /> Rechercher un client, une facture…</button>
+              {MENU_GROUPS.map((g) => {
+                const items = g.items.map(findNav).filter((n): n is NavItem => !!n && canSee(n, role));
+                if (!items.length) return null;
+                return (
+                  <div key={g.title} className="menu-group">
+                    <div className="menu-group-title">{g.title}</div>
+                    <div className="menu-tiles">
+                      {items.map((n) => (
+                        <NavLink key={n.to} to={n.to} end={n.end}>
+                          <span className="mi"><n.icon size={22} />{n.to === '/demandes' && newLeads > 0 && <i className="tab-badge">{newLeads}</i>}</span>
+                          {n.short}
+                        </NavLink>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              <button className="sheet-row" onClick={() => setThemeState(cycleTheme())}><ThemeIcon size={18} /> {THEME_LABEL[theme]}</button>
+            </div>
           </div>
         )}
         {cmd && <CommandPalette onClose={() => setCmd(false)} />}

@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
+// Rendue à la racine de la page: jamais coincée dans une barre ou une liste qui défile.
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  return (
+  return createPortal(
     <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" role="dialog" aria-label={title}>
         <div className="row" style={{ marginBottom: 12 }}>
@@ -11,6 +13,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

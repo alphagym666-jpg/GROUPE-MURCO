@@ -22,7 +22,8 @@ export default function PunchPage() {
   const [, tick] = useState(0);
   const today = todayISO();
 
-  useEffect(() => { whoAmI(st.memberId).then(setMe); }, [st.memberId]);
+  const memberRec = useLiveQuery(() => (st.memberId ? db.members.get(st.memberId) : undefined), [st.memberId]);
+  useEffect(() => { whoAmI(st.memberId).then(setMe); }, [st.memberId, memberRec]);
   useEffect(() => {
     const t = setInterval(() => tick((x) => x + 1), 30000);
     return () => clearInterval(t);

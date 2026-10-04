@@ -16,6 +16,8 @@ export async function whoAmI(memberId?: number): Promise<Me> {
   if (memberId) {
     const m = await db.members.get(memberId);
     if (m) return { memberId, name: m.name, hourlyCost: m.hourlyCost };
+    // Fiche pas encore synchronisée sur ce téléphone: on garde quand même le bon numéro d'employé
+    return { memberId, name: 'Employé', hourlyCost: 0 };
   }
   const s = await getSettings();
   return { memberId: 0, name: s.ownerName || 'Moi', hourlyCost: s.laborCostPerHour };

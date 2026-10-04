@@ -201,10 +201,10 @@ export default function ExpenseEditor() {
     <>
       <div className="page-head">
         <div>
-          <div className="small muted"><Link to="/depenses">← Reçus et dépenses</Link></div>
+          <div className="small muted"><Link className="back-link" to="/depenses">← Reçus et dépenses</Link></div>
           <h1>{isNew ? 'Nouveau reçu' : 'Reçu'}</h1>
         </div>
-        <div className="actions">
+        <div className="actions editor-bar">
           <button className="btn accent" onClick={save} disabled={!!busy}>Enregistrer</button>
         </div>
       </div>

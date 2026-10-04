@@ -278,18 +278,18 @@ export default function DocEditor() {
     <>
       <div className="page-head">
         <div>
-          <div className="small muted"><Link to={isInvoice ? '/factures' : '/soumissions'}>← {isInvoice ? 'Factures' : 'Soumissions'}</Link></div>
+          <div className="small muted"><Link className="back-link" to={isInvoice ? '/factures' : '/soumissions'}>← {isInvoice ? 'Factures' : 'Soumissions'}</Link></div>
           <h1>
             {kind} {doc.number || '(nouvelle)'} {doc.id && <span className={statusClass(doc)} style={{ verticalAlign: 'middle' }}>{statusLabel(doc)}</span>}
           </h1>
         </div>
-        <div className="actions">
+        <div className="actions editor-bar">
           <button className="btn accent" onClick={() => save()} disabled={busy}><Save size={17} /> {busy ? '…' : 'Enregistrer'}</button>
-          <button className="btn" onClick={preview}><Eye size={17} /> Aperçu</button>
-          <button className="btn" onClick={download}><Download size={17} /> PDF</button>
-          <button className="btn" onClick={share}><Share2 size={17} /> Partager</button>
           <button className="btn primary" onClick={openEmail}><Send size={17} /> Envoyer</button>
           {doc.id && <PortalButton doc={doc} />}
+          <button className="btn" onClick={share}><Share2 size={17} /> Partager</button>
+          <button className="btn" onClick={download}><Download size={17} /> PDF</button>
+          <button className="btn" onClick={preview}><Eye size={17} /> Aperçu</button>
         </div>
       </div>
 

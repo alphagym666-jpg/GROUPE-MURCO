@@ -144,10 +144,12 @@ export default function Agenda() {
                   aria-label={`${formatDate(d)}: ${list.length} job(s)`}
                 >
                   <span className="dnum">{Number(d.slice(8))}</span>
-                  {list.slice(0, 2).map((j) => (
-                    <span key={j.id} className={`chip ${j.status}`}>{data.clients.get(j.clientId)?.name ?? j.title}</span>
-                  ))}
-                  {list.length > 2 && <span className="more">+{list.length - 2}</span>}
+                  <span className="chips-row">
+                    {list.slice(0, 2).map((j) => (
+                      <span key={j.id} className={`chip ${j.status}`}>{data.clients.get(j.clientId)?.name ?? j.title}</span>
+                    ))}
+                    {list.length > 2 && <span className="more">+{list.length - 2}</span>}
+                  </span>
                 </button>
               );
             })}
