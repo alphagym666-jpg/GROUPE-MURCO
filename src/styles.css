@@ -554,9 +554,9 @@ table.list tr.click:hover td { background: var(--surface-2); }
   /* Agenda compact: des points au lieu des noms */
   .cal .day { min-height: 50px; align-items: center; }
   .cal .day .chips-row { display: flex; gap: 3px; flex-wrap: wrap; justify-content: center; }
-  .cal .chip { font-size: 0; width: 7px; height: 7px; padding: 0; border-radius: 50%; background: var(--blue); }
-  .cal .chip.fait { background: var(--green); }
-  .cal .chip.facture { background: var(--muted); }
+  .cal .chip { font-size: 0; width: 7px; height: 7px; padding: 0; border-radius: 50%; background: var(--c, var(--blue)) !important; border: 0 !important; }
+  .cal .chip.fait, .cal .chip.facture { opacity: 0.45; }
+  .cal .chip.lead { background: var(--purple, #7c5cff) !important; }
   .cal .more { font-size: 0.58rem; }
   .page-head { margin-bottom: 14px; }
 
@@ -589,4 +589,118 @@ table.list tr.click:hover td { background: var(--surface-2); }
   .topbar { margin: 0 -16px 14px; }
   .back-link { display: none !important; }
   .update-bar { top: calc(var(--sat) + 62px); }
+}
+
+/* ---------- Agenda complet ---------- */
+.ag-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.ag-views button { padding: 8px 14px; }
+.ag-views button.on { background: var(--primary-bg); color: var(--primary-ink); }
+.ag-date { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.ag-date input { width: auto; padding: 7px 9px; }
+.ag-filters { margin-bottom: 12px; }
+.ag-stats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.ag-stats > div { display: flex; align-items: baseline; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+.ag-stats b { font-family: var(--font-display); font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 4px; }
+.ag-stats span { font-size: 0.8rem; color: var(--muted); }
+.ag-stats .warn { border-color: color-mix(in srgb, var(--red) 45%, var(--line)); }
+.ag-stats .warn b { color: var(--red); }
+.ag-search { margin-bottom: 10px; flex-wrap: nowrap; }
+
+.wx { display: inline-flex; align-items: center; gap: 3px; font-size: 0.74rem; font-weight: 650; color: var(--muted); white-space: nowrap; }
+.wx.bad { color: var(--blue); }
+.wx-banner { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 8px 10px; margin-bottom: 8px; border-radius: 10px; background: var(--surface-2); }
+.wx-banner .wx { font-size: 0.9rem; color: var(--ink); }
+.wx-banner.bad { background: var(--blue-soft); }
+.wx-mini { color: var(--muted); display: inline-flex; }
+.wx-mini.bad { color: var(--blue); }
+
+/* Bloc de job coloré selon l'employé */
+.jb {
+  --c: var(--amber); display: flex; flex-direction: column; gap: 1px; min-width: 0; overflow: hidden; position: relative;
+  background: color-mix(in srgb, var(--c) 16%, var(--surface)); border-left: 3px solid var(--c); border-radius: 7px;
+  padding: 4px 7px; color: var(--ink); font-size: 0.76rem; line-height: 1.25; text-decoration: none; cursor: pointer;
+}
+.jb + .jb { margin-top: 3px; }
+.jb:hover { background: color-mix(in srgb, var(--c) 26%, var(--surface)); }
+.jb[draggable='true'] { cursor: grab; }
+.jb .jb-t, .jb .jb-s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jb .jb-s { color: var(--muted); }
+.jb.fait, .jb.facture { opacity: 0.55; }
+.jb.fait .jb-t strong, .jb.facture .jb-t strong { text-decoration: line-through; }
+.jb.conflict { box-shadow: inset 0 0 0 1.5px var(--red); }
+.jb .jb-warn { position: absolute; top: 4px; right: 4px; color: var(--red); }
+.jb.lead { --c: #7c5cff; }
+.jb.lead .jb-t { display: inline-flex; gap: 4px; align-items: center; }
+
+/* Grille horaire */
+.tg { --cols: 7; display: grid; grid-template-rows: auto auto 1fr; overflow-x: auto; }
+.tg-head, .tg-allday { display: grid; grid-template-columns: 46px repeat(var(--cols), minmax(0, 1fr)); }
+.tg-day { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 2px; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; border-radius: 8px; }
+.tg-day:disabled { cursor: default; }
+.tg-day span { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+.tg-day b { font-family: var(--font-display); font-size: 1.1rem; }
+.tg-day.today b { background: var(--amber); color: var(--on-amber); border-radius: 50%; width: 30px; height: 30px; display: grid; place-items: center; }
+.tg-allday { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.tg-lbl { font-size: 0.66rem; color: var(--muted); padding: 6px 4px; text-align: right; }
+.tg-cell { padding: 3px 2px; min-height: 30px; border-left: 1px solid var(--line); min-width: 0; }
+.tg-body { display: grid; grid-template-columns: 46px repeat(var(--cols), minmax(0, 1fr)); position: relative; }
+.tg-hours div { font-size: 0.68rem; color: var(--muted); text-align: right; padding-right: 6px; transform: translateY(-7px); }
+.tg-col { position: relative; border-left: 1px solid var(--line); min-width: 0; }
+.tg-col.today { background: color-mix(in srgb, var(--amber) 5%, transparent); }
+.tg-slot { display: block; width: 100%; border: 0; border-top: 1px solid var(--line); background: none; padding: 0; cursor: pointer; }
+.tg-slot:hover { background: var(--surface-2); }
+.tg-col .jb { z-index: 1; margin: 0; }
+.tg-now { position: absolute; left: 0; right: 0; height: 2px; background: var(--red); z-index: 2; pointer-events: none; }
+.tg-now::before { content: ''; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+
+/* Mois */
+.cal .day-top { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.cal .chip { background: color-mix(in srgb, var(--c, var(--blue)) 18%, var(--surface)) !important; color: var(--ink) !important; border-left: 3px solid var(--c, var(--blue)); cursor: pointer; }
+.cal .chip.conflict { box-shadow: inset 0 0 0 1px var(--red); }
+.cal .chip.lead { --c: #7c5cff; font-style: italic; }
+.cal-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+
+/* Semaine (cellulaire) et liste */
+.week-list { display: grid; gap: 8px; }
+.wl-day { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.wl-day.today { border-color: var(--amber); }
+.wl-head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; text-align: left; }
+.wl-date { display: flex; flex-direction: column; align-items: center; width: 38px; flex: none; }
+.wl-date b { font-family: var(--font-display); font-size: 1.25rem; line-height: 1; }
+.wl-date span { font-size: 0.66rem; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.wl-day.today .wl-date b { color: var(--amber-ink); }
+.wl-sum { flex: 1; font-size: 0.85rem; color: var(--muted); }
+.wl-items { padding: 0 10px 10px; display: grid; gap: 4px; }
+.wl-items .jb + .jb { margin-top: 0; }
+.wl-items .jb, .al-day .jb { font-size: 0.85rem; padding: 7px 10px; }
+.al-day { margin-bottom: 12px; }
+.al-head { width: 100%; display: flex; justify-content: space-between; align-items: center; border: 0; background: none; color: var(--ink); font: inherit; font-weight: 700; padding: 6px 2px; cursor: pointer; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.al-head.today { color: var(--amber-ink); }
+.job-card { border-left: 4px solid var(--c, var(--line)); }
+.job-card.lead { --c: #7c5cff; margin-bottom: 8px; }
+.job-card.lead .stop { background: #7c5cff; color: #fff; }
+.who { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+@media (max-width: 860px) {
+  .ag-views { flex: 1; }
+  .ag-views button { flex: 1; padding: 9px 4px; }
+  .ag-date input { max-width: 150px; }
+  .ag-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px 12px; padding: 0 16px; }
+  .ag-filters::-webkit-scrollbar { display: none; }
+  .ag-filters .chip-btn { flex: none; }
+  .ag-day .tg { --cols: 1; }
+}
+@media (max-width: 860px) {
+  /* Mois sur cellulaire: un point coloré par job */
+  .cal .chip { font-size: 0; width: 7px; height: 7px; padding: 0; border-radius: 50%; background: var(--c, var(--blue)) !important; border: 0; }
+  .cal .chip.lead { width: 7px; background: #7c5cff !important; }
+  .cal .day { min-height: 54px; }
+  .cal-legend { font-size: 0.75rem; }
+}
+
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.swatches button { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--line-strong); cursor: pointer; }
+.swatches button.on { box-shadow: 0 0 0 2px var(--ink); }
+@media (max-width: 860px) {
+  /* Jour sur cellulaire: la route (actions) d'abord, la grille horaire ensuite */
+  .ag-day { display: flex; flex-direction: column-reverse; align-items: stretch !important; }
 }

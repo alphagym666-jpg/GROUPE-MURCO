@@ -1,8 +1,8 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Download, MapPin, Timer } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Download, MapPin, Timer, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Modal } from '../components/Modal';
-import { useToast } from '../components/Toast';
+import { useConfirm, useToast } from '../components/Toast';
 import { db, type Punch } from '../lib/db';
 import { mapsLink } from '../lib/geo';
 import { useSettings } from '../lib/hooks';
@@ -100,13 +100,15 @@ export default function Timesheets() {
       </div>
 
       {edit && (
-        <PunchModal p={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); notify('Pointage mis à jour'); }} />
+        <PunchModal p={edit} onClose={() => setEdit(null)} onSaved={(msg) => { setEdit(null); notify(msg); }} />
       )}
     </>
   );
 }
 
-function PunchModal({ p, onClose, onSaved }: { p: Punch; onClose: () => void; onSaved: () => void }) {
+/** Corriger, approuver ou supprimer un pointage (propriétaire / admin). */
+export function PunchModal({ p, onClose, onSaved }: { p: Punch; onClose: () => void; onSaved: (msg: string) => void }) {
+  const ask = useConfirm();
   const [x, setX] = useState(p);
   const fromLocal = (v: string) => (v ? new Date(v).toISOString() : undefined);
   return (
@@ -122,9 +124,14 @@ function PunchModal({ p, onClose, onSaved }: { p: Punch; onClose: () => void; on
         {x.endGeo && <a href={mapsLink(x.endGeo)} target="_blank" rel="noreferrer"><MapPin size={12} /> Position du punch out</a>}
       </div>
       <div className="row" style={{ marginTop: 14, justifyContent: 'flex-end' }}>
+        <button className="btn danger" style={{ marginRight: 'auto' }} onClick={async () => {
+          if (!(await ask({ title: 'Supprimer ce pointage?', message: `${p.name} — ${localDay(p.start)}. Les heures seront retirées des feuilles de temps et de la rentabilité.`, confirm: 'Supprimer', danger: true }))) return;
+          await db.punches.delete(p.id!);
+          onSaved('Pointage supprimé');
+        }}><Trash2 size={15} /> Supprimer</button>
         <button className="btn" onClick={onClose}>Annuler</button>
-        <button className="btn" onClick={async () => { await db.punches.put({ ...x, approved: !x.approved }); onSaved(); }}>{x.approved ? 'Retirer l’approbation' : 'Approuver'}</button>
-        <button className="btn accent" onClick={async () => { await db.punches.put(x); onSaved(); }}>Enregistrer</button>
+        <button className="btn" onClick={async () => { await db.punches.put({ ...x, approved: !x.approved }); onSaved('Pointage mis à jour'); }}>{x.approved ? 'Retirer l’approbation' : 'Approuver'}</button>
+        <button className="btn accent" onClick={async () => { await db.punches.put(x); onSaved('Pointage mis à jour'); }}>Enregistrer</button>
       </div>
     </Modal>
   );

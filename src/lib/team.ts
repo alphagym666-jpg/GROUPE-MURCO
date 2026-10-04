@@ -16,7 +16,8 @@ export const ROLE_LABEL: Record<MemberRole | 'owner', string> = {
   employe: 'Employé',
 };
 
-export const MEMBER_COLORS = ['#e0901f', '#2b63c6', '#157f5b', '#9b3fb5', '#c2362f', '#0e8a8a', '#7a5c2e'];
+// L'orange est réservé au patron dans l'agenda
+export const MEMBER_COLORS = ['#2b63c6', '#157f5b', '#9b3fb5', '#c2362f', '#0e8a8a', '#7a5c2e', '#d0457a'];
 
 export function newInviteCode(): string {
   const a = new Uint8Array(9);

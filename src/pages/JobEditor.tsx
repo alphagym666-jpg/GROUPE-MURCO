@@ -40,7 +40,7 @@ export default function JobEditor() {
   useEffect(() => {
     (async () => {
       if (isNew) {
-        setJ({ ...blankJob(params.get('d') || todayISO(), Number(params.get('client')) || 0), projectId: Number(params.get('project')) || undefined });
+        setJ({ ...blankJob(params.get('d') || todayISO(), Number(params.get('client')) || 0), time: params.get('t') || '', projectId: Number(params.get('project')) || undefined });
         setSavedAddress('');
       } else {
         const x = await db.jobs.get(Number(id));

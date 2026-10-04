@@ -9,7 +9,7 @@ import { db, type Member, type MemberRole } from '../lib/db';
 import { useSettings } from '../lib/hooks';
 import { shareLink } from '../lib/native';
 import { useSyncState } from '../lib/sync';
-import { blankMember, inviteLink, revokeMember, ROLE_LABEL } from '../lib/team';
+import { blankMember, inviteLink, MEMBER_COLORS, revokeMember, ROLE_LABEL } from '../lib/team';
 import { money } from '../lib/utils';
 
 const ROLE_HELP: Record<MemberRole, string> = {
@@ -96,6 +96,13 @@ function MemberModal({ m, onClose }: { m: Member; onClose: () => void }) {
         </label>
         <label className="field">Coût horaire ($)<input id="mb-cost" type="number" inputMode="decimal" value={x.hourlyCost || ''} onChange={(e) => up({ hourlyCost: Number(e.target.value) })} /></label>
         <label className="field">Commission (%)<input id="mb-com" type="number" inputMode="decimal" value={x.commissionRate || ''} onChange={(e) => up({ commissionRate: Number(e.target.value) })} /></label>
+        <div className="field full">Couleur dans l’agenda
+          <div className="swatches">
+            {MEMBER_COLORS.map((c) => (
+              <button key={c} type="button" className={x.color === c ? 'on' : ''} style={{ background: c }} aria-label={`Couleur ${c}`} onClick={() => up({ color: c })} />
+            ))}
+          </div>
+        </div>
       </div>
 
       {x.id && x.active && (

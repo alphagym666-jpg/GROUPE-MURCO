@@ -6,6 +6,7 @@ import { errMsg, useToast } from '../components/Toast';
 import { db, type Punch } from '../lib/db';
 import { hoursOf, localDay, openPunch, punchFlags, startPunch, stopPunch, weekStart, whoAmI, type Me } from '../lib/punch';
 import { useSyncState } from '../lib/sync';
+import { PunchModal } from './Timesheets';
 import { todayISO } from '../lib/utils';
 
 const hm = (h: number) => `${Math.floor(h)} h ${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
@@ -19,6 +20,8 @@ export default function PunchPage() {
   const [jobId, setJobId] = useState<number | ''>('');
   const [breakMin, setBreakMin] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [edit, setEdit] = useState<Punch | null>(null);
+  const canEdit = st.role === 'owner' || st.role === 'admin';
   const [, tick] = useState(0);
   const today = todayISO();
 
@@ -119,7 +122,7 @@ export default function PunchPage() {
             {todayPunches.map((p) => {
               const j = p.jobId ? data.jobs.find((x) => x.id === p.jobId) : undefined;
               return (
-                <tr key={p.id}>
+                <tr key={p.id} className={canEdit ? 'click' : undefined} onClick={canEdit ? () => setEdit(p) : undefined}>
                   <td>{time(p.start)} → {p.end ? time(p.end) : '…'}<div className="small muted">{j ? data.clients.get(j.clientId)?.name : 'Sans job'}{p.breakMin ? ` · pause ${p.breakMin} min` : ''}</div></td>
                   <td className="num">{hm(hoursOf(p))}</td>
                 </tr>
@@ -127,8 +130,10 @@ export default function PunchPage() {
             })}
           </tbody></table>
         )}
-        {(st.role === 'owner' || st.role === 'admin') && <Link className="btn small" style={{ marginTop: 10 }} to="/temps">Feuilles de temps de l’équipe</Link>}
+        {canEdit && todayPunches.length > 0 && <div className="small muted" style={{ marginTop: 6 }}>Touche un pointage pour le corriger ou le supprimer.</div>}
+        {canEdit && <Link className="btn small" style={{ marginTop: 10 }} to="/temps">Feuilles de temps de l’équipe</Link>}
       </div>
+      {edit && <PunchModal p={edit} onClose={() => setEdit(null)} onSaved={(msg) => { setEdit(null); notify(msg); }} />}
     </div>
   );
 }
