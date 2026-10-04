@@ -85,6 +85,7 @@ export default function LeadForm() {
             <input tabIndex={-1} autoComplete="off" value={hp} onChange={(e) => setHp(e.target.value)} aria-hidden="true" style={{ position: 'absolute', left: -9999, width: 1, height: 1 }} name="website" />
           </div>
           <button className="btn accent big block" style={{ marginTop: 14 }} disabled={busy}><Send size={18} /> {busy ? 'Envoi…' : 'Envoyer ma demande'}</button>
+          <p className="small muted" style={{ textAlign: 'center', marginTop: 10 }}>Tes renseignements servent uniquement à répondre à ta demande. <a href="#/confidentialite" target="_blank" rel="noreferrer">Confidentialité</a></p>
           <p className="small muted" style={{ textAlign: 'center' }}>Tes informations servent seulement à te préparer une soumission.</p>
         </form>
       )}

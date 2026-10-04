@@ -192,7 +192,7 @@ export default function Portal() {
           {p.company.conditions && <p className="small muted">{p.company.conditions}</p>}
         </div>
       )}
-      <p className="small muted" style={{ textAlign: 'center' }}>{p.company.legalName}</p>
+      <p className="small muted" style={{ textAlign: 'center' }}>{p.company.legalName} · <a href="#/confidentialite" target="_blank" rel="noreferrer">Confidentialité</a></p>
     </div>
   );
 }

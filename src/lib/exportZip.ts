@@ -121,6 +121,10 @@ export async function buildBackup(): Promise<Blob> {
       if (blob) photos.file(`media-${m.id}`, blob);
       return { ...rest, hasBlob: !!blob };
     }),
+    leads: await db.leads.toArray(),
+    members: await db.members.toArray(),
+    punches: await db.punches.toArray(),
+    projects: await db.projects.toArray(),
   };
   zip.file('data.json', JSON.stringify(data));
   return zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
@@ -148,7 +152,13 @@ export async function restoreBackup(file: Blob): Promise<void> {
       return f ? { ...rest, blob: new Blob([await f.async('arraybuffer')], { type: (m.type as string) || 'image/jpeg' }) } : rest;
     }),
   );
-  await db.transaction('rw', [db.settings, db.clients, db.docs, db.trips, db.expenses, db.emails, db.services, db.jobs, db.media], async () => {
+  await db.transaction('rw', [db.settings, db.clients, db.docs, db.trips, db.expenses, db.emails, db.services, db.jobs, db.media, db.leads, db.members, db.punches, db.projects], async () => {
+    for (const k of ['leads', 'members', 'punches', 'projects']) {
+      if (data[k]) {
+        await db.table(k).clear();
+        await db.table(k).bulkPut(data[k]);
+      }
+    }
     await Promise.all([db.settings.clear(), db.clients.clear(), db.docs.clear(), db.trips.clear(), db.expenses.clear(), db.emails.clear()]);
     if (data.jobs) {
       await db.jobs.clear();

@@ -4,8 +4,11 @@ import { getSettings, saveSettings, type Settings } from '../lib/db';
 import { buildBackup, restoreBackup } from '../lib/exportZip';
 import { AddressInput } from '../components/AddressInput';
 import { drivingDistance, geocode, mapsLastError } from '../lib/geo';
-import { configFromLink, deviceLink, getFirebaseConfig, parseFirebaseConfig, resetPassword, saveFirebaseConfig, signInEmail, signInGoogle, signOutSync, useSyncState } from '../lib/sync';
-import { useSearchParams } from 'react-router-dom';
+import { configFromLink, deleteMyAccount, deviceLink, getFirebaseConfig, parseFirebaseConfig, resetPassword, saveFirebaseConfig, signInEmail, signInGoogle, signOutSync, useSyncState } from '../lib/sync';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Download, Trash2, Upload } from 'lucide-react';
+import { useBilling } from '../lib/billing';
+import { useSettings } from '../lib/hooks';
 import { isNative } from '../lib/native';
 import { connectGmail, isGmailConnected } from '../lib/gmail';
 import { downloadBlob, todayISO } from '../lib/utils';
@@ -22,11 +25,9 @@ async function logoToPng(file: File): Promise<string> {
 
 export default function SettingsPage() {
   const notify = useToast();
-  const ask = useConfirm();
   const [s, setS] = useState<Settings | null>(null);
   const [orig, setOrig] = useState<Settings | null>(null);
   const [homeCheck, setHomeCheck] = useState('');
-  const restoreRef = useRef<HTMLInputElement>(null);
   useEffect(() => { getSettings().then((x) => { setS(x); setOrig(x); }); }, []);
   const st = useSyncState();
   const [params] = useSearchParams();
@@ -231,19 +232,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="card">
-        <h2>Sauvegarde</h2>
-        <p className="small muted">Tes données sont gardées sur cet appareil. Fais une sauvegarde régulièrement (ou pour transférer vers ton téléphone/ordinateur).</p>
-        <div className="row">
-          <button className="btn" onClick={async () => downloadBlob(await buildBackup(), `Murco_sauvegarde_${todayISO()}.zip`)}>⬇ Télécharger une sauvegarde</button>
-          <button className="btn" onClick={() => restoreRef.current?.click()}>⬆ Restaurer</button>
-          <input ref={restoreRef} type="file" accept=".zip" hidden onChange={async (e) => {
-            const f = e.target.files?.[0];
-            if (!f || !(await ask({ title: 'Restaurer cette sauvegarde?', message: 'Toutes les données actuelles de cet appareil seront remplacées.', confirm: 'Restaurer', danger: true }))) return;
-            try { await restoreBackup(f); notify('Sauvegarde restaurée'); setS(await getSettings()); } catch (err) { notify(errMsg(err), 'err'); }
-          }} />
-        </div>
-      </div>
+      <PrivacyCard onRestored={async () => setS(await getSettings())} />
 
       <div className="card">
         <h2>Installer sur ton téléphone</h2>
@@ -418,4 +407,67 @@ function SyncSection() {
 function defaultEndpoint(): string {
   const cfg = getFirebaseConfig();
   return cfg?.projectId ? `https://northamerica-northeast1-${cfg.projectId}.cloudfunctions.net` : '';
+}
+
+/** Loi 25: exporter, restaurer, supprimer le compte; liens vers la politique et les conditions. */
+function PrivacyCard({ onRestored }: { onRestored: () => void }) {
+  const notify = useToast();
+  const ask = useConfirm();
+  const nav = useNavigate();
+  const st = useSyncState();
+  const s = useSettings();
+  const b = useBilling();
+  const restoreRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState('');
+  const owner = st.role === 'owner';
+  const signedIn = st.status === 'ok' || st.status === 'syncing' || st.status === 'error';
+
+  const del = async () => {
+    if (b.kind === 'active' && !b.cancelAtPeriodEnd) return notify('Annule d’abord ton abonnement (Abonnement → Gérer mon abonnement), puis supprime ton compte.', 'err');
+    const ok = await ask({
+      title: owner ? 'Supprimer ton compte et toutes tes données?' : 'Quitter l’entreprise et supprimer ton accès?',
+      message: owner
+        ? `Clients, factures, soumissions, reçus, photos, journal de bord, équipe: tout sera effacé définitivement, sur tous tes appareils. Les lois fiscales t’obligent à garder tes registres 6 ans: exporte tes données avant. Cette action est irréversible.`
+        : 'Ton accès à l’entreprise et ton compte seront supprimés. Tes heures pointées restent dans les registres de l’entreprise.',
+      confirm: 'Supprimer définitivement',
+      danger: true,
+    });
+    if (!ok) return;
+    setBusy('del');
+    try {
+      await deleteMyAccount();
+      notify('Compte et données supprimés.');
+      nav('/produit', { replace: true });
+      setTimeout(() => location.reload(), 400);
+    } catch (e) {
+      notify(errMsg(e), 'err');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  return (
+    <div className="card" id="donnees">
+      <h2>Mes données et confidentialité</h2>
+      <p className="small muted">Tes données t’appartiennent. Exporte-les en tout temps (fichier structuré et photos) ou supprime ton compte. <Link to="/confidentialite">Politique de confidentialité</Link> · <Link to="/conditions">Conditions d’utilisation</Link>{s.termsAcceptedAt ? ` · acceptées le ${new Date(s.termsAcceptedAt).toLocaleDateString('fr-CA')}` : ''}</p>
+      <div className="row">
+        <button className="btn" disabled={!!busy} onClick={async () => { setBusy('exp'); try { downloadBlob(await buildBackup(), `${(s.companyName || 'donnees').replace(/[^\w-]+/g, '_')}_export_${todayISO()}.zip`); } finally { setBusy(''); } }}><Download size={16} /> Exporter toutes mes données</button>
+        {owner && <button className="btn" onClick={() => restoreRef.current?.click()}><Upload size={16} /> Restaurer une sauvegarde</button>}
+        <input ref={restoreRef} type="file" accept=".zip" hidden onChange={async (e) => {
+          const f = e.target.files?.[0];
+          if (!f || !(await ask({ title: 'Restaurer cette sauvegarde?', message: 'Toutes les données actuelles de cet appareil seront remplacées.', confirm: 'Restaurer', danger: true }))) return;
+          try { await restoreBackup(f); notify('Sauvegarde restaurée'); onRestored(); } catch (err) { notify(errMsg(err), 'err'); }
+        }} />
+      </div>
+      {signedIn && (
+        <div className="danger-zone">
+          <div>
+            <strong>{owner ? 'Supprimer mon compte' : 'Quitter l’entreprise'}</strong>
+            <div className="small muted">{owner ? 'Efface ton compte et toutes les données de ton entreprise.' : 'Supprime ton accès et ton compte.'}</div>
+          </div>
+          <button className="btn danger" disabled={!!busy} onClick={() => void del()}><Trash2 size={16} /> {busy === 'del' ? 'Suppression…' : owner ? 'Supprimer mon compte' : 'Quitter'}</button>
+        </div>
+      )}
+    </div>
+  );
 }

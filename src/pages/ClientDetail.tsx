@@ -1,3 +1,4 @@
+import { anonymizeClient, exportClientData } from '../lib/privacy';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -10,7 +11,7 @@ import { MediaGallery } from '../components/MediaGallery';
 import { mapsLink } from '../lib/geo';
 import { gmailThreadLink, isGmailConnected, searchMail, type MailSummary } from '../lib/gmail';
 import { useSettings } from '../lib/hooks';
-import { docTotals, km, money, statusClass, statusLabel } from '../lib/utils';
+import { docTotals, km, money, statusClass, statusLabel, downloadBlob, todayISO } from '../lib/utils';
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -94,7 +95,18 @@ export default function ClientDetail() {
           {c.email && <div><a href={`mailto:${c.email}`}>{c.email}</a></div>}
           {c.address && <div><a href={mapsLink(c.geo, c.address)} target="_blank" rel="noreferrer">{c.address}</a></div>}
           {c.notes && <p className="small muted" style={{ whiteSpace: 'pre-wrap' }}>{c.notes}</p>}
-          <button className="btn small danger" style={{ marginTop: 10 }} onClick={remove}>Supprimer le client</button>
+          <div className="row" style={{ marginTop: 10 }}>
+            <button className="btn small" onClick={async () => downloadBlob(await exportClientData(cid), `client_${c.name.replace(/[^\w-]+/g, '_')}_${todayISO()}.json`)} title="Demande d’accès d’un client (Loi 25)">Exporter ses données</button>
+            {data.docs.length ? (
+              <button className="btn small danger" onClick={async () => {
+                if (!(await ask({ title: `Anonymiser ${c.name}?`, message: 'À la demande du client (Loi 25): son nom, ses coordonnées, ses adresses, ses photos et ses demandes sont effacés. Les montants de ses factures restent pour ta comptabilité (registres à garder 6 ans). Irréversible.', confirm: 'Anonymiser', danger: true }))) return;
+                await anonymizeClient(cid);
+                notify('Client anonymisé');
+              }}>Supprimer ses renseignements</button>
+            ) : (
+              <button className="btn small danger" onClick={remove}>Supprimer le client</button>
+            )}
+          </div>
         </div>
         <div className="card">
           <div className="row"><h2 style={{ margin: 0 }}>Courriels Gmail</h2><div className="spacer" />

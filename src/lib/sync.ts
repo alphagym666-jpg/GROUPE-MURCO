@@ -4,6 +4,7 @@ import {
   browserPopupRedirectResolver,
   connectAuthEmulator,
   createUserWithEmailAndPassword,
+  deleteUser,
   GoogleAuthProvider,
   indexedDBLocalPersistence,
   initializeAuth,
@@ -19,7 +20,12 @@ import {
   connectFirestoreEmulator,
   doc,
   collection,
+  deleteDoc,
   getDoc,
+  getDocs,
+  query,
+  where,
+  writeBatch,
   initializeFirestore,
   onSnapshot,
   persistentLocalCache,
@@ -320,6 +326,51 @@ export async function resetPassword(email: string) {
     await sendPasswordResetEmail(auth, email.trim());
   } catch (e) {
     throw authError(e);
+  }
+}
+
+/**
+ * Loi 25: supprime le compte et toutes les données de l'entreprise dans le nuage, puis sur cet appareil.
+ * Un employé quitte simplement l'entreprise (son accès est supprimé).
+ */
+export async function deleteMyAccount(): Promise<void> {
+  if (!fs || !user) throw new Error('Connecte-toi d’abord.');
+  const u = user;
+  // Firebase exige une connexion récente pour supprimer un compte: on vérifie avant d'effacer quoi que ce soit
+  const auth = await u.getIdTokenResult();
+  if (Date.now() - new Date(auth.authTime).getTime() > 4 * 60_000) {
+    throw new Error('Par sécurité, déconnecte-toi puis reconnecte-toi, et recommence la suppression dans les 5 minutes.');
+  }
+  const ownerUid = u.uid;
+  const wipe = async (refs: { ref: Parameters<typeof deleteDoc>[0] }[]) => {
+    for (let i = 0; i < refs.length; i += 400) {
+      const b = writeBatch(fs!);
+      refs.slice(i, i + 400).forEach((d) => b.delete(d.ref));
+      await b.commit();
+    }
+  };
+  detach();
+  if (role === 'owner') {
+    for (const t of [...SYNC_TABLES, 'files', 'invites']) await wipe((await getDocs(collection(fs, 'users', ownerUid, t))).docs);
+    await wipe((await getDocs(query(collection(fs, 'portal'), where('owner', '==', ownerUid)))).docs);
+    await wipe((await getDocs(collection(fs, 'inbox', ownerUid, 'leads'))).docs);
+    await wipe((await getDocs(query(collection(fs, 'memberships'), where('ownerUid', '==', ownerUid)))).docs);
+    await deleteDoc(doc(fs, 'public', ownerUid)).catch(() => undefined);
+  } else {
+    await deleteDoc(doc(fs, 'memberships', ownerUid)).catch(() => undefined);
+  }
+  try {
+    await deleteUser(u);
+  } catch (e) {
+    throw authError(e);
+  }
+  await remoteTx(SYNC_TABLES.map((t) => db.table(t)), async () => {
+    for (const t of SYNC_TABLES) await db.table(t).clear();
+  });
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith('murco.') && k !== 'murco.firebase' && k !== 'murco.lang' && k !== 'murco.theme') localStorage.removeItem(k);
+  } catch {
+    /* ignore */
   }
 }
 
