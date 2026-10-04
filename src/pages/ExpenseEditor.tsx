@@ -3,14 +3,15 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AddressInput } from '../components/AddressInput';
 import { errMsg, useConfirm, useToast } from '../components/Toast';
-import { db, EXPENSE_CATEGORIES, type Expense } from '../lib/db';
+import { jobGeo } from '../lib/agenda';
+import { db, EXPENSE_CATEGORIES, type Expense, type ExpenseOrigin, type GeoPoint } from '../lib/db';
 import { currentPosition, drivingDistance, geocode, mapsLink, reverseGeocode } from '../lib/geo';
 import { useSettings } from '../lib/hooks';
 import { compressImage, pendingImport, readPhotoInfo, splitTaxes } from '../lib/receipt';
 import { readReceipt } from '../lib/ocr';
 import { ensureHomeGeo, syncTripForExpense } from '../lib/trips';
 import { km, money, round2, todayISO } from '../lib/utils';
-import { Camera, ImagePlus, ScanText } from 'lucide-react';
+import { Briefcase, Camera, Home, ImagePlus, MapPin, ScanText } from 'lucide-react';
 
 const blank = (): Expense => ({
   date: todayISO(), vendor: '', category: 'Essence', subtotal: 0, tps: 0, tvq: 0, total: 0, paymentMethod: 'Carte de crédit',
@@ -36,6 +37,26 @@ export default function ExpenseEditor() {
   const projects = useLiveQuery(() => db.projects.toArray(), []) ?? [];
   const docs = useLiveQuery(() => db.docs.where('type').equals('invoice').reverse().sortBy('date'), []) ?? [];
   const trip = useLiveQuery(() => (e?.tripId ? db.trips.get(e.tripId) : undefined), [e?.tripId]);
+  const [otherFrom, setOtherFrom] = useState(false);
+  // Jobs de cette journée (agenda + factures) = points de départ possibles
+  const starts = useLiveQuery(async () => {
+    if (!e?.date) return [];
+    const [jobs, invs] = await Promise.all([db.jobs.where('date').equals(e.date).toArray(), db.docs.where('type').equals('invoice').toArray()]);
+    const out: { key: string; label: string; sub: string; jobId?: number; docId?: number; clientId: number; resolve: () => Promise<GeoPoint | null> }[] = [];
+    for (const j of jobs.filter((x) => x.status !== 'annule')) {
+      const c = await db.clients.get(j.clientId);
+      const addr = j.address || c?.address || '';
+      if (!addr) continue;
+      out.push({ key: `j${j.id}`, label: c?.name ?? j.title, sub: addr, jobId: j.id, clientId: j.clientId, resolve: async () => (await jobGeo(j, c))?.geo ?? null });
+    }
+    for (const d of invs.filter((x) => (x.jobDate || x.date) === e.date && !x.jobId)) {
+      const c = await db.clients.get(d.clientId);
+      const addr = d.jobAddress || c?.address || '';
+      if (!addr || out.some((o) => o.sub === addr)) continue;
+      out.push({ key: `d${d.id}`, label: c?.name ?? d.number, sub: addr, docId: d.id, clientId: d.clientId, resolve: async () => d.jobGeo ?? c?.geo ?? (await geocode(addr))?.geo ?? null });
+    }
+    return out;
+  }, [e?.date]) ?? [];
 
   useEffect(() => {
     (async () => {
@@ -83,7 +104,26 @@ export default function ExpenseEditor() {
     } catch (err) {
       notify(errMsg(err), 'err');
     }
-    return { ...base, geo, geoSource: source, locationLabel: label, kmFromHome };
+    let originKm = !base.origin || base.origin.kind === 'maison' ? kmFromHome : undefined;
+    if (base.origin && base.origin.kind !== 'maison') originKm = await drivingDistance(base.origin.geo, geo).then((r) => r.km).catch(() => undefined);
+    return { ...base, geo, geoSource: source, locationLabel: label, kmFromHome, originKm };
+  }
+
+  /** « Tu partais d'où? »: domicile, une job de la journée ou une autre adresse. */
+  async function chooseOrigin(o: Omit<ExpenseOrigin, 'geo'>, resolve: () => Promise<GeoPoint | null>) {
+    if (!e?.geo) return;
+    setBusy('Calcul des km…');
+    try {
+      const geo = await resolve();
+      if (!geo) throw new Error('Adresse de départ introuvable. Vérifie l’adresse de la job.');
+      const r = await drivingDistance(geo, e.geo);
+      setE((cur) => ({ ...cur!, origin: { ...o, geo }, originKm: r.km, clientId: cur!.clientId ?? o.clientId, docId: cur!.docId ?? o.docId }));
+      setOtherFrom(false);
+    } catch (err) {
+      notify(errMsg(err), 'err');
+    } finally {
+      setBusy('');
+    }
   }
 
   async function handleFile(file: File, base: Expense, meta: { vendor?: string; date?: string } = {}) {
@@ -124,8 +164,19 @@ export default function ExpenseEditor() {
       if (guess.date && useDate) next.date = guess.date;
       if (guess.vendor && !base.vendor) next.vendor = guess.vendor;
       if (guess.category) next.category = guess.category;
-      setE((cur) => ({ ...(cur ?? next), ...next, photo: cur?.photo ?? next.photo, geo: cur?.geo ?? next.geo, locationLabel: cur?.locationLabel || next.locationLabel, kmFromHome: cur?.kmFromHome ?? next.kmFromHome }));
-      notify(guess.total ? `Reçu lu: ${money(guess.total)}${guess.vendor ? ` chez ${guess.vendor}` : ''} — vérifie les montants` : 'Je n’ai pas trouvé le total sur la photo. Entre-le à la main.', guess.total ? 'ok' : 'err');
+      setE((cur) => ({ ...(cur ?? next), ...next, photo: cur?.photo ?? next.photo, geo: cur?.geo ?? next.geo, geoSource: cur?.geoSource ?? next.geoSource, locationLabel: cur?.locationLabel || next.locationLabel, kmFromHome: cur?.kmFromHome ?? next.kmFromHome, origin: cur?.origin ?? next.origin, originKm: cur?.originKm ?? next.originKm }));
+      let where = '';
+      // Adresse du commerce imprimée sur le reçu → position → km
+      if (guess.address && !base.geo) {
+        setBusy('Recherche de l’adresse du commerce…');
+        const g = await geocode(guess.address).catch(() => null);
+        if (g) {
+          const located = await locate(g.geo, 'recu', { ...next, locationLabel: guess.address });
+          setE((cur) => (cur?.geo ? cur : { ...cur!, geo: located.geo, geoSource: 'recu', locationLabel: guess.address!, kmFromHome: located.kmFromHome, originKm: located.originKm }));
+          where = ` · adresse trouvée: ${guess.address}`;
+        }
+      }
+      notify(guess.total ? `Reçu lu: ${money(guess.total)}${guess.vendor ? ` chez ${guess.vendor}` : ''}${guess.category ? ` (${guess.category})` : ''}${where} — vérifie les montants` : 'Je n’ai pas trouvé le total sur la photo. Entre-le à la main.', guess.total ? 'ok' : 'err');
     } catch (err) {
       notify(`Lecture automatique impossible: ${errMsg(err)}`, 'err');
     } finally {
@@ -225,21 +276,49 @@ export default function ExpenseEditor() {
             ? <p><a href={photoUrl} target="_blank" rel="noreferrer">Voir le PDF du reçu</a></p>
             : <a href={photoUrl} target="_blank" rel="noreferrer"><img src={photoUrl} className="photo-preview" style={{ marginTop: 12 }} alt="Reçu" /></a>)}
 
-          <h3 style={{ marginTop: 18 }}>Où (pour calculer les km de chez toi)</h3>
+          <h3 style={{ marginTop: 18 }}>Où as-tu fait cette dépense?</h3>
           <div className="row" style={{ flexWrap: 'nowrap' }}>
-            <AddressInput value={e.locationLabel} placeholder="ex.: Petro-Canada, Sherrington" onChange={(v) => up({ locationLabel: v, geo: undefined, kmFromHome: undefined })} onPick={async (label, geo) => { setBusy('Calcul des km…'); try { const n = await locate(geo, 'adresse', e); setE({ ...n, locationLabel: label }); } finally { setBusy(''); } }} />
+            <AddressInput value={e.locationLabel} placeholder="ex.: Petro-Canada, Sherrington" onChange={(v) => up({ locationLabel: v, geo: undefined, kmFromHome: undefined, originKm: undefined })} onPick={async (label, geo) => { setBusy('Calcul des km…'); try { const n = await locate(geo, 'adresse', e); setE({ ...n, locationLabel: label }); } finally { setBusy(''); } }} />
             <button className="btn" onClick={useAddress} disabled={!!busy}></button>
           </div>
           <div className="row" style={{ marginTop: 8 }}>
             <button className="btn small" onClick={useGps} disabled={!!busy}>Je suis sur place (GPS)</button>
             {e.geo && <a className="btn small" href={mapsLink(e.geo)} target="_blank" rel="noreferrer">Carte</a>}
           </div>
-          {e.kmFromHome !== undefined && (
-            <div className="notice ok" style={{ marginTop: 10 }}>
-              <strong>{km(e.kmFromHome)}</strong> de ton domicile{e.geoSource === 'photo' ? ' (position lue dans la photo)' : e.geoSource === 'gps' ? ' (GPS)' : ''}
-              <label className="check" style={{ marginTop: 6 }}><input type="checkbox" checked={addTrip} onChange={(ev) => setAddTrip(ev.target.checked)} /> Ajouter au journal de bord</label>
-              {addTrip && !trip && <label className="check"><input type="checkbox" checked={roundTrip} onChange={(ev) => setRoundTrip(ev.target.checked)} /> Aller-retour ({km(e.kmFromHome * (roundTrip ? 2 : 1))})</label>}
-              {trip && <div className="small">Au journal: {km(trip.totalKm)} — {trip.reason}</div>}
+          {e.geo && (
+            <div className="origin-box">
+              <div className="origin-q">Tu partais d’où?</div>
+              <div className="origin-opts">
+                <button className={!e.origin || e.origin.kind === 'maison' ? 'on' : ''} disabled={!!busy}
+                  onClick={() => void chooseOrigin({ kind: 'maison', label: s.homeAddress || 'Domicile' }, async () => (await ensureHomeGeo()).geo)}>
+                  <Home size={18} /><span><strong>De chez nous</strong><small>{s.homeAddress || 'Ajoute ton adresse dans Paramètres'}</small></span>
+                </button>
+                {starts.map((o) => (
+                  <button key={o.key} className={e.origin?.kind === 'job' && (e.origin.jobId ?? -1) === (o.jobId ?? -2) || (e.origin?.docId && e.origin.docId === o.docId) ? 'on' : ''} disabled={!!busy}
+                    onClick={() => void chooseOrigin({ kind: 'job', label: o.label, jobId: o.jobId, docId: o.docId, clientId: o.clientId }, o.resolve)}>
+                    <Briefcase size={18} /><span><strong>De la job: {o.label}</strong><small>{o.sub}</small></span>
+                  </button>
+                ))}
+                <button className={e.origin?.kind === 'autre' || otherFrom ? 'on' : ''} disabled={!!busy} onClick={() => setOtherFrom(true)}>
+                  <MapPin size={18} /><span><strong>D’ailleurs</strong><small>{e.origin?.kind === 'autre' ? e.origin.label : 'Choisir une adresse'}</small></span>
+                </button>
+              </div>
+              {otherFrom && (
+                <div style={{ marginTop: 8 }}>
+                  <AddressInput value="" placeholder="Adresse de départ" onChange={() => undefined}
+                    onPick={(label, geo) => void chooseOrigin({ kind: 'autre', label }, async () => geo)} />
+                </div>
+              )}
+              {starts.length === 0 && <div className="small muted" style={{ marginTop: 6 }}>Aucune job à l’agenda le {e.date}: les jobs de la journée apparaissent ici.</div>}
+              {(e.originKm ?? e.kmFromHome) !== undefined && (
+                <div className="notice ok" style={{ marginTop: 10 }}>
+                  <strong>{km((e.originKm ?? e.kmFromHome)!)}</strong> {!e.origin || e.origin.kind === 'maison' ? 'de ton domicile' : e.origin.kind === 'job' ? `de la job ${e.origin.label}` : `de ${e.origin.label}`} jusqu’à {e.vendor || 'ce commerce'}
+                  {e.geoSource === 'photo' ? ' (position lue dans la photo)' : e.geoSource === 'recu' ? ' (adresse lue sur le reçu)' : e.geoSource === 'gps' ? ' (GPS)' : ''}
+                  <label className="check" style={{ marginTop: 6 }}><input type="checkbox" checked={addTrip} onChange={(ev) => setAddTrip(ev.target.checked)} /> Ajouter au journal de bord</label>
+                  {addTrip && <label className="check"><input type="checkbox" checked={trip ? trip.roundTrip : roundTrip} disabled={!!trip} onChange={(ev) => setRoundTrip(ev.target.checked)} /> Aller-retour ({km((e.originKm ?? e.kmFromHome)! * ((trip ? trip.roundTrip : roundTrip) ? 2 : 1))}){e.origin?.kind === 'job' ? ' — je suis retourné à la job' : ''}</label>}
+                  {trip && <div className="small">Au journal: {km(trip.totalKm)} — {trip.reason}</div>}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -250,7 +329,7 @@ export default function ExpenseEditor() {
             <label className="field">Date<input type="date" value={e.date} onChange={(ev) => up({ date: ev.target.value })} /></label>
             <label className="field">Catégorie
               <select value={e.category} onChange={(ev) => up({ category: ev.target.value })}>
-                {EXPENSE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c === 'Essence' ? 'Essence (véhicule)' : c}</option>)}
               </select>
             </label>
             <label className="field full">Fournisseur / commerce<input value={e.vendor} onChange={(ev) => up({ vendor: ev.target.value })} placeholder="ex.: Shell, Rona, Home Depot" /></label>

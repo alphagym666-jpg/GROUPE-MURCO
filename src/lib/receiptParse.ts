@@ -9,6 +9,7 @@ export interface ReceiptGuess {
   date?: string; // YYYY-MM-DD
   vendor?: string;
   category?: string;
+  address?: string; // adresse du commerce imprimée sur le reçu
   confidence: number; // 0 à 1
 }
 
@@ -44,6 +45,7 @@ const VENDORS: [RegExp, string, string][] = [
   [/vid[ée]otron|\bbell\b|rogers|telus|\bfizz\b|koodo|fido/i, '', 'Téléphone / Internet'],
   [/garage|m[ée]canique|pneus?|speedy|midas|kal\s?tire|lave[\s-]?auto/i, '', 'Entretien véhicule'],
   [/location|simplex|loue[\s-]?froid|lou[ée] tout/i, '', 'Location équipement'],
+  [/carburant|diesel|\bessence\b|pompe\s*#?\s*\d|\d\s?l\s?@|\$\s?\/\s?l\b|unleaded|\bregular\b|ordinaire|\bgas\s?bar/i, '', 'Essence'],
   [/costco|walmart|maxi\b|\biga\b|metro\b|provigo|super\s?c/i, '', 'Matériaux'],
 ];
 
@@ -129,6 +131,26 @@ const LINE = {
   notTotal: /\b(sous[\s-]?total|subtotal|tps|tvq|gst|qst|economies|epargne|rabais|remise|change|monnaie|points|litres?|\/l\b)/,
 };
 
+const STREET = /\b\d{1,6}[a-z]?,?\s+(?:[\p{L}'.-]+\s+){0,2}(?:rue|boul(?:evard)?|bd|ch(?:emin)?|av(?:enue)?|ave|route|rte|rang|mont[ée]e|place|pl|cr[ée]s(?:cent)?|c[ôo]te|autoroute|street|st|road|rd|blvd|drive|dr|hwy)\b\.?[^\n]*/iu;
+const POSTAL = /\b[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z]\s?\d[ABCEGHJ-NPRSTV-Z]\d\b/i;
+const CITY_PROV = /^[\p{L}' .-]{3,40},?\s+(?:qc|qu[ée]bec|on|ontario)\b/iu;
+
+/** Adresse du commerce (no + rue, ville, code postal) dans le haut du reçu. */
+export function findAddress(text: string): string | undefined {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(0, 14);
+  const i = lines.findIndex((l) => STREET.test(l) && !/t[ée]l|phone|tps|tvq|gst|qst|#\s?\d{6,}/i.test(l));
+  if (i < 0) {
+    const pc = lines.find((l) => POSTAL.test(l));
+    return pc ? pc.match(POSTAL)![0].toUpperCase() : undefined;
+  }
+  const parts = [lines[i].match(STREET)![0].replace(/\s{2,}/g, ' ').trim()];
+  for (const l of lines.slice(i + 1, i + 3)) {
+    if (CITY_PROV.test(l) || POSTAL.test(l)) parts.push(l.replace(/\s{2,}/g, ' ').replace(/t[ée]l.*$/i, '').trim());
+    else break;
+  }
+  return parts.join(', ').replace(/[,\s]+$/, '').slice(0, 120);
+}
+
 export function parseReceipt(text: string, today = new Date()): ReceiptGuess {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const low = lines.map((l) => strip(l).toLowerCase());
@@ -183,6 +205,7 @@ export function parseReceipt(text: string, today = new Date()): ReceiptGuess {
     if (first) g.vendor = first.replace(/[^\p{L}\p{N}&' .-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 40);
   }
   if (g.vendor) g.confidence += 0.15;
+  g.address = findAddress(text);
   g.confidence = Math.min(1, Math.round(g.confidence * 100) / 100);
   return g;
 }

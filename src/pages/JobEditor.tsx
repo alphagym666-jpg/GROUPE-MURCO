@@ -25,6 +25,9 @@ export default function JobEditor() {
   const ask = useConfirm();
   const s = useSettings();
   const [j, setJ] = useState<Job | null>(null);
+  // Le formulaire affiché doit correspondre à la page (évite d'enregistrer l'ancien job sur « Nouveau job »)
+  const loadKey = `${id}|${params.toString()}`;
+  const [loadedFor, setLoadedFor] = useState('');
   const [savedAddress, setSavedAddress] = useState('');
   const [showClient, setShowClient] = useState(false);
   const [remind, setRemind] = useState(false);
@@ -42,16 +45,18 @@ export default function JobEditor() {
       if (isNew) {
         setJ({ ...blankJob(params.get('d') || todayISO(), Number(params.get('client')) || 0), time: params.get('t') || '', projectId: Number(params.get('project')) || undefined });
         setSavedAddress('');
+        setLoadedFor(`${id}|${params.toString()}`);
       } else {
         const x = await db.jobs.get(Number(id));
         if (!x) return nav('/agenda');
         setJ(x);
         setSavedAddress(x.address);
+        setLoadedFor(`${id}|${params.toString()}`);
       }
     })();
   }, [id, isNew, params, nav]);
 
-  if (!j) return null;
+  if (!j || loadedFor !== loadKey) return null;
   const client = clients.find((c) => c.id === j.clientId);
   const up = (p: Partial<Job>) => setJ((x) => ({ ...x!, ...p }));
   const total = j.items.reduce((a, it) => a + lineAmount(it), 0);
@@ -94,7 +99,10 @@ export default function JobEditor() {
       setSavedAddress(saved.address);
       if (saved.status !== 'planifie') await syncDayRoute(saved.date).catch(() => undefined);
       if (!quiet) notify('Job enregistré');
-      if (isNew) nav(`/job/${newId}${wantPhoto ? '?photo=1' : ''}`, { replace: true });
+      if (isNew) {
+        setLoadedFor(`${newId}|${wantPhoto ? 'photo=1' : ''}`);
+        nav(`/job/${newId}${wantPhoto ? '?photo=1' : ''}`, { replace: true });
+      }
       return saved;
     } catch (e) {
       notify(errMsg(e), 'err');

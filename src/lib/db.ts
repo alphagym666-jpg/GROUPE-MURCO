@@ -257,6 +257,15 @@ export const EXPENSE_CATEGORIES = [
   'Autre',
 ] as const;
 
+export interface ExpenseOrigin {
+  kind: 'maison' | 'job' | 'autre';
+  label: string;
+  geo: GeoPoint;
+  jobId?: number;
+  docId?: number;
+  clientId?: number;
+}
+
 export interface Expense extends Synced {
   id?: number;
   date: string;
@@ -273,8 +282,10 @@ export interface Expense extends Synced {
   photoType?: string;
   locationLabel: string;
   geo?: GeoPoint;
-  geoSource?: 'photo' | 'gps' | 'adresse';
+  geoSource?: 'photo' | 'gps' | 'adresse' | 'recu';
   kmFromHome?: number;
+  origin?: ExpenseOrigin; // d'où je partais (domicile, une job, autre)
+  originKm?: number; // km aller, du point de départ au commerce
   clientId?: number;
   docId?: number;
   projectId?: number;

@@ -704,3 +704,13 @@ table.list tr.click:hover td { background: var(--surface-2); }
   /* Jour sur cellulaire: la route (actions) d'abord, la grille horaire ensuite */
   .ag-day { display: flex; flex-direction: column-reverse; align-items: stretch !important; }
 }
+
+/* Reçu: « Tu partais d'où? » */
+.origin-box { margin-top: 12px; padding: 12px; border: 1.5px solid var(--amber); border-radius: 14px; background: color-mix(in srgb, var(--amber) 6%, var(--surface)); }
+.origin-q { font-family: var(--font-display); font-weight: 750; font-size: 1.05rem; margin-bottom: 8px; }
+.origin-opts { display: grid; gap: 6px; }
+.origin-opts button { display: flex; align-items: center; gap: 10px; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; min-height: 52px; }
+.origin-opts button span { display: grid; min-width: 0; }
+.origin-opts button small { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.origin-opts button svg { flex: none; color: var(--amber-ink); }
+.origin-opts button.on { border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber); }

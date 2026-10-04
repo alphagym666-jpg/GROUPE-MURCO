@@ -81,34 +81,36 @@ export async function syncTripForDoc(docId: number, opts: { force?: boolean } = 
   return { ...trip, id };
 }
 
-/** Déplacement domicile → lieu du reçu (ex.: station d'essence). */
+/** Déplacement point de départ (domicile ou une job) → lieu du reçu (ex.: station d'essence). */
 export async function syncTripForExpense(expenseId: number, roundTrip = true): Promise<Trip | null> {
   const exp = await db.expenses.get(expenseId);
   if (!exp?.geo) return null;
-  const home = await ensureHomeGeo();
+  const fromHome = !exp.origin || exp.origin.kind === 'maison';
+  const from = fromHome ? await ensureHomeGeo() : { label: exp.origin!.label, geo: exp.origin!.geo };
   const existing = exp.tripId ? await db.trips.get(exp.tripId) : undefined;
-  let oneWayKm = exp.kmFromHome;
+  let oneWayKm = fromHome ? exp.originKm ?? exp.kmFromHome : exp.originKm;
   let method: Trip['distanceMethod'] = 'route';
   if (oneWayKm === undefined) {
-    const r = await drivingDistance(home.geo, exp.geo);
+    const r = await drivingDistance(from.geo, exp.geo);
     oneWayKm = r.km;
     method = r.method;
-    await db.expenses.update(expenseId, { kmFromHome: oneWayKm });
+    await db.expenses.update(expenseId, fromHome ? { kmFromHome: oneWayKm, originKm: oneWayKm } : { originKm: oneWayKm });
   }
+  const sameRoute = existing && existing.fromLabel === from.label && existing.toGeo?.lat === exp.geo.lat && existing.toGeo?.lon === exp.geo.lon;
   const trip: Trip = {
     ...(existing ?? { createdAt: new Date().toISOString(), source: 'auto-recu' as const }),
     date: exp.date,
-    fromLabel: home.label,
-    fromGeo: home.geo,
+    fromLabel: from.label,
+    fromGeo: from.geo,
     toLabel: exp.locationLabel || exp.vendor,
     toGeo: exp.geo,
     oneWayKm,
     roundTrip: existing?.roundTrip ?? roundTrip,
     totalKm: Math.round(oneWayKm * ((existing?.roundTrip ?? roundTrip) ? 2 : 1) * 10) / 10,
     reason: expenseReason(exp),
-    clientId: exp.clientId,
+    clientId: exp.clientId ?? exp.origin?.clientId,
     expenseId,
-    distanceMethod: existing?.distanceMethod ?? method,
+    distanceMethod: sameRoute ? existing!.distanceMethod : method,
   };
   const id = await db.trips.put(trip);
   if (exp.tripId !== id) await db.expenses.update(expenseId, { tripId: id });
@@ -116,7 +118,8 @@ export async function syncTripForExpense(expenseId: number, roundTrip = true): P
 }
 
 export function expenseReason(exp: Expense): string {
-  const base = `${exp.category}${exp.vendor ? ' — ' + exp.vendor : ''}`;
+  const from = exp.origin?.kind === 'job' ? ` (parti de la job ${exp.origin.label})` : exp.origin?.kind === 'autre' ? ` (parti de ${exp.origin.label})` : '';
+  const base = `${exp.category}${exp.vendor ? ' — ' + exp.vendor : ''}${from}`;
   return exp.notes ? `${base} (${exp.notes})` : base;
 }
 

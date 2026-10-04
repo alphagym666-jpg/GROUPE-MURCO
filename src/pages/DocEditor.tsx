@@ -56,6 +56,9 @@ export default function DocEditor() {
   const isNew = id === 'new';
 
   const [doc, setDoc] = useState<Doc | null>(null);
+  // Le formulaire affiché doit correspondre à la page (évite d'enregistrer l'ancien document sur « Nouvelle facture »)
+  const loadKey = `${id}|${params.toString()}`;
+  const [loadedFor, setLoadedFor] = useState('');
   const [savedAddress, setSavedAddress] = useState('');
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -85,12 +88,14 @@ export default function DocEditor() {
         setDoc({ ...newDoc(type, Number(params.get('client')) || 0, st), projectId: Number(params.get('project')) || undefined });
         setSavedAddress('');
         setDirty(false);
+        setLoadedFor(`${id}|${params.toString()}`);
       } else {
         const d = await db.docs.get(Number(id));
         if (!d) return nav('/factures');
         setDoc(d);
         setSavedAddress(d.jobAddress);
         setDirty(false);
+        setLoadedFor(`${id}|${params.toString()}`);
       }
     })();
   }, [id, isNew, params, nav]);
@@ -100,13 +105,13 @@ export default function DocEditor() {
   // Mises à jour venant d'ailleurs (autre appareil, signature du client dans le portail)
   const live = useLiveQuery(() => (doc?.id ? db.docs.get(doc.id) : undefined), [doc?.id]);
   useEffect(() => {
-    if (!live || !doc || live._u === doc._u) return;
+    if (!live || !doc || live.id !== doc.id || live._u === doc._u) return;
     if (!dirty) setDoc(live);
     else setDoc((d) => (d ? { ...d, signature: live.signature, viewedAt: live.viewedAt, portalToken: live.portalToken, _u: live._u } : d));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live?._u]);
 
-  if (!doc) return null;
+  if (!doc || loadedFor !== loadKey) return null;
   const client = clients.find((c) => c.id === doc.clientId);
   const tot = docTotals(doc, s);
   const isInvoice = doc.type === 'invoice';
@@ -149,7 +154,10 @@ export default function DocEditor() {
       setDoc(saved);
       setDirty(false);
       void syncLeadFromDoc(saved);
-      if (isNew) nav(`/doc/${newId}`, { replace: true });
+      if (isNew) {
+        setLoadedFor(`${newId}|`);
+        nav(`/doc/${newId}`, { replace: true });
+      }
       return saved;
     } catch (e) {
       notify(errMsg(e), 'err');

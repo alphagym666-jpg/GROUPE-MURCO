@@ -1,6 +1,6 @@
 // Test de la lecture des reçus: node --experimental-strip-types tests/receipt.test.ts
 import assert from 'node:assert/strict';
-import { parseReceipt, findDate, amountsIn } from '../src/lib/receiptParse.ts';
+import { parseReceipt, findDate, amountsIn, findAddress } from '../src/lib/receiptParse.ts';
 
 const today = new Date(2026, 9, 4);
 const cases: [string, Partial<ReturnType<typeof parseReceipt>>][] = [
@@ -14,7 +14,7 @@ SOUS-TOTAL      66,28
 TPS 123456789   3,31
 TVQ 1234567890  6,61
 TOTAL          76,20 $
-VISA          76,20`, { vendor: 'Petro-Canada', category: 'Essence', total: 76.2, subtotal: 66.28, tps: 3.31, tvq: 6.61, date: '2026-10-02' }],
+VISA          76,20`, { vendor: 'Petro-Canada', category: 'Essence', address: '1234 BOUL. LABELLE, BLAINVILLE QC', total: 76.2, subtotal: 66.28, tps: 3.31, tvq: 6.61, date: '2026-10-02' }],
   [`RONA L'ENTREPOT
 Sherrington
 02/10/26  09:12
@@ -41,3 +41,12 @@ for (const [text, exp] of cases) {
 assert.deepEqual(amountsIn('TOTAL 1 234,56 $ et 12.30'), [1234.56, 12.3]);
 assert.equal(findDate('le 31/12/2027', today), undefined); // futur
 console.log(`reçus: ${cases.length} cas OK`);
+
+// Adresse du commerce
+assert.equal(findAddress('SHELL\n455 boul. Saint-Jean-Baptiste\nChâteauguay, QC J6K 3B7\nTél: 450-555-1212\nTOTAL 60,00'), '455 boul. Saint-Jean-Baptiste, Châteauguay, QC J6K 3B7');
+assert.equal(findAddress('ULTRAMAR\n12, rue Principale\nSherrington QC\n'), '12, rue Principale, Sherrington QC');
+assert.equal(findAddress('DEPANNEUR\nJ0L 2N0\nTOTAL 5,00'), 'J0L 2N0');
+assert.equal(findAddress('Tim Hortons #1234\nTotal 6,38'), undefined);
+// Station inconnue reconnue comme essence
+assert.equal(parseReceipt('STATION BEAULIEU\nPOMPE 3\n40,000 L @ 1,659\nTOTAL 66,36').category, 'Essence');
+console.log('adresses: 4 cas OK');
