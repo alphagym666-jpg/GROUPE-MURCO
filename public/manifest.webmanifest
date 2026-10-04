@@ -1,6 +1,6 @@
 {
-  "name": "Groupe Murco — Gestion",
-  "short_name": "Murco",
+  "name": "Chantio — Gestion pour entrepreneurs",
+  "short_name": "Chantio",
   "description": "Factures, soumissions, clients, journal de bord (km), reçus et Gmail pour Groupe Murco Inc.",
   "start_url": "./",
   "scope": "./",

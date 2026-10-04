@@ -73,6 +73,18 @@ function setState(p: Partial<SyncState>) {
   state = { ...state, ...p };
   subs.forEach((f) => f());
 }
+/** Pour le code hors React: appelé à chaque changement d'état de la synchro. */
+export function onSyncState(fn: (s: SyncState) => void): () => void {
+  const f = () => fn(state);
+  subs.add(f);
+  return () => subs.delete(f);
+}
+/** Compte connecté (création du compte = début de l'essai gratuit). */
+export function currentAccount(): { uid: string; email: string; createdAt: string; getToken: () => Promise<string> } | null {
+  if (!user) return null;
+  const u = user;
+  return { uid: u.uid, email: u.email ?? '', createdAt: new Date(u.metadata.creationTime ?? Date.now()).toISOString(), getToken: () => u.getIdToken() };
+}
 export function useSyncState(): SyncState {
   return useSyncExternalStore(
     (f) => {
@@ -253,7 +265,7 @@ export function startSync(): void {
     setState({ configured: true, status: 'error', error: msg(e) });
     return;
   }
-  setState({ configured: true, status: 'signedout' });
+  setState({ configured: true, status: 'connecting' }); // en attente de la session enregistrée
   onAuthStateChanged(auth, async (u) => {
     detach();
     user = u;

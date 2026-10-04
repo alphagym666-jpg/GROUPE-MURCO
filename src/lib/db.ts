@@ -61,6 +61,10 @@ export interface Settings extends Synced {
   leadForm: boolean;
   setupDone?: string[]; // étapes de démarrage cochées à la main (ex.: codes vérifiés)
   setupHidden?: boolean; // liste « Démarrage » masquée
+  trade?: string; // métier choisi au démarrage (modèle de codes et prix)
+  setupComplete?: boolean; // assistant de démarrage terminé
+  wantedPlan?: string; // forfait choisi sur la page de vente
+  termsAcceptedAt?: string; // consentement aux conditions et à la politique de confidentialité (Loi 25)
   leadFormIntro: string;
   // Paiement par carte (Stripe, via les fonctions Firebase)
   cardPayments: boolean;
@@ -437,6 +441,14 @@ class MurcoDB extends Dexie {
       jobs: 'id, date, clientId, status, docId, projectId',
       expenses: 'id, date, category, docId, clientId, projectId',
     });
+    // Arrivée des autres entreprises: les réglages par défaut deviennent vides.
+    // Les appareils existants (Groupe Murco) gardent leurs informations; _u = 0 → le nuage a toujours priorité.
+    this.version(4).stores({}).upgrade(async (tx) => {
+      (tx.idbtrans as unknown as Record<string, unknown>)[REMOTE_FLAG] = true;
+      const t = tx.table('settings');
+      const cur = (await t.get('main')) as Partial<Settings> | undefined;
+      await t.put({ ...MURCO_SETTINGS, _u: 0, ...(cur ?? {}), id: 'main', trade: cur?.trade ?? 'exterieur', setupComplete: true });
+    });
   }
 }
 
@@ -519,7 +531,59 @@ db.use({
   },
 });
 
+/** Réglages de départ d'une nouvelle entreprise (remplis par l'assistant de démarrage). */
 export const DEFAULT_SETTINGS: Settings = {
+  id: 'main',
+  ownerName: '',
+  companyName: '',
+  legalName: '',
+  address: '',
+  city: '',
+  province: 'QC',
+  postalCode: '',
+  phone: '',
+  email: '',
+  website: '',
+  neq: '',
+  tpsNumber: '',
+  tvqNumber: '',
+  rbqNumber: '',
+  homeAddress: '',
+  chargeTaxes: false,
+  tpsRate: 5,
+  tvqRate: 9.975,
+  invoicePrefix: 'F-',
+  nextInvoiceNumber: 1001,
+  quotePrefix: 'S-',
+  nextQuoteNumber: 1001,
+  paymentTermsDays: 0,
+  quoteValidityDays: 30,
+  invoiceNotes: 'Merci de votre confiance !',
+  quoteNotes: 'Cette soumission est valide 30 jours. Les travaux débuteront à la réception de votre acceptation.',
+  paymentInstructions: 'Virement Interac, comptant ou chèque.',
+  invoiceConditions: 'Paiement dû selon l’échéance indiquée.',
+  autoTripFromInvoices: true,
+  autoTripRoundTrip: true,
+  kmRateFirst5000: 0.72,
+  kmRateAfter5000: 0.66,
+  vehicle: '',
+  laborCostPerHour: 0,
+  kmCost: 0.72,
+  taxFiling: 'annuel',
+  googleReviewUrl: '',
+  leadForm: false,
+  leadFormIntro: 'Décrivez votre projet, on vous revient rapidement avec une soumission.',
+  cardPayments: false,
+  paymentsEndpoint: '',
+  googleMapsKey: '',
+  googleClientId: '',
+  accountantName: '',
+  accountantEmail: '',
+  emailSignature: '',
+};
+
+/** Réglages de Groupe Murco (comptes existants avant l'arrivée des autres entreprises). */
+export const MURCO_SETTINGS: Settings = {
   id: 'main',
   ownerName: 'Samuel Michea',
   companyName: 'Groupe Murco',
@@ -582,25 +646,6 @@ export const DEFAULT_SERVICES: Omit<Service, 'id'>[] = [
   { code: 'HR', name: 'Main-d’œuvre à l’heure', unit: 'heure', price: 55, minimum: 0, notes: 'Extras.' },
   { code: 'DEP', name: 'Frais de déplacement', unit: 'forfait', price: 25, minimum: 0, notes: 'Clients plus loin.' },
 ].map((x, i) => ({ ...x, order: i }));
-
-/** Ajoute la liste de prix de départ si elle est vide (premier démarrage). */
-export async function seedServices(): Promise<void> {
-  try {
-    if (localStorage.getItem('murco.seeded')) return;
-  } catch {
-    /* ignore */
-  }
-  // Identifiants fixes (1, 2, 3…) : le même code créé sur 2 appareils ne fait pas de doublon.
-  // _u = 0 : n'écrase jamais une liste déjà modifiée sur un autre appareil.
-  if ((await db.services.count()) === 0) {
-    await remoteTx([db.services], () => db.services.bulkPut(DEFAULT_SERVICES.map((x, i) => ({ ...x, id: i + 1, _u: 0 }))));
-  }
-  try {
-    localStorage.setItem('murco.seeded', '1');
-  } catch {
-    /* ignore */
-  }
-}
 
 export async function getSettings(): Promise<Settings> {
   const s = await db.settings.get('main');

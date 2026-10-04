@@ -2,7 +2,7 @@ import {
   CalendarDays, Camera, ChevronLeft, Download, FolderOpen, TrendingUp, Inbox, Clock, Briefcase, UsersRound, Car, ClipboardList, FileText, Home, LayoutGrid, Mail, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Timer, Users, X, Zap, ImagePlus, type LucideIcon,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { CommandPalette } from './components/CommandPalette';
 import { SyncBadge } from './components/SyncBadge';
@@ -34,6 +34,13 @@ import PunchPage from './pages/Punch';
 import Timesheets from './pages/Timesheets';
 import Team from './pages/Team';
 import Projects, { ProjectDetail } from './pages/Projects';
+import Landing from './pages/Landing';
+import Signup from './pages/Signup';
+import Login from './pages/Login';
+import Legal from './pages/Legal';
+import { PRODUCT } from './brand';
+import { CompanyMark } from './components/CompanyMark';
+import { isBooted, onBooted } from './lib/templates';
 import { useSyncState, type Role } from './lib/sync';
 import { db } from './lib/db';
 import { APK_URL, useAppUpdate } from './lib/update';
@@ -115,21 +122,49 @@ const QUICK: { label: string; icon: LucideIcon; to: string; roles?: Role[] }[] =
 const THEME_LABEL: Record<ThemePref, string> = { system: 'Thème: auto', dark: 'Thème: sombre', light: 'Thème: clair' };
 const THEME_ICON: Record<ThemePref, LucideIcon> = { system: SunMoon, dark: Moon, light: Sun };
 
+const PUBLIC = ['/p/', '/demande/', '/rejoindre', '/produit', '/demarrer', '/connexion', '/confidentialite', '/conditions'];
+
 export default function App() {
   const loc = useLocation();
-  // Pages publiques (client, formulaire, invitation): sans le menu de l'app
-  if (loc.pathname.startsWith('/p/') || loc.pathname.startsWith('/demande/') || loc.pathname.startsWith('/rejoindre')) {
-    return (
-      <ToastProvider>
+  // Pages publiques (client, formulaire, invitation, page de vente, inscription): sans le menu de l'app
+  return <ToastProvider>{PUBLIC.some((p) => loc.pathname.startsWith(p)) ? <PublicRoutes /> : <Gate />}</ToastProvider>;
+}
+
+function PublicRoutes() {
+  return (
         <Routes>
           <Route path="/p/:token" element={<Portal />} />
           <Route path="/demande/:owner" element={<LeadForm />} />
           <Route path="/rejoindre" element={<Join />} />
+          <Route path="/produit" element={<Landing />} />
+          <Route path="/demarrer" element={<Signup />} />
+          <Route path="/connexion" element={<Login />} />
+          <Route path="/confidentialite" element={<Legal kind="privacy" />} />
+          <Route path="/conditions" element={<Legal kind="terms" />} />
         </Routes>
-      </ToastProvider>
-    );
-  }
-  return <Shell />;
+  );
+}
+
+/** Nouvel appareil ou nouveau visiteur: page de vente, assistant de démarrage ou chargement de l'entreprise. */
+function Gate() {
+  const st = useSyncState();
+  const booted = useSyncExternalStore(onBooted, isBooted);
+  const raw = useLiveQuery(() => db.settings.get('main').then((x) => x ?? null), []);
+  if (!booted || raw === undefined) return <Splash />;
+  const configured = !!(raw && (raw.setupComplete || raw.companyName));
+  if (configured) return <Shell />;
+  if (st.status === 'connecting' || st.status === 'syncing' || (st.status === 'ok' && st.role !== 'owner')) return <Splash text="Chargement de ton entreprise…" />;
+  if (st.status === 'ok') return <Navigate to="/demarrer" replace />;
+  return <Navigate to="/produit" replace />;
+}
+
+function Splash({ text }: { text?: string }) {
+  return (
+    <div className="splash">
+      <span className="lp-logo big">{PRODUCT.name.slice(0, 1)}</span>
+      {text && <div className="muted">{text}</div>}
+    </div>
+  );
 }
 
 function Shell() {
@@ -196,11 +231,11 @@ function Shell() {
   }, [loc.pathname]);
 
   return (
-    <ToastProvider>
+    <>
       <div className="layout">
         <aside className="sidebar">
           <div className="brand">
-            <img src={s.logo || './icon.svg'} alt="" />
+            <CompanyMark s={s} size={36} />
             <div>
               {s.companyName}
               <small>Gestion d’entreprise</small>
@@ -236,7 +271,7 @@ function Shell() {
         <main className={`main ${editor ? 'is-editor' : ''}`}>
           <header className="topbar">
             {isRoot ? (
-              <div className="tb-title"><img src={s.logo || './icon.svg'} alt="" /><span>{s.companyName}</span></div>
+              <div className="tb-title"><CompanyMark s={s} /><span>{s.companyName}</span></div>
             ) : (
               <>
                 <button className="tb-btn tb-back" onClick={goBack} aria-label="Retour"><ChevronLeft size={26} /> Retour</button>
@@ -339,7 +374,7 @@ function Shell() {
             <div className="sheet tall" role="dialog" aria-label="Menu" onClick={(e) => e.stopPropagation()}>
               <div className="sheet-grip" />
               <div className="sheet-head">
-                <img src={s.logo || './icon.svg'} alt="" />
+                <CompanyMark s={s} size={40} />
                 <div><strong>{s.companyName}</strong><SyncBadge /></div>
                 <button className="icon-btn" aria-label="Fermer" onClick={() => setMore(false)}><X size={20} /></button>
               </div>
@@ -367,6 +402,6 @@ function Shell() {
         )}
         {cmd && <CommandPalette onClose={() => setCmd(false)} />}
       </div>
-    </ToastProvider>
+    </>
   );
 }

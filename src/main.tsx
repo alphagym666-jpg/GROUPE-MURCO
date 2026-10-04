@@ -7,15 +7,23 @@ import '@fontsource-variable/figtree';
 import './styles.css';
 import { applyTheme } from './lib/theme';
 import { isNative } from './lib/native';
-import { seedServices } from './lib/db';
-import { startSync } from './lib/sync';
+import { onSyncState, startSync } from './lib/sync';
+import { bootstrap } from './lib/templates';
 import './lib/portal';
 import './lib/team';
 import './lib/crm';
 
 applyTheme();
-seedServices().catch(() => undefined);
+bootstrap().catch(() => undefined);
 startSync();
+// Nouvel appareil d'un compte existant: les réglages arrivent du nuage, puis on complète la liste de prix si elle est vide
+let booted = false;
+onSyncState((st) => {
+  if (st.status === 'ok' && !booted) {
+    booted = true;
+    bootstrap().catch(() => undefined);
+  }
+});
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

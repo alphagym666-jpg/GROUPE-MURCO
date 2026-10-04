@@ -33,7 +33,7 @@ export function Onboarding({ s }: { s: Settings }) {
       key: 'sync', title: 'Synchro ordi ↔ cellulaire', desc: 'Connecte-toi avec le même compte sur chaque appareil', to: '/parametres?s=sync', done: st.status === 'ok',
       err: st.status === 'error' ? 'Erreur de synchro: vérifie les règles Firebase (Paramètres → Synchronisation)' : undefined,
     },
-    { key: 'codes', title: 'Tes codes et prix', desc: 'Vérifie tes prix (NDG, LVE, LAP…) avant ta première facture', to: '/codes', done: manual.includes('codes') },
+    { key: 'codes', title: 'Tes codes et prix', desc: 'Vérifie et ajuste tes prix avant ta première facture', to: '/codes', done: manual.includes('codes') },
     { key: 'premiere', title: 'Ta première facture envoyée', desc: 'Essaie la facture express: client, codes, envoyer', to: '/express', done: counts.sent > 0 },
     { key: 'maps', title: 'Clé Google Maps', desc: 'Km identiques à Google Maps et adresses qui se complètent', to: '/parametres?s=maps', done: !!s.googleMapsKey, optional: true },
     { key: 'formulaire', title: 'Formulaire de demandes en ligne', desc: 'Lien et code QR pour tes pubs, ta fiche Google, ton camion', to: '/demandes', done: s.leadForm, optional: true },
