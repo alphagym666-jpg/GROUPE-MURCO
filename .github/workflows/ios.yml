@@ -21,6 +21,7 @@ jobs:
       - run: npm run build
         env:
           VITE_FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
+          VITE_API_URL: ${{ vars.API_URL }}
       - run: npx cap sync ios
       - name: Compiler pour le simulateur
         run: |

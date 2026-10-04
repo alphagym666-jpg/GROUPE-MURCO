@@ -41,7 +41,7 @@ export default function Signup() {
   const finish = async () => {
     setBusy(true);
     try {
-      const home = [f.address, f.city, 'QC', f.postalCode].filter((x) => x.trim()).join(', ');
+      const home = f.address.trim() || f.city.trim() ? [f.address, f.city, 'QC', f.postalCode].filter((x) => x.trim()).join(', ') : '';
       const homeGeo = geo ?? (home ? (await geocode(home).catch(() => null))?.geo : undefined);
       await saveSettings({
         ...DEFAULT_SETTINGS,

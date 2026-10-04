@@ -7,7 +7,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "node --experimental-strip-types src/checkout.test.ts"
+    "test": "node --experimental-strip-types src/checkout.test.ts && node --experimental-strip-types src/billing.test.ts"
   },
   "dependencies": {
     "firebase-admin": "^14.5.0",

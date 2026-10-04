@@ -44,6 +44,12 @@ service cloud.firestore {
     }
 
     // ---------- Formulaire public « Demander une soumission » ----------
+    // ---------- Abonnement (écrit seulement par le serveur, via Stripe) ----------
+    match /billing/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isMember(uid));
+      allow write: if false;
+    }
+
     match /public/{ownerUid} {
       allow get: if true;
       allow write: if signedIn() && request.auth.uid == ownerUid;

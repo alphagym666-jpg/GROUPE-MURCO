@@ -113,6 +113,29 @@ de la clé Google Maps.
 Frais Stripe: environ 2,9 % + 0,30 $ par paiement. Au Québec, la Loi sur la protection du consommateur
 interdit d'ajouter ces frais au client.
 
+## Vendre le logiciel (abonnements)
+
+Le nom du produit, l'exploitant et la date des « membres fondateurs » (gratuits à vie) sont dans `src/brand.ts`; les forfaits affichés dans `src/lib/plans.ts`.
+
+1. **GitHub → Settings → Secrets and variables → Actions → Variables**:
+   - `FIREBASE_CONFIG`: le bloc `firebaseConfig` de ton projet Firebase (les nouveaux clients n'ont rien à configurer);
+   - `API_URL`: `https://northamerica-northeast1-<ID-du-projet>.cloudfunctions.net`.
+2. **Stripe → Catalogue de produits**: un produit avec 3 prix mensuels récurrents en $ CA (Solo 39, Équipe 79, Pro 129).
+   Copie les identifiants `price_…` dans `functions/.env`:
+   ```
+   STRIPE_PRICE_SOLO=price_...
+   STRIPE_PRICE_EQUIPE=price_...
+   STRIPE_PRICE_PRO=price_...
+   ```
+3. **Stripe → Développeurs → Webhooks**: sur le point de terminaison `stripeWebhook`, ajoute les événements
+   `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted` (en plus de `checkout.session.completed`).
+4. **Stripe → Paramètres → Portail client**: active-le (changement de forfait entre les 3 prix, mise à jour de la carte, annulation).
+5. Déploie: `npx -y firebase-tools deploy --only functions,firestore:rules --project <ID-du-projet>`.
+6. Firebase → Authentication: active « Courriel/Mot de passe » et ajoute ton domaine dans « Domaines autorisés ».
+
+Essai: 14 jours sans carte à partir de la création du compte. Après l'essai sans forfait, l'app passe en lecture seule
+(consultation et exportation permises). Les comptes créés avant `foundersBefore` sont gratuits à vie.
+
 ## Relier Gmail (une seule fois)
 
 1. <https://console.cloud.google.com/> → nouveau projet « Murco ».

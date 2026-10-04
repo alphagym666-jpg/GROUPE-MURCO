@@ -29,6 +29,7 @@ jobs:
       - run: npm run build
         env:
           VITE_FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
+          VITE_API_URL: ${{ vars.API_URL }}
       - run: npx cap sync android
       - name: Construire l'APK
         working-directory: android

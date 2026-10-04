@@ -949,3 +949,20 @@ table.list tr.click:hover td { background: var(--surface-2); }
 .legal h2 { font-size: 1.1rem; margin: 22px 0 6px; }
 .legal p { line-height: 1.6; color: var(--ink-2, var(--ink)); margin: 6px 0; }
 .co-mark { display: inline-grid; place-items: center; flex: none; border-radius: 9px; background: linear-gradient(135deg, #f2b13d, #e0791f); color: #1b1407; font-family: var(--font-display); font-weight: 900; }
+
+/* Abonnement */
+.bill-banner { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; padding: 10px 14px; border-radius: 12px; background: var(--amber-soft); color: var(--amber-ink); text-decoration: none; font-weight: 600; font-size: 0.9rem; border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent); }
+.bill-banner span { flex: 1; }
+.bill-banner.bad { background: var(--red-soft); color: var(--red); border-color: color-mix(in srgb, var(--red) 35%, transparent); }
+.paywall { max-width: 520px; margin: 8vh auto; text-align: center; display: grid; justify-items: center; gap: 10px; }
+.paywall svg { color: var(--amber-ink); }
+.paywall .btn { text-decoration: none; }
+.sub-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 16px; align-items: stretch; }
+.sub-plan { position: relative; display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.sub-plan.hot { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber); }
+.sub-plan.cur { border-color: var(--green); }
+.sub-price b { font-family: var(--font-display); font-size: 2rem; font-weight: 850; }
+.sub-price span { color: var(--muted); }
+.sub-plan ul { list-style: none; padding: 0; margin: 8px 0 14px; display: grid; gap: 6px; flex: 1; font-size: 0.9rem; }
+.sub-plan li { display: flex; gap: 8px; align-items: flex-start; }
+.sub-plan li svg { color: var(--green); flex: none; margin-top: 3px; }

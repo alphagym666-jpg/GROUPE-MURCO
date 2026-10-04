@@ -9,5 +9,5 @@
     "esModuleInterop": true,
     "allowImportingTsExtensions": false
   },
-  "include": ["src/index.ts", "src/checkout.ts"]
+  "include": ["src/index.ts", "src/checkout.ts", "src/billing.ts"]
 }

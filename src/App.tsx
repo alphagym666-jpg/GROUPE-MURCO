@@ -1,9 +1,9 @@
 import {
-  CalendarDays, Camera, ChevronLeft, Download, FolderOpen, TrendingUp, Inbox, Clock, Briefcase, UsersRound, Car, ClipboardList, FileText, Home, LayoutGrid, Mail, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Timer, Users, X, Zap, ImagePlus, type LucideIcon,
+  CalendarDays, Camera, ChevronLeft, Crown, Download, Lock, FolderOpen, TrendingUp, Inbox, Clock, Briefcase, UsersRound, Car, ClipboardList, FileText, Home, LayoutGrid, Mail, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Timer, Users, X, Zap, ImagePlus, type LucideIcon,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { CommandPalette } from './components/CommandPalette';
 import { SyncBadge } from './components/SyncBadge';
 import { ToastProvider } from './components/Toast';
@@ -38,6 +38,8 @@ import Landing from './pages/Landing';
 import Signup from './pages/Signup';
 import Login from './pages/Login';
 import Legal from './pages/Legal';
+import Subscription from './pages/Subscription';
+import { useBilling } from './lib/billing';
 import { PRODUCT } from './brand';
 import { CompanyMark } from './components/CompanyMark';
 import { isBooted, onBooted } from './lib/templates';
@@ -73,6 +75,7 @@ const NAV: NavItem[] = [
   { to: '/classeur', label: 'Classeur', short: 'Classeur', icon: FolderOpen },
   { to: '/gmail', label: 'Gmail', short: 'Gmail', icon: Mail },
   { to: '/comptable', label: 'Dossier comptable', short: 'Comptable', icon: Package },
+  { to: '/abonnement', label: 'Abonnement', short: 'Abonnement', icon: Crown },
   { to: '/parametres', label: 'Paramètres', short: 'Paramètres', icon: Settings, roles: ['employe', 'vendeur'] },
 ];
 
@@ -92,7 +95,7 @@ const MENU_GROUPS: { title: string; items: string[] }[] = [
   { title: 'Ventes', items: ['/demandes', '/soumissions', '/factures', '/clients', '/projets'] },
   { title: 'Terrain', items: ['/agenda', '/pointage', '/equipe', '/temps'] },
   { title: 'Argent et papiers', items: ['/depenses', '/km', '/classeur', '/rapports', '/comptable'] },
-  { title: 'Outils', items: ['/', '/codes', '/gmail', '/parametres'] },
+  { title: 'Outils', items: ['/', '/codes', '/gmail', '/abonnement', '/parametres'] },
 ];
 
 const PAGE_TITLE: [RegExp, string][] = [
@@ -158,6 +161,17 @@ function Gate() {
   return <Navigate to="/produit" replace />;
 }
 
+function Paywall() {
+  return (
+    <div className="paywall">
+      <Lock size={34} />
+      <h1>Ton essai gratuit est terminé</h1>
+      <p className="muted">Tes clients, factures et reçus sont en sécurité: tu peux toujours les consulter et les exporter. Choisis un forfait pour recommencer à créer des factures, des soumissions et des jobs.</p>
+      <Link to="/abonnement" className="btn accent big"><Crown size={18} /> Voir les forfaits</Link>
+    </div>
+  );
+}
+
 function Splash({ text }: { text?: string }) {
   return (
     <div className="splash">
@@ -180,6 +194,9 @@ function Shell() {
   const [theme, setThemeState] = useState<ThemePref>(getTheme());
   const ThemeIcon = THEME_ICON[theme];
   const update = useAppUpdate();
+  const billing = useBilling();
+  // Essai terminé: lecture et exportation seulement (pas de nouvelles factures, jobs, reçus)
+  const locked = !billing.canWrite && (isEditorRoute(loc.pathname) || loc.pathname.startsWith('/express'));
   const newLeads = useLiveQuery(() => db.leads.where('stage').equals('nouveau').count(), []) ?? 0;
   const editor = isEditorRoute(loc.pathname);
   const findNav = (to: string) => NAV.find((n) => n.to === to) ?? EXTRA.find((n) => n.to === to);
@@ -283,7 +300,15 @@ function Shell() {
               <span className={`tb-dot ${st.status === 'ok' ? 'ok' : st.status === 'error' ? 'err' : ''}`} />
             </NavLink>
           </header>
+          {full && !loc.pathname.startsWith('/abonnement') && (billing.kind === 'expired' || billing.kind === 'past_due' || (billing.kind === 'trial' && (billing.daysLeft ?? 99) <= 7)) && (
+            <Link to="/abonnement" className={`bill-banner ${billing.kind === 'trial' ? '' : 'bad'}`}>
+              <Crown size={16} />
+              <span>{billing.kind === 'trial' ? `Essai gratuit: ${billing.daysLeft} jour${(billing.daysLeft ?? 0) > 1 ? 's' : ''} restant${(billing.daysLeft ?? 0) > 1 ? 's' : ''}` : billing.kind === 'past_due' ? 'Paiement de l’abonnement en retard' : 'Essai terminé: tes données sont en lecture seule'}</span>
+              <strong>{billing.kind === 'past_due' ? 'Mettre à jour' : 'Choisir un forfait'} →</strong>
+            </Link>
+          )}
           <div className="page-anim" key={'/' + path.split('/')[1]}>
+          {locked ? <Paywall /> : (
           <Routes>
             <Route path="/" element={full ? <Dashboard onSearch={() => setCmd(true)} /> : <Navigate to={role === 'vendeur' ? '/demandes' : '/pointage'} replace />} />
             <Route path="/demandes" element={<Leads />} />
@@ -309,8 +334,10 @@ function Shell() {
             <Route path="/gmail" element={<GmailPage />} />
             <Route path="/comptable" element={<Accountant />} />
             <Route path="/parametres" element={<SettingsPage />} />
+            <Route path="/abonnement" element={<Subscription />} />
             <Route path="*" element={full ? <Dashboard onSearch={() => setCmd(true)} /> : <Navigate to="/agenda" replace />} />
           </Routes>
+          )}
           </div>
         </main>
 
@@ -359,7 +386,7 @@ function Shell() {
               <div className="sheet-title">Créer</div>
               <div className="create-grid">
                 {QUICK.filter((q) => canSee(q, role)).map((q) => (
-                  <button key={q.to} onClick={() => nav(q.to)}>
+                  <button key={q.to} onClick={() => nav(billing.canWrite || q.to === '/pointage' ? q.to : '/abonnement')}>
                     <span className="ci"><q.icon size={22} /></span>
                     {q.label}
                   </button>

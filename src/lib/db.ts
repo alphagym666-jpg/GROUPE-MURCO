@@ -64,6 +64,7 @@ export interface Settings extends Synced {
   trade?: string; // métier choisi au démarrage (modèle de codes et prix)
   setupComplete?: boolean; // assistant de démarrage terminé
   wantedPlan?: string; // forfait choisi sur la page de vente
+  accountCreatedAt?: string; // création du compte du propriétaire (début de l'essai; employés compris)
   termsAcceptedAt?: string; // consentement aux conditions et à la politique de confidentialité (Loi 25)
   leadFormIntro: string;
   // Paiement par carte (Stripe, via les fonctions Firebase)

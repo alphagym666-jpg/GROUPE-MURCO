@@ -12,6 +12,7 @@ import { bootstrap } from './lib/templates';
 import './lib/portal';
 import './lib/team';
 import './lib/crm';
+import './lib/billing';
 
 applyTheme();
 bootstrap().catch(() => undefined);
