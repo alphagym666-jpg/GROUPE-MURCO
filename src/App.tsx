@@ -1,8 +1,8 @@
 import {
-  CalendarDays, Camera, Download, FolderOpen, TrendingUp, Inbox, Clock, Briefcase, UsersRound, Car, ClipboardList, FileText, Home, LayoutGrid, Mail, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Timer, Users, X, Zap, ImagePlus, type LucideIcon,
+  CalendarDays, Camera, ChevronLeft, Download, FolderOpen, TrendingUp, Inbox, Clock, Briefcase, UsersRound, Car, ClipboardList, FileText, Home, LayoutGrid, Mail, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Timer, Users, X, Zap, ImagePlus, type LucideIcon,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { CommandPalette } from './components/CommandPalette';
 import { SyncBadge } from './components/SyncBadge';
@@ -37,6 +37,7 @@ import Projects, { ProjectDetail } from './pages/Projects';
 import { useSyncState, type Role } from './lib/sync';
 import { db } from './lib/db';
 import { APK_URL, useAppUpdate } from './lib/update';
+import { isNative } from './lib/native';
 
 interface NavItem {
   to: string;
@@ -85,6 +86,16 @@ const MENU_GROUPS: { title: string; items: string[] }[] = [
   { title: 'Terrain', items: ['/agenda', '/pointage', '/equipe', '/temps'] },
   { title: 'Argent et papiers', items: ['/depenses', '/km', '/classeur', '/rapports', '/comptable'] },
   { title: 'Outils', items: ['/', '/codes', '/gmail', '/parametres'] },
+];
+
+const PAGE_TITLE: [RegExp, string][] = [
+  [/^\/doc\//, 'Facture / soumission'], [/^\/job\//, 'Job'], [/^\/depenses\/.+/, 'Reçu'], [/^\/clients\/.+/, 'Client'],
+  [/^\/projets\/.+/, 'Projet'], [/^\/express/, 'Facture express'], [/^\/temps/, 'Feuilles de temps'],
+];
+/** Où mène « Retour » quand on arrive directement sur une page (lien, notification). */
+const PARENT: [RegExp, string][] = [
+  [/^\/doc\//, '/factures'], [/^\/job\//, '/agenda'], [/^\/depenses\/.+/, '/depenses'], [/^\/clients\/.+/, '/clients'],
+  [/^\/projets\/.+/, '/projets'], [/^\/temps/, '/equipe'],
 ];
 
 /** Routes d'édition: sur cellulaire, la barre du bas laisse place aux boutons de la page. */
@@ -138,6 +149,35 @@ function Shell() {
   const editor = isEditorRoute(loc.pathname);
   const findNav = (to: string) => NAV.find((n) => n.to === to) ?? EXTRA.find((n) => n.to === to);
   const leadsVisible = canSee(NAV[1], role);
+  const path = loc.pathname;
+  const tabs = MOBILE_TABS[role];
+  const isRoot = tabs.includes(path) || (path === '/' && full) || (!full && path === tabs[0]);
+  const pageTitle = PAGE_TITLE.find(([r]) => r.test(path))?.[1] ?? NAV.find((n) => n.to !== '/' && (path === n.to || path.startsWith(n.to + '/')))?.label ?? '';
+  const goBack = () => {
+    if (loc.key !== 'default' && window.history.length > 1) nav(-1);
+    else nav(PARENT.find(([r]) => r.test(path))?.[1] ?? tabs[0].replace('+', '/'));
+  };
+
+  // Bouton « retour » du téléphone (Android): ferme d'abord ce qui est ouvert, puis revient en arrière
+  const backRef = useRef<() => void>(() => undefined);
+  backRef.current = () => {
+    const modalClose = document.querySelector<HTMLButtonElement>('.modal-bg .modal [aria-label="Fermer"]');
+    if (fab || more || cmd) {
+      setFab(false);
+      setMore(false);
+      setCmd(false);
+    } else if (modalClose) modalClose.click();
+    else if (!isRoot) goBack();
+    else void import('@capacitor/app').then(({ App: CapApp }) => CapApp.minimizeApp());
+  };
+  useEffect(() => {
+    if (!isNative()) return;
+    let off: (() => void) | undefined;
+    void import('@capacitor/app').then(({ App: CapApp }) =>
+      CapApp.addListener('backButton', () => backRef.current()).then((h) => (off = () => void h.remove())),
+    );
+    return () => off?.();
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -194,6 +234,20 @@ function Shell() {
         </aside>
 
         <main className={`main ${editor ? 'is-editor' : ''}`}>
+          <header className="topbar">
+            {isRoot ? (
+              <div className="tb-title"><img src={s.logo || './icon.svg'} alt="" /><span>{s.companyName}</span></div>
+            ) : (
+              <>
+                <button className="tb-btn tb-back" onClick={goBack} aria-label="Retour"><ChevronLeft size={26} /> Retour</button>
+                <div className="tb-title"><span>{pageTitle}</span></div>
+              </>
+            )}
+            <button className="tb-btn" onClick={() => setCmd(true)} aria-label="Rechercher"><Search size={21} /></button>
+            <NavLink className="tb-btn" to="/parametres" aria-label={`Synchronisation: ${st.status}`}>
+              <span className={`tb-dot ${st.status === 'ok' ? 'ok' : st.status === 'error' ? 'err' : ''}`} />
+            </NavLink>
+          </header>
           <Routes>
             <Route path="/" element={full ? <Dashboard onSearch={() => setCmd(true)} /> : <Navigate to={role === 'vendeur' ? '/demandes' : '/pointage'} replace />} />
             <Route path="/demandes" element={<Leads />} />
@@ -237,7 +291,7 @@ function Shell() {
             {MOBILE_TABS[role].map((to) => {
               if (to === '+') {
                 return (
-                  <button key="+" className={`tab-create ${fab ? 'open' : ''}`} aria-label="Menu Créer" aria-expanded={fab} onClick={() => { setFab((x) => !x); setMore(false); }}>
+                  <button key="+" className={`tab-create ${fab ? 'open' : ''}`} aria-label="Ajouter" aria-expanded={fab} onClick={() => { setFab((x) => !x); setMore(false); }}>
                     <span><Plus size={26} /></span>
                   </button>
                 );

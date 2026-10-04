@@ -1,3 +1,5 @@
+import { Capacitor, SystemBars, SystemBarsStyle, SystemBarType } from '@capacitor/core';
+
 export type ThemePref = 'system' | 'light' | 'dark';
 const KEY = 'murco.theme';
 
@@ -15,6 +17,11 @@ export function applyTheme(t: ThemePref = getTheme()) {
   else root.dataset.theme = t;
   const dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0e0f11' : '#23262b');
+  // App installée: icônes de la barre du téléphone lisibles sur le fond de l'app
+  if (Capacitor.isNativePlatform()) {
+    SystemBars.setStyle({ style: dark ? SystemBarsStyle.Dark : SystemBarsStyle.Light, bar: SystemBarType.StatusBar }).catch(() => undefined);
+    SystemBars.setStyle({ style: SystemBarsStyle.Dark, bar: SystemBarType.NavigationBar }).catch(() => undefined);
+  }
 }
 
 export function setTheme(t: ThemePref) {
