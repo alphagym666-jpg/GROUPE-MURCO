@@ -56,6 +56,10 @@ export interface Settings extends Synced {
   laborCostPerHour: number; // coût d'une heure de main-d'œuvre (0 = ton propre temps)
   kmCost: number; // coût réel d'un km (essence, usure)
   taxFiling: 'mensuel' | 'trimestriel' | 'annuel';
+  // Avis clients et formulaire de demande
+  googleReviewUrl: string;
+  leadForm: boolean;
+  leadFormIntro: string;
   // Paiement par carte (Stripe, via les fonctions Firebase)
   cardPayments: boolean;
   paymentsEndpoint: string; // ex.: https://northamerica-northeast1-<projet>.cloudfunctions.net
@@ -154,6 +158,11 @@ export interface Doc extends Synced {
   depositMediaId?: number; // photo du dépôt reçu
   pdfPhotos?: boolean; // joindre les photos avant/après au PDF
   hoursWorked?: number; // heures travaillées (rentabilité)
+  salesRepId?: number; // vendeur (commission)
+  leadId?: number; // demande d'où vient la soumission
+  projectId?: number;
+  review?: Review; // avis du client (portail)
+  reviewRequestedAt?: string;
   otherCost?: number; // autres coûts directs non liés à un reçu (sous-traitant…)
   portalToken?: string; // lien client (portail)
   signature?: Signature; // acceptation signée en ligne
@@ -186,6 +195,8 @@ export interface Job extends Synced {
   docId?: number;
   doneAt?: string;
   remindedAt?: string;
+  assignees?: number[]; // employés assignés (membres)
+  projectId?: number;
   createdAt: string;
 }
 
@@ -266,6 +277,7 @@ export interface Expense extends Synced {
   kmFromHome?: number;
   clientId?: number;
   docId?: number;
+  projectId?: number;
   tripId?: number;
   photoSig?: string; // empreinte de la photo (synchronisation)
   ocrText?: string; // texte lu sur le reçu (recherche)
@@ -284,6 +296,93 @@ export interface EmailLog extends Synced {
   kind: 'facture' | 'soumission' | 'comptable' | 'autre';
 }
 
+export interface Review {
+  stars: number; // 1 à 5
+  comment?: string;
+  at: string;
+  toGoogle?: boolean; // redirigé vers Google
+}
+
+export type LeadStage = 'nouveau' | 'contacte' | 'visite' | 'soumission' | 'gagne' | 'perdu';
+export type LeadSource = 'formulaire' | 'facebook' | 'google' | 'reference' | 'telephone' | 'site' | 'autre';
+
+/** Demande entrante (prospect) — CRM. */
+export interface Lead extends Synced {
+  id?: number;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  geo?: GeoPoint;
+  service: string;
+  message: string;
+  source: LeadSource;
+  stage: LeadStage;
+  value: number; // valeur estimée ($)
+  nextAction?: string; // date de relance YYYY-MM-DD
+  nextNote?: string;
+  assignedTo?: number; // membre (vendeur)
+  clientId?: number;
+  quoteId?: number;
+  lostReason?: string;
+  history: { at: string; text: string }[];
+  createdAt: string;
+}
+
+export type MemberRole = 'employe' | 'vendeur' | 'admin';
+
+/** Membre de l'équipe (employé, vendeur). */
+export interface Member extends Synced {
+  id?: number;
+  name: string;
+  email: string;
+  phone: string;
+  role: MemberRole;
+  hourlyCost: number; // coût horaire (salaire + charges)
+  commissionRate: number; // % sur les ventes payées
+  active: boolean;
+  inviteCode: string;
+  uid?: string; // compte Firebase une fois l'invitation acceptée
+  color: string;
+  createdAt: string;
+}
+
+/** Pointage (punch in / out) avec position GPS. */
+export interface Punch extends Synced {
+  id?: number;
+  memberId: number; // 0 = propriétaire
+  name: string;
+  jobId?: number;
+  projectId?: number;
+  clientId?: number;
+  start: string; // ISO
+  end?: string;
+  startGeo?: GeoPoint;
+  endGeo?: GeoPoint;
+  startDistM?: number; // distance du chantier au punch in (mètres)
+  endDistM?: number;
+  breakMin: number;
+  note: string;
+  approved?: boolean;
+  createdAt: string;
+}
+
+export type ProjectStatus = 'estimation' | 'en_cours' | 'termine' | 'annule';
+
+/** Projet (chantier de plusieurs jours / plusieurs jobs). */
+export interface Project extends Synced {
+  id?: number;
+  name: string;
+  clientId: number;
+  address: string;
+  status: ProjectStatus;
+  budget: number;
+  start: string;
+  end: string;
+  notes: string;
+  createdAt: string;
+}
+
 class MurcoDB extends Dexie {
   settings!: Table<Settings, string>;
   clients!: Table<Client, number>;
@@ -294,6 +393,10 @@ class MurcoDB extends Dexie {
   services!: Table<Service, number>;
   jobs!: Table<Job, number>;
   media!: Table<Media, number>;
+  leads!: Table<Lead, number>;
+  members!: Table<Member, number>;
+  punches!: Table<Punch, number>;
+  projects!: Table<Project, number>;
 
   constructor() {
     // Identifiants uniques globaux (pas d'auto-incrément) pour synchroniser plusieurs appareils.
@@ -312,12 +415,21 @@ class MurcoDB extends Dexie {
       jobs: 'id, date, clientId, status, docId',
       media: 'id, docId, jobId, clientId, kind',
     });
+    this.version(3).stores({
+      leads: 'id, stage, source, nextAction, createdAt',
+      members: 'id, role, inviteCode, uid',
+      punches: 'id, memberId, jobId, projectId, start',
+      projects: 'id, clientId, status',
+      docs: 'id, type, number, clientId, date, status, projectId, salesRepId',
+      jobs: 'id, date, clientId, status, docId, projectId',
+      expenses: 'id, date, category, docId, clientId, projectId',
+    });
   }
 }
 
 export const db = new MurcoDB();
 
-export const SYNC_TABLES = ['settings', 'clients', 'docs', 'trips', 'expenses', 'emails', 'services', 'jobs', 'media'] as const;
+export const SYNC_TABLES = ['settings', 'clients', 'docs', 'trips', 'expenses', 'emails', 'services', 'jobs', 'media', 'leads', 'members', 'punches', 'projects'] as const;
 export type SyncTable = (typeof SYNC_TABLES)[number];
 
 let lastId = 0;
@@ -432,6 +544,9 @@ export const DEFAULT_SETTINGS: Settings = {
   laborCostPerHour: 0,
   kmCost: 0.72,
   taxFiling: 'annuel',
+  googleReviewUrl: '',
+  leadForm: false,
+  leadFormIntro: 'Décrivez votre projet, on vous revient rapidement avec une soumission.',
   cardPayments: false,
   paymentsEndpoint: '',
   googleMapsKey: '',

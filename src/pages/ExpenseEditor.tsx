@@ -33,6 +33,7 @@ export default function ExpenseEditor() {
   const camRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const clients = useLiveQuery(() => db.clients.orderBy('name').toArray(), []) ?? [];
+  const projects = useLiveQuery(() => db.projects.toArray(), []) ?? [];
   const docs = useLiveQuery(() => db.docs.where('type').equals('invoice').reverse().sortBy('date'), []) ?? [];
   const trip = useLiveQuery(() => (e?.tripId ? db.trips.get(e.tripId) : undefined), [e?.tripId]);
 
@@ -40,6 +41,7 @@ export default function ExpenseEditor() {
     (async () => {
       if (isNew) {
         const ex = blank();
+        if (params.get('project')) ex.projectId = Number(params.get('project'));
         if (params.get('doc')) {
           const d = await db.docs.get(Number(params.get('doc')));
           if (d) Object.assign(ex, { docId: d.id, clientId: d.clientId });
@@ -267,6 +269,12 @@ export default function ExpenseEditor() {
               <select value={e.clientId ?? ''} onChange={(ev) => up({ clientId: ev.target.value ? Number(ev.target.value) : undefined })}>
                 <option value="">—</option>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </label>
+            <label className="field">Projet (optionnel)
+              <select value={e.projectId ?? ''} onChange={(ev) => up({ projectId: ev.target.value ? Number(ev.target.value) : undefined })}>
+                <option value="">—</option>
+                {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </label>
             <label className="field">Pour la facture (optionnel)

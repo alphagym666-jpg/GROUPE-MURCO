@@ -440,3 +440,40 @@ table.list tr.click:hover td { background: var(--surface-2); }
 .audit li { padding: 6px 0; border-bottom: 1px solid var(--line); list-style: none; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .audit { padding: 0; margin: 0; }
 @media (max-width: 860px) { .lib-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* CRM — pipeline des demandes */
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(250px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x mandatory; }
+.board-col { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; scroll-snap-align: start; }
+.board-head { font-weight: 700; font-size: 0.85rem; display: flex; gap: 8px; align-items: center; padding: 2px 2px 4px; }
+.lead-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+.lead-card.late { border-color: color-mix(in srgb, var(--red) 50%, var(--line)); }
+.lead-main { display: grid; gap: 3px; width: 100%; text-align: left; padding: 10px 12px 6px; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.lead-actions { display: flex; gap: 4px; padding: 0 8px 8px; align-items: center; }
+.lead-actions .icon-btn { width: 32px; }
+@media (max-width: 860px) { .board { grid-auto-columns: 86%; } }
+
+/* Équipe, pointage, projets */
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
+.punch-card { text-align: center; padding: 22px; }
+.punch-card.on { border-color: var(--green); background: linear-gradient(180deg, var(--green-soft), var(--surface) 70%); }
+.punch-clock { font-family: var(--font-display); font-stretch: 112%; font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; margin: 4px 0; }
+.punch-btn { margin-top: 12px; background: var(--green); color: #fff; border-color: var(--green); font-size: 1.1rem; min-height: 60px; }
+.punch-btn.stop { background: var(--red); border-color: var(--red); }
+.proj-card { text-align: left; display: grid; gap: 8px; cursor: pointer; font: inherit; color: var(--ink); margin: 0; }
+.proj-card:hover { border-color: var(--amber); }
+.proj-nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.proj-nums div { display: grid; }
+.proj-nums span { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 650; }
+.proj-nums b { font-family: var(--font-display); font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 0.85rem; cursor: pointer; }
+.chip-btn.on { background: var(--primary-bg); color: var(--primary-ink); border-color: var(--primary-bg); }
+.stars { display: flex; gap: 6px; justify-content: center; }
+.stars button { background: none; border: 0; cursor: pointer; padding: 4px; color: var(--line-strong); }
+.stars button.on { color: var(--amber); }
+@media (max-width: 600px) {
+  .grid.kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .kpi .card { padding: 12px; }
+  .kpi .value { font-size: 1.25rem; }
+  .kpi .label { font-size: 0.66rem; }
+}

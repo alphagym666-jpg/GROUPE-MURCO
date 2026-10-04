@@ -1,22 +1,75 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Données privées: chaque utilisateur ne voit et ne modifie que les siennes (users/{son uid}/...).
-    match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+    function signedIn() { return request.auth != null; }
+    function membership() { return get(/databases/$(database)/documents/memberships/$(request.auth.uid)).data; }
+    function isMember(owner) {
+      return signedIn() && exists(/databases/$(database)/documents/memberships/$(request.auth.uid))
+        && membership().ownerUid == owner;
+    }
+    function memberRole() { return membership().role; }
+
+    // ---------- Données de l'entreprise ----------
+    // Le propriétaire a tout; les membres invités ont un accès limité selon leur rôle.
+    match /users/{uid}/{coll}/{docId} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+
+      // Administrateur: tout sauf les invitations
+      allow read, write: if isMember(uid) && memberRole() == 'admin' && coll != 'invites';
+
+      // Employé: agenda, clients, codes, photos, pointages, projets (lecture) — écrit ses pointages, photos et jobs
+      allow read: if isMember(uid) && memberRole() in ['employe', 'vendeur']
+        && coll in ['settings', 'clients', 'services', 'jobs', 'media', 'punches', 'members', 'projects', 'files']
+        && (coll != 'files' || docId.matches('media-.*'));
+      allow write: if isMember(uid) && memberRole() in ['employe', 'vendeur']
+        && (coll in ['jobs', 'media', 'punches'] || (coll == 'files' && docId.matches('media-.*')));
+
+      // Vendeur: en plus, les demandes (CRM), les soumissions/factures et les clients
+      allow read, write: if isMember(uid) && memberRole() == 'vendeur' && coll in ['leads', 'docs', 'clients'];
+
+      // Invitation: lisible par la personne invitée (elle a le code secret)
+      allow get: if signedIn() && coll == 'invites';
     }
 
-    // Portail client: une copie de la soumission/facture lisible par quiconque a le lien (jeton secret).
+    // Lien employé → entreprise: créé par l'employé avec un code d'invitation valide; le rôle vient de l'invitation
+    match /memberships/{memberUid} {
+      allow get: if signedIn() && request.auth.uid == memberUid;
+      allow list, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if signedIn() && request.auth.uid == memberUid
+        && exists(/databases/$(database)/documents/users/$(request.resource.data.ownerUid)/invites/$(request.resource.data.inviteCode))
+        && request.resource.data.role == get(/databases/$(database)/documents/users/$(request.resource.data.ownerUid)/invites/$(request.resource.data.inviteCode)).data.role
+        && request.resource.data.memberId == get(/databases/$(database)/documents/users/$(request.resource.data.ownerUid)/invites/$(request.resource.data.inviteCode)).data.memberId;
+      allow delete: if signedIn() && request.auth.uid == memberUid;
+    }
+
+    // ---------- Formulaire public « Demander une soumission » ----------
+    match /public/{ownerUid} {
+      allow get: if true;
+      allow write: if signedIn() && request.auth.uid == ownerUid;
+    }
+    match /inbox/{ownerUid}/leads/{leadId} {
+      allow create: if exists(/databases/$(database)/documents/public/$(ownerUid))
+        && get(/databases/$(database)/documents/public/$(ownerUid)).data.leadForm == true
+        && request.resource.data.keys().hasOnly(['name', 'phone', 'email', 'address', 'service', 'message', 'source', 'at'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 1 && request.resource.data.name.size() < 100
+        && request.resource.data.phone is string && request.resource.data.phone.size() < 40
+        && request.resource.data.email is string && request.resource.data.email.size() < 120
+        && request.resource.data.address is string && request.resource.data.address.size() < 200
+        && request.resource.data['service'] is string && request.resource.data['service'].size() < 120
+        && request.resource.data.message is string && request.resource.data.message.size() < 2000;
+      allow read, delete: if signedIn() && (request.auth.uid == ownerUid || (isMember(ownerUid) && memberRole() in ['admin', 'vendeur']));
+    }
+
+    // ---------- Portail client: copie de la soumission/facture lisible avec le lien secret ----------
     match /portal/{token} {
       allow get: if true;
-      // Le propriétaire liste ses propres pages (pour recevoir les signatures)
-      allow list: if request.auth != null && resource.data.owner == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.owner == request.auth.uid;
-      allow delete: if request.auth != null && resource.data.owner == request.auth.uid;
+      allow list: if signedIn() && resource.data.owner == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.owner == request.auth.uid;
+      allow delete: if signedIn() && resource.data.owner == request.auth.uid;
       allow update: if
-        (request.auth != null && resource.data.owner == request.auth.uid
-          && request.resource.data.owner == request.auth.uid)
-        // Le client peut seulement: marquer « vu » et signer une soumission non signée
+        (signedIn() && resource.data.owner == request.auth.uid && request.resource.data.owner == request.auth.uid)
+        // Le client peut seulement: marquer « vu », signer une soumission non signée, laisser un avis
         || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewedAt'])
         || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['signature', 'viewedAt'])
             && resource.data.doc.kind == 'quote'
@@ -24,7 +77,12 @@ service cloud.firestore {
             && request.resource.data.signature.name is string
             && request.resource.data.signature.name.size() > 1
             && request.resource.data.signature.name.size() < 120
-            && (!('image' in request.resource.data.signature) || request.resource.data.signature.image.size() < 200000));
+            && (!('image' in request.resource.data.signature) || request.resource.data.signature.image.size() < 200000))
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['review'])
+            && (!('review' in resource.data) || resource.data.review == null)
+            && request.resource.data.review.stars is int
+            && request.resource.data.review.stars >= 1 && request.resource.data.review.stars <= 5
+            && (!('comment' in request.resource.data.review) || request.resource.data.review.comment.size() < 2000));
     }
   }
 }

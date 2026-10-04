@@ -1,11 +1,12 @@
-import { CircleCheck, Copy, CreditCard, Download, PenLine } from 'lucide-react';
+import { CircleCheck, Copy, CreditCard, Download, ExternalLink, PenLine, Star } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { SignaturePad } from '../components/SignaturePad';
 import { errMsg, useToast } from '../components/Toast';
 import { DEFAULT_SETTINGS, type Doc, type Settings } from '../lib/db';
 import { buildDocPdf } from '../lib/pdf';
-import { loadPortal, signPortal, startCardPayment, type PortalData } from '../lib/portal';
+import { loadPortal, reviewPortal, signPortal, startCardPayment, type PortalData } from '../lib/portal';
+import type { Review } from '../lib/db';
 import { downloadBlob, formatDate, lineAmount, money } from '../lib/utils';
 
 /** Page publique envoyée au client: voir, accepter (signer) et payer. */
@@ -142,6 +143,8 @@ export default function Portal() {
         <button className="btn" onClick={pdf}><Download size={16} /> Télécharger le PDF</button>
       </div>
 
+      {(params.get('avis') === '1' || p.review) && !isQuote && <ReviewCard p={p} token={token} cfg={cfg} onDone={(review) => setP({ ...p, review })} />}
+
       {isQuote && (
         <div className="card">
           {signed ? (
@@ -190,6 +193,57 @@ export default function Portal() {
         </div>
       )}
       <p className="small muted" style={{ textAlign: 'center' }}>{p.company.legalName}</p>
+    </div>
+  );
+}
+
+/** Avis du client: 4-5 étoiles → invitation à publier sur Google; 1-3 → commentaire privé à l'entreprise. */
+function ReviewCard({ p, token, cfg, onDone }: { p: PortalData; token: string; cfg: string | null; onDone: (r: Review) => void }) {
+  const notify = useToast();
+  const [stars, setStars] = useState(p.review?.stars ?? 0);
+  const [comment, setComment] = useState('');
+  const [busy, setBusy] = useState(false);
+  const done = !!p.review;
+  const send = async (review: Review) => {
+    setBusy(true);
+    try {
+      await reviewPortal(token, cfg, review);
+      onDone(review);
+    } catch (e) {
+      notify(errMsg(e), 'err');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="card" style={{ textAlign: 'center' }}>
+      <h2>Comment s’est passé le travail?</h2>
+      <div className="stars" role="radiogroup" aria-label="Note">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} className={n <= stars ? 'on' : ''} disabled={done} aria-label={`${n} étoile${n > 1 ? 's' : ''}`} onClick={() => setStars(n)}>
+            <Star size={36} fill={n <= stars ? 'currentColor' : 'none'} />
+          </button>
+        ))}
+      </div>
+      {done ? (
+        <p>Merci pour ton avis!</p>
+      ) : stars >= 4 ? (
+        <div style={{ marginTop: 10 }}>
+          <p>Merci! Ça nous aiderait beaucoup que tu le dises aussi sur Google (30 secondes).</p>
+          {p.company.reviewUrl ? (
+            <a className="btn accent big block" href={p.company.reviewUrl} target="_blank" rel="noreferrer" onClick={() => void send({ stars, at: new Date().toISOString(), toGoogle: true })}><ExternalLink size={18} /> Laisser un avis Google</a>
+          ) : (
+            <button className="btn accent big block" disabled={busy} onClick={() => send({ stars, at: new Date().toISOString() })}>Envoyer</button>
+          )}
+        </div>
+      ) : stars > 0 ? (
+        <div style={{ marginTop: 10, textAlign: 'left' }}>
+          <label className="field">Qu’est-ce qu’on pourrait améliorer? (seulement {p.company.name} le voit)
+            <textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
+          </label>
+          <button className="btn accent block" style={{ marginTop: 8 }} disabled={busy} onClick={() => send({ stars, comment: comment.trim() || undefined, at: new Date().toISOString() })}>Envoyer</button>
+        </div>
+      ) : null}
     </div>
   );
 }

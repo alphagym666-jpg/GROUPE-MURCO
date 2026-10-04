@@ -2,7 +2,7 @@ import { initializeApp, type FirebaseApp } from 'firebase/app';
 import {
   collection, connectFirestoreEmulator, doc, getDoc, initializeFirestore, onSnapshot, query, setDoc, updateDoc, where, type Firestore,
 } from 'firebase/firestore';
-import { db, getSettings, type Doc, type LineItem, type Signature } from './db';
+import { db, getSettings, type Doc, type LineItem, type Review, type Signature } from './db';
 import { configFromLink, getFirebaseConfig, onSyncAttach, onSyncedPut, syncContext, type FirebaseConfig } from './sync';
 import { companyAddressLines, docTotals, type Totals } from './utils';
 import { publicBase } from './native';
@@ -33,6 +33,7 @@ export interface PortalData {
     chargeTaxes: boolean;
     cardPayments?: boolean;
     payEndpoint?: string;
+    reviewUrl?: string;
   };
   client: { name: string; address: string };
   doc: {
@@ -55,6 +56,7 @@ export interface PortalData {
   signature?: Signature | null;
   viewedAt?: string | null;
   cardPayments?: { id: string; amount: number; at: string; method: string }[];
+  review?: Review | null;
   updatedAt: string;
 }
 
@@ -87,6 +89,7 @@ export async function buildPortalData(d: Doc, token: string, owner: string): Pro
       chargeTaxes: s.chargeTaxes,
       cardPayments: s.cardPayments && !!s.paymentsEndpoint,
       payEndpoint: s.cardPayments ? s.paymentsEndpoint.replace(/\/+$/, '') : '',
+      reviewUrl: s.googleReviewUrl || '',
     },
     client: { name: c?.name ?? '', address: c?.address ?? '' },
     doc: {
@@ -151,6 +154,7 @@ onSyncAttach(() => {
       if (!local?.id) continue;
       const patch: Partial<Doc> = {};
       if (p.viewedAt && p.viewedAt !== local.viewedAt) patch.viewedAt = p.viewedAt;
+      if (p.review && !local.review) patch.review = p.review;
       if (p.signature && !local.signature) {
         patch.signature = p.signature;
         if (local.type === 'quote' && (local.status === 'draft' || local.status === 'sent')) patch.status = 'accepted';
@@ -164,7 +168,10 @@ onSyncAttach(() => {
         patch.payments = payments;
         patch.status = t.balance <= 0.004 ? 'paid' : 'partial';
       }
-      if (Object.keys(patch).length) await db.docs.update(local.id, patch);
+      if (Object.keys(patch).length) {
+        await db.docs.update(local.id, patch);
+        if (patch.signature) void import('./crm').then((m) => m.syncLeadFromDoc({ ...local, ...patch } as Doc));
+      }
     }
   });
 });
@@ -173,7 +180,7 @@ onSyncAttach(() => {
 let viewApp: FirebaseApp | null = null;
 let viewFs: Firestore | null = null;
 
-function portalFs(cfgParam: string | null): Firestore {
+export function portalFs(cfgParam: string | null): Firestore {
   if (viewFs) return viewFs;
   const cfg: FirebaseConfig | null = (cfgParam ? configFromLinkLoose(cfgParam) : null) ?? getFirebaseConfig();
   if (!cfg) throw new Error('Lien incomplet. Demande un nouveau lien à l’entreprise.');
@@ -225,4 +232,14 @@ export async function startCardPayment(p: PortalData): Promise<string> {
   const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
   if (!res.ok || !data.url) throw new Error(data.error || 'Paiement impossible pour le moment.');
   return data.url;
+}
+
+export async function reviewPortal(token: string, cfgParam: string | null, review: Review): Promise<void> {
+  const fs = portalFs(cfgParam);
+  await updateDoc(doc(fs, 'portal', token), { review });
+}
+
+/** Lien « donne-nous ton avis » (page du portail avec les étoiles). */
+export function reviewLink(portalUrl: string): string {
+  return portalUrl + (portalUrl.includes('?') ? '&' : '?') + 'avis=1';
 }

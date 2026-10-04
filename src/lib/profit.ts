@@ -1,4 +1,5 @@
-import { db, getSettings, type Client, type Doc, type Expense, type Settings } from './db';
+import { db, getSettings, type Client, type Doc, type Expense, type Member, type Punch, type Settings } from './db';
+import { costOf, hoursOf } from './punch';
 import { docTotals, round2 } from './utils';
 
 export interface JobProfit {
@@ -20,7 +21,8 @@ export interface JobProfit {
 /** Calcule la rentabilité de chaque facture de la période. */
 export async function profitByInvoice(from: string, to: string): Promise<{ rows: JobProfit[]; overhead: number; s: Settings }> {
   const s = await getSettings();
-  const [docs, expenses, trips, clients] = await Promise.all([db.docs.where('type').equals('invoice').toArray(), db.expenses.toArray(), db.trips.toArray(), db.clients.toArray()]);
+  const [docs, expenses, trips, clients, punches, members] = await Promise.all([db.docs.where('type').equals('invoice').toArray(), db.expenses.toArray(), db.trips.toArray(), db.clients.toArray(), db.punches.toArray(), db.members.toArray()]);
+  const laborFor = laborFromPunches(punches, members, s);
   const cmap = new Map(clients.map((c) => [c.id!, c]));
   const invs = docs.filter((d) => d.date >= from && d.date <= to && d.status !== 'draft' && d.status !== 'cancelled');
 
@@ -38,7 +40,7 @@ export async function profitByInvoice(from: string, to: string): Promise<{ rows:
     return round2(k);
   };
 
-  const rows: JobProfit[] = invs.map((d) => computeRow(d, s, expenses, kmFor, cmap.get(d.clientId)));
+  const rows: JobProfit[] = invs.map((d) => computeRow(d, s, expenses, kmFor, cmap.get(d.clientId), laborFor));
   // Frais généraux: dépenses de la période qui ne sont liées à aucune facture
   const overhead = round2(expenses.filter((e) => e.date >= from && e.date <= to && !e.docId).reduce((a, e) => a + e.subtotal, 0));
   return { rows: rows.sort((a, b) => b.profit - a.profit), overhead, s };
@@ -52,18 +54,34 @@ export async function profitOfDoc(docId: number): Promise<JobProfit | null> {
   const found = rows.find((r) => r.doc.id === docId);
   if (found) return found;
   const s = await getSettings();
-  const [expenses, trips] = await Promise.all([db.expenses.toArray(), db.trips.toArray()]);
+  const [expenses, trips, punches, members] = await Promise.all([db.expenses.toArray(), db.trips.toArray(), db.punches.toArray(), db.members.toArray()]);
   const kmFor = (x: Doc) => round2((x.tripId ? trips.find((t) => t.id === x.tripId)?.totalKm ?? 0 : 0));
-  return computeRow(d, s, expenses, kmFor, await db.clients.get(d.clientId));
+  return computeRow(d, s, expenses, kmFor, await db.clients.get(d.clientId), laborFromPunches(punches, members, s));
 }
 
-function computeRow(d: Doc, s: Settings, expenses: Expense[], kmFor: (d: Doc) => number, client?: Client): JobProfit {
+type LaborFn = (d: Doc) => { hours: number; labor: number } | null;
+
+/** Heures et coût de main-d'œuvre selon les pointages du job (s'il y en a). */
+function laborFromPunches(punches: Punch[], members: Member[], s: Settings): LaborFn {
+  return (d) => {
+    if (!d.jobId) return null;
+    const ps = punches.filter((p) => p.jobId === d.jobId);
+    if (!ps.length) return null;
+    return {
+      hours: round2(ps.reduce((a, p) => a + hoursOf(p), 0)),
+      labor: round2(ps.reduce((a, p) => a + hoursOf(p) * costOf(p.memberId, members, s.laborCostPerHour), 0)),
+    };
+  };
+}
+
+function computeRow(d: Doc, s: Settings, expenses: Expense[], kmFor: (d: Doc) => number, client?: Client, laborFor?: LaborFn): JobProfit {
   const revenue = docTotals(d, s).subtotal;
   const materials = round2(expenses.filter((e) => e.docId === d.id).reduce((a, e) => a + e.subtotal, 0));
   const km = kmFor(d);
   const kmCost = round2(km * s.kmCost);
-  const hours = d.hoursWorked ?? 0;
-  const labor = round2(hours * s.laborCostPerHour);
+  const fromPunches = laborFor?.(d);
+  const hours = fromPunches?.hours ?? d.hoursWorked ?? 0;
+  const labor = fromPunches?.labor ?? round2(hours * s.laborCostPerHour);
   const other = d.otherCost ?? 0;
   const cost = round2(materials + kmCost + labor + other);
   const profit = round2(revenue - cost);

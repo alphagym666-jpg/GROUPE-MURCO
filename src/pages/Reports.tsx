@@ -6,6 +6,8 @@ import { saveSettings } from '../lib/db';
 import { useSettings } from '../lib/hooks';
 import { buildTaxReportPdf } from '../lib/pdf';
 import { profitByInvoice } from '../lib/profit';
+import { salesReport } from '../lib/sales';
+import { SOURCE_LABEL } from '../lib/crm';
 import { periodsOfYear, smallSupplierStatus, taxReport } from '../lib/taxes';
 import { downloadBlob, km, lineAmount, money, toISODate, todayISO } from '../lib/utils';
 
@@ -25,20 +27,21 @@ function presets() {
 
 export default function Reports() {
   const [params, setParams] = useSearchParams();
-  const tab = params.get('t') === 'taxes' ? 'taxes' : 'profit';
+  const tab = params.get('t') === 'taxes' ? 'taxes' : params.get('t') === 'ventes' ? 'ventes' : 'profit';
   return (
     <>
       <div className="page-head">
         <div>
           <div className="eyebrow"><TrendingUp size={14} /> Rapports</div>
-          <h1>{tab === 'profit' ? 'Rentabilité' : 'TPS / TVQ'}</h1>
+          <h1>{tab === 'profit' ? 'Rentabilité' : tab === 'ventes' ? 'Ventes et commissions' : 'TPS / TVQ'}</h1>
         </div>
         <div className="seg">
           <button className={tab === 'profit' ? 'on' : ''} onClick={() => setParams({}, { replace: true })}>Rentabilité</button>
+          <button className={tab === 'ventes' ? 'on' : ''} onClick={() => setParams({ t: 'ventes' }, { replace: true })}>Ventes</button>
           <button className={tab === 'taxes' ? 'on' : ''} onClick={() => setParams({ t: 'taxes' }, { replace: true })}>TPS / TVQ</button>
         </div>
       </div>
-      {tab === 'profit' ? <Profit /> : <Taxes />}
+      {tab === 'profit' ? <Profit /> : tab === 'ventes' ? <Sales /> : <Taxes />}
     </>
   );
 }
@@ -187,6 +190,60 @@ function Taxes() {
           </table>
         </div>
         <p className="small muted">Taxes perçues selon la date des factures émises; CTI/RTI selon les reçus de dépenses. Méthode régulière. Valide avec ton comptable avant de produire ta déclaration.</p>
+      </div>
+    </>
+  );
+}
+
+function Sales() {
+  const P = presets();
+  const [from, setFrom] = useState(P[2].from);
+  const [to, setTo] = useState(P[2].to);
+  const r = useLiveQuery(() => salesReport(from, to), [from, to]);
+  if (!r) return null;
+  return (
+    <>
+      <div className="tabs">
+        {P.map((p) => <button key={p.label} className={from === p.from && to === p.to ? 'on' : ''} onClick={() => { setFrom(p.from); setTo(p.to); }}>{p.label}</button>)}
+      </div>
+      <div className="grid kpi">
+        <div className="card"><div className="label">Demandes reçues</div><div className="value">{r.leads}</div><div className="sub">{r.open} en cours</div></div>
+        <div className="card"><div className="label">Demandes → clients</div><div className="value">{r.leadRate === null ? '—' : `${r.leadRate} %`}</div><div className="sub">{r.won} gagnée(s) · {r.lost} perdue(s)</div></div>
+        <div className="card"><div className="label">Soumissions acceptées</div><div className="value">{r.quoteRate === null ? '—' : `${r.quoteRate} %`}</div><div className="sub">{r.accepted} / {r.quotes}</div></div>
+        <div className="card"><div className="label">Soumission moyenne</div><div className="value">{money(r.avgQuote)}</div><div className="sub">total {money(r.quotedValue)}</div></div>
+      </div>
+      <div className="grid two">
+        <div className="card">
+          <h2>Par vendeur</h2>
+          <div className="table-wrap">
+            <table className="list">
+              <thead><tr><th>Vendeur</th><th className="num">Soumissions</th><th className="num">Ventes</th><th className="num">Payé</th><th className="num">Commission</th></tr></thead>
+              <tbody>
+                {r.reps.map((x) => (
+                  <tr key={x.id}>
+                    <td><strong>{x.name}</strong>{x.rate ? <div className="small muted">{x.rate} %</div> : null}</td>
+                    <td className="num">{x.won}/{x.quotes}<div className="small muted">{money(x.quoted)}</div></td>
+                    <td className="num">{money(x.sales)}</td>
+                    <td className="num">{money(x.paid)}</td>
+                    <td className="num"><strong>{x.rate ? money(x.commission) : '—'}</strong></td>
+                  </tr>
+                ))}
+                {r.reps.length === 0 && <tr><td colSpan={5} className="muted">Aucune vente pour cette période.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <p className="small muted">Commission calculée sur les factures payées (avant taxes). Le vendeur se choisit sur chaque soumission et facture.</p>
+        </div>
+        <div className="card">
+          <h2>D’où viennent tes clients</h2>
+          {r.bySource.length === 0 ? <div className="small muted">Aucune demande pour cette période.</div> : r.bySource.map(([src, v]) => (
+            <div key={src} className="hbar" style={{ gridTemplateColumns: '110px 1fr auto' }}>
+              <span>{SOURCE_LABEL[src]}</span>
+              <div className="track"><div className="fill" style={{ width: `${(v.n / Math.max(1, ...r.bySource.map((x) => x[1].n))) * 100}%` }} /></div>
+              <span className="num small">{v.n} · {v.won} gagnée(s)</span>
+            </div>
+          ))}
+        </div>
       </div>
     </>
   );

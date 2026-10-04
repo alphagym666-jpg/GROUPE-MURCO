@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  AlertTriangle, Bell, CalendarDays, Camera, Car, CircleCheck, ClipboardList, Eye, FileText, MapPin, Plus, Search, Zap,
+  AlertTriangle, Bell, CalendarDays, Camera, Car, CircleCheck, ClipboardList, Clock, Eye, FileText, Inbox, MapPin, Phone, Plus, Search, Star, Zap,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -13,7 +13,8 @@ import { db, type Client, type Doc } from '../lib/db';
 import { makeDocPdf } from '../lib/docPdf';
 import { useSettings } from '../lib/hooks';
 import { docFileName } from '../lib/pdf';
-import { docTotals, formatDate, km, kmAllowance, lineAmount, money, statusClass, statusLabel, todayISO } from '../lib/utils';
+import { OPEN_STAGES } from '../lib/crm';
+import { addDays, docTotals, formatDate, km, kmAllowance, lineAmount, money, statusClass, statusLabel, todayISO } from '../lib/utils';
 
 const MONTHS = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
 
@@ -26,14 +27,16 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
   const [relance, setRelance] = useState<{ doc: Doc; client?: Client; pdf?: Blob; mode: 'choose' | 'mail' } | null>(null);
 
   const data = useLiveQuery(async () => {
-    const [docs, expenses, trips, clients, jobsToday] = await Promise.all([
+    const [docs, expenses, trips, clients, jobsToday, leads, punches] = await Promise.all([
       db.docs.toArray(),
       db.expenses.toArray(),
       db.trips.toArray(),
       db.clients.toArray(),
       db.jobs.where('date').equals(today).toArray(),
+      db.leads.toArray(),
+      db.punches.toArray(),
     ]);
-    return { docs, expenses, trips, clients: new Map(clients.map((c) => [c.id!, c])), jobsToday };
+    return { docs, expenses, trips, clients: new Map(clients.map((c) => [c.id!, c])), jobsToday, leads, onSite: punches.filter((p) => !p.end) };
   }, [today]);
   if (!data) return null;
 
@@ -187,6 +190,53 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
               </div>
             ))
           )}
+        </div>
+      </div>
+
+      <div className="grid three">
+        <div className="card">
+          <div className="card-head"><Inbox size={18} /><h2>Demandes à relancer</h2><span className="spacer" /><Link className="btn small" to="/demandes">CRM</Link></div>
+          {(() => {
+            const due = data.leads.filter((l) => OPEN_STAGES.includes(l.stage) && l.nextAction && l.nextAction <= today);
+            const fresh = data.leads.filter((l) => l.stage === 'nouveau');
+            if (!due.length && !fresh.length) return <div className="small muted">Rien à relancer. Les nouvelles demandes arrivent ici.</div>;
+            return (
+              <>
+                {fresh.length > 0 && <div className="small" style={{ marginBottom: 6 }}><span className="badge amber">{fresh.length} nouvelle{fresh.length > 1 ? 's' : ''}</span></div>}
+                {due.slice(0, 5).map((l) => (
+                  <div key={l.id} className="row small" style={{ padding: '4px 0', borderBottom: '1px solid var(--line)' }}>
+                    <strong>{l.name}</strong><span className="muted">{l.nextNote || l.service}</span><span className="spacer" />
+                    {l.phone && <a href={`tel:${l.phone}`} aria-label="Appeler"><Phone size={14} /></a>}
+                  </div>
+                ))}
+              </>
+            );
+          })()}
+        </div>
+        <div className="card">
+          <div className="card-head"><Star size={18} /><h2>Avis clients</h2></div>
+          {(() => {
+            const rv = data.docs.filter((d) => d.review).sort((a, b) => b.review!.at.localeCompare(a.review!.at));
+            const avg = rv.length ? rv.reduce((a, d) => a + d.review!.stars, 0) / rv.length : 0;
+            const toAsk = data.docs.filter((d) => d.type === 'invoice' && d.status === 'paid' && !d.reviewRequestedAt && !d.review && d.date >= addDays(today, -45));
+            return (
+              <>
+                {rv.length > 0 ? <div className="value" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem' }}>{avg.toFixed(1)} ★ <span className="small muted">({rv.length} avis)</span></div> : <div className="small muted">Aucun avis encore.</div>}
+                {rv.slice(0, 2).map((d) => d.review!.comment && <div key={d.id} className="small" style={{ marginTop: 4 }}>« {d.review!.comment} » — {data.clients.get(d.clientId)?.name}</div>)}
+                {toAsk.length > 0 && <div className="small" style={{ marginTop: 8 }}>{toAsk.length} job(s) payée(s) sans demande d’avis: <Link to={`/doc/${toAsk[0].id}`}>demander</Link></div>}
+              </>
+            );
+          })()}
+        </div>
+        <div className="card">
+          <div className="card-head"><Clock size={18} /><h2>Sur le terrain</h2><span className="spacer" /><Link className="btn small" to="/temps">Heures</Link></div>
+          {data.onSite.length === 0 ? <div className="small muted">Personne n’est pointé en ce moment.</div> : data.onSite.map((p) => (
+            <div key={p.id} className="row small" style={{ padding: '4px 0' }}>
+              <span className="dot" style={{ background: 'var(--green)' }} /> <strong>{p.name}</strong>
+              <span className="muted">depuis {new Date(p.start).toLocaleTimeString('fr-CA', { hour: '2-digit', minute: '2-digit' })}</span>
+              {(p.startDistM ?? 0) > 300 && <span className="badge red">loin du chantier</span>}
+            </div>
+          ))}
         </div>
       </div>
 

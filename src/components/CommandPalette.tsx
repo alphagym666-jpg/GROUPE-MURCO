@@ -25,6 +25,12 @@ const ACTIONS: Item[] = [
   { group: 'Actions', label: 'Photo de reçu', icon: Camera, to: '/depenses/new', keywords: 'depense essence' },
   { group: 'Actions', label: 'Ajouter un déplacement', icon: Car, to: '/km?add=1', keywords: 'km kilometrage' },
   { group: 'Pages', label: 'Tableau de bord', icon: Home, to: '/' },
+  { group: 'Pages', label: 'Demandes (CRM)', icon: Users, to: '/demandes', keywords: 'leads prospects pipeline' },
+  { group: 'Pages', label: 'Pointage', icon: CalendarDays, to: '/pointage', keywords: 'punch heures' },
+  { group: 'Pages', label: 'Feuilles de temps', icon: CalendarDays, to: '/temps', keywords: 'heures paie employes' },
+  { group: 'Pages', label: 'Équipe', icon: Users, to: '/equipe', keywords: 'employes vendeurs inviter' },
+  { group: 'Pages', label: 'Projets', icon: Briefcase, to: '/projets', keywords: 'chantier budget' },
+  { group: 'Pages', label: 'Ventes et commissions', icon: Package, to: '/rapports?t=ventes', keywords: 'vendeur conversion' },
   { group: 'Pages', label: 'Agenda', icon: CalendarDays, to: '/agenda' },
   { group: 'Pages', label: 'Factures', icon: FileText, to: '/factures' },
   { group: 'Pages', label: 'Soumissions', icon: ClipboardList, to: '/soumissions' },
@@ -50,14 +56,15 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const [sel, setSel] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const data = useLiveQuery(async () => {
-    const [clients, docs, jobs] = await Promise.all([db.clients.toArray(), db.docs.toArray(), db.jobs.toArray()]);
-    return { clients, docs, jobs };
+    const [clients, docs, jobs, leads] = await Promise.all([db.clients.toArray(), db.docs.toArray(), db.jobs.toArray(), db.leads.toArray()]);
+    return { clients, docs, jobs, leads };
   }, []);
 
   const items = useMemo(() => {
     const out: Item[] = [...ACTIONS];
     if (data) {
       const cname = new Map(data.clients.map((c) => [c.id, c.name]));
+      data.leads.forEach((l) => out.push({ group: 'Demandes', label: l.name, sub: l.service, icon: User, to: '/demandes', keywords: `${l.phone} ${l.email} ${l.address}` }));
       data.clients.forEach((c) => out.push({ group: 'Clients', label: c.name, sub: c.address, icon: User, to: `/clients/${c.id}`, keywords: `${c.email} ${c.phone} ${c.contact}` }));
       [...data.docs].sort((a, b) => b.date.localeCompare(a.date)).forEach((d) =>
         out.push({

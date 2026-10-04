@@ -2,13 +2,14 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import {
   ArrowDown, ArrowUp, Bell, CalendarDays, Check, ChevronLeft, ChevronRight, FileText, MapPin, Navigation, Plus, Repeat, Route, Shuffle,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ReminderModal } from '../components/ReminderModal';
 import { errMsg, useToast } from '../components/Toast';
-import { completeJob, dayRouteLink, JOB_STATUS_LABEL, jobToInvoice, optimizeDay, syncDayRoute } from '../lib/agenda';
+import { completeJob, dayRouteLink, ensureDayRoute, JOB_STATUS_LABEL, jobToInvoice, optimizeDay, syncDayRoute } from '../lib/agenda';
 import { db, type Job } from '../lib/db';
 import { useSettings } from '../lib/hooks';
+import { useSyncState } from '../lib/sync';
 import { addDays, formatDate, km, lineAmount, money, todayISO, toISODate } from '../lib/utils';
 
 const DOW = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -26,6 +27,9 @@ export default function Agenda() {
   const nav = useNavigate();
   const notify = useToast();
   const s = useSettings();
+  const st = useSyncState();
+  const isEmp = st.role === 'employe';
+  const showMoney = !isEmp;
   const [params, setParams] = useSearchParams();
   const sel = params.get('d') || todayISO();
   const [month, setMonth] = useState(sel.slice(0, 7));
@@ -45,6 +49,10 @@ export default function Agenda() {
     return { jobs, clients: new Map(clients.map((c) => [c.id!, c])), trips, toRemind };
   }, [days, sel]);
 
+  useEffect(() => {
+    if (st.role === 'owner' || st.role === 'admin') void ensureDayRoute(sel);
+  }, [sel, st.role]);
+
   const select = (d: string) => {
     setParams({ d }, { replace: true });
     if (d.slice(0, 7) !== month) setMonth(d.slice(0, 7));
@@ -57,7 +65,7 @@ export default function Agenda() {
 
   if (!data) return null;
   const byDay = new Map<string, Job[]>();
-  data.jobs.filter((j) => j.status !== 'annule').forEach((j) => byDay.set(j.date, [...(byDay.get(j.date) ?? []), j]));
+  data.jobs.filter((j) => j.status !== 'annule' && (!isEmp || j.assignees?.includes(st.memberId!))).forEach((j) => byDay.set(j.date, [...(byDay.get(j.date) ?? []), j]));
   const dayJobs = (byDay.get(sel) ?? []).sort((a, b) => a.order - b.order);
   const legs = [...data.trips].sort((a, b) => a.id! - b.id!);
   const dayKm = legs.reduce((a, t) => a + t.totalKm, 0);
@@ -86,7 +94,7 @@ export default function Agenda() {
 
   const done = (j: Job) =>
     run('Fait', async () => {
-      const r = await completeJob(j.id!);
+      const r = await completeJob(j.id!, !isEmp && st.role !== 'vendeur');
       const kmTxt = r.trips.length ? ` · route du jour ${km(r.trips.reduce((a, t) => a + t.totalKm, 0))}` : '';
       notify(`Job terminé${kmTxt}${r.next ? ` · prochain le ${formatDate(r.next.date)}` : ''}`);
     });
@@ -108,7 +116,7 @@ export default function Agenda() {
           <button className="btn icon-btn" onClick={() => shiftMonth(-1)} aria-label="Mois précédent"><ChevronLeft size={18} /></button>
           <button className="btn" onClick={() => select(today)}>Aujourd’hui</button>
           <button className="btn icon-btn" onClick={() => shiftMonth(1)} aria-label="Mois suivant"><ChevronRight size={18} /></button>
-          <button className="btn accent" onClick={() => nav(`/job/new?d=${sel}`)}><Plus size={17} /> Job</button>
+          {!isEmp && <button className="btn accent" onClick={() => nav(`/job/new?d=${sel}`)}><Plus size={17} /> Job</button>}
         </div>
       </div>
 
@@ -151,7 +159,7 @@ export default function Agenda() {
             <div>
               <h2 style={{ marginBottom: 2 }}>{new Date(sel + 'T12:00:00').toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' })}</h2>
               <div className="small muted">
-                {dayJobs.length} job{dayJobs.length > 1 ? 's' : ''}{dayTotal ? ` · ${money(dayTotal)} prévus` : ''}{dayKm ? ` · ${km(dayKm)} de route` : ''}
+                {dayJobs.length} job{dayJobs.length > 1 ? 's' : ''}{showMoney && dayTotal ? ` · ${money(dayTotal)} prévus` : ''}{dayKm ? ` · ${km(dayKm)} de route` : ''}
               </div>
             </div>
           </div>
@@ -185,11 +193,11 @@ export default function Agenda() {
                           {j.recurrence !== 'none' && <Repeat size={14} className="muted" aria-label="Récurrent" />}
                           {j.remindedAt && <Bell size={14} className="muted" aria-label="Rappel envoyé" />}
                         </div>
-                        <div className="small">{j.title}{jobTotal(j) ? ` · ${money(jobTotal(j))}` : ''}</div>
+                        <div className="small">{j.title}{showMoney && jobTotal(j) ? ` · ${money(jobTotal(j))}` : ''}</div>
                         {(j.address || c?.address) && <div className="small muted row" style={{ gap: 4 }}><MapPin size={13} /> {j.address || c?.address}</div>}
                         <div className="row" style={{ marginTop: 8, gap: 6 }}>
                           {j.status === 'planifie' && <button className="btn small accent" disabled={!!busy} onClick={() => done(j)}><Check size={15} /> Fait</button>}
-                          {j.docId ? (
+                          {isEmp ? null : j.docId ? (
                             <Link className="btn small" to={`/doc/${j.docId}`}><FileText size={15} /> Facture</Link>
                           ) : (
                             <button className="btn small" disabled={!!busy} onClick={() => invoice(j)}><FileText size={15} /> Facturer</button>

@@ -13,12 +13,13 @@ import { useSettings } from '../lib/hooks';
 import { docFileName } from '../lib/pdf';
 import { makeDocPdf } from '../lib/docPdf';
 import { isNative, shareFiles, shareLink } from '../lib/native';
-import { publishPortal } from '../lib/portal';
+import { publishPortal, reviewLink } from '../lib/portal';
 import { profitOfDoc } from '../lib/profit';
+import { syncLeadFromDoc } from '../lib/crm';
 import { useSyncState } from '../lib/sync';
 import { smsLink } from '../lib/agenda';
 import { MediaGallery, ProofPhoto } from '../components/MediaGallery';
-import { Banknote, Copy, Download, Eye, Link2, Plus, Save, Send, Share2, Trash2, Navigation, RefreshCw, TrendingUp } from 'lucide-react';
+import { Banknote, Copy, Download, Eye, Link2, Plus, Save, Send, Share2, Star, Trash2, Navigation, RefreshCw, TrendingUp } from 'lucide-react';
 import { deleteDocCascade, syncTripForDoc } from '../lib/trips';
 import { addDays, METHOD_LABEL, docTotals, downloadBlob, formatDate, km, money, round2, STATUS_LABELS, statusClass, statusLabel, todayISO } from '../lib/utils';
 
@@ -65,6 +66,8 @@ export default function DocEditor() {
 
   const clients = useLiveQuery(() => db.clients.orderBy('name').toArray(), []) ?? [];
   const services = useLiveQuery(() => db.services.orderBy('order').toArray(), []) ?? [];
+  const projects = useLiveQuery(() => db.projects.toArray(), []) ?? [];
+  const members = useLiveQuery(() => db.members.toArray(), []) ?? [];
   const trip = useLiveQuery(() => (doc?.tripId ? db.trips.get(doc.tripId) : undefined), [doc?.tripId]);
   const emails = useLiveQuery(() => (doc?.id ? db.emails.where('docId').equals(doc.id).toArray() : []), [doc?.id]) ?? [];
   const linked = useLiveQuery(async () => {
@@ -79,7 +82,7 @@ export default function DocEditor() {
       if (isNew) {
         const st = await getSettings();
         const type = (params.get('type') as DocType) || 'invoice';
-        setDoc(newDoc(type, Number(params.get('client')) || 0, st));
+        setDoc({ ...newDoc(type, Number(params.get('client')) || 0, st), projectId: Number(params.get('project')) || undefined });
         setSavedAddress('');
         setDirty(false);
       } else {
@@ -145,6 +148,7 @@ export default function DocEditor() {
       }
       setDoc(saved);
       setDirty(false);
+      void syncLeadFromDoc(saved);
       if (isNew) nav(`/doc/${newId}`, { replace: true });
       return saved;
     } catch (e) {
@@ -206,6 +210,7 @@ export default function DocEditor() {
     inv.number = await takeNextNumber('invoice');
     const invId = await db.docs.add(inv);
     await db.docs.update(q.id, { status: 'accepted', convertedInvoiceId: invId, updatedAt: new Date().toISOString() });
+    void syncLeadFromDoc({ ...q, status: 'accepted', convertedInvoiceId: invId });
     try {
       await syncTripForDoc(invId);
     } catch (e) {
@@ -290,6 +295,11 @@ export default function DocEditor() {
 
       {linked?.src && <div className="notice info">Créée à partir de la soumission <Link to={`/doc/${linked.src.id}`}>{linked.src.number}</Link>.</div>}
       {doc.signature && <div className="notice ok">Acceptée en ligne par <strong>{doc.signature.name}</strong> le {new Date(doc.signature.at).toLocaleString('fr-CA')}{doc.type === 'quote' && !doc.convertedInvoiceId ? ' — crée la facture quand les travaux sont faits.' : ''}</div>}
+      {doc.review && (
+        <div className={`notice ${doc.review.stars >= 4 ? 'ok' : 'err'}`}>
+          Avis du client: <strong>{'★'.repeat(doc.review.stars)}{'☆'.repeat(5 - doc.review.stars)}</strong>{doc.review.toGoogle ? ' — redirigé vers Google' : ''}{doc.review.comment ? ` — « ${doc.review.comment} »` : ''}
+        </div>
+      )}
       {!doc.signature && doc.viewedAt && <div className="notice info">Le client a ouvert le lien le {new Date(doc.viewedAt).toLocaleString('fr-CA')}.</div>}
       {linked?.conv && <div className="notice ok">Convertie en facture <Link to={`/doc/${linked.conv.id}`}>{linked.conv.number}</Link>.</div>}
 
@@ -308,6 +318,18 @@ export default function DocEditor() {
           <label className="field">Date<input type="date" value={doc.date} onChange={(e) => upd({ date: e.target.value })} /></label>
           <label className="field">{isInvoice ? 'Échéance' : 'Valide jusqu’au'}<input type="date" value={doc.dueDate} onChange={(e) => upd({ dueDate: e.target.value })} /></label>
           <label className="field">Date des travaux<input type="date" value={doc.jobDate} onChange={(e) => upd({ jobDate: e.target.value })} /></label>
+          <label className="field">Projet
+            <select value={doc.projectId ?? ''} onChange={(e) => upd({ projectId: e.target.value ? Number(e.target.value) : undefined })}>
+              <option value="">—</option>
+              {projects.filter((p) => !doc.clientId || p.clientId === doc.clientId || p.id === doc.projectId).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
+          <label className="field">Vendeur
+            <select value={doc.salesRepId ?? ''} onChange={(e) => upd({ salesRepId: e.target.value ? Number(e.target.value) : undefined })}>
+              <option value="">Moi</option>
+              {members.filter((m) => m.active && (m.role === 'vendeur' || m.role === 'admin' || m.id === doc.salesRepId)).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </label>
           <label className="field">
             Statut
             <select value={doc.status} onChange={(e) => upd({ status: e.target.value as DocStatus })}>
@@ -407,6 +429,7 @@ export default function DocEditor() {
             {isInvoice && doc.id && doc.status !== 'paid' && <button className="btn accent" onClick={() => setShowPay(true)}><Banknote size={17} /> Enregistrer un paiement</button>}
             {!isInvoice && doc.id && !doc.convertedInvoiceId && <button className="btn accent" onClick={convertToInvoice}>Acceptée → créer la facture</button>}
             {!isInvoice && doc.id && doc.status !== 'refused' && !doc.convertedInvoiceId && <button className="btn" onClick={() => setStatus('refused')}>Refusée</button>}
+            {isInvoice && doc.id && !doc.review && <ReviewRequestButton doc={doc} />}
             {doc.id && <button className="btn" onClick={duplicate}><Copy size={16} /> Dupliquer</button>}
             <button className="btn danger" onClick={remove}><Trash2 size={16} /> Supprimer</button>
           </div>
@@ -581,5 +604,39 @@ function ProfitCard({ doc, onChange }: { doc: Doc; onChange: (p: Partial<Doc>) =
       </div>
       <div className="small muted" style={{ marginTop: 8 }}>Enregistre la facture pour mettre le calcul à jour.</div>
     </div>
+  );
+}
+
+function ReviewRequestButton({ doc }: { doc: Doc }) {
+  const notify = useToast();
+  const st = useSyncState();
+  const [link, setLink] = useState<string | null>(null);
+  const client = useLiveQuery(() => db.clients.get(doc.clientId), [doc.clientId]);
+  const s = useSettings();
+  const open = async () => {
+    try {
+      setLink(reviewLink(await publishPortal(doc.id!)));
+      await db.docs.update(doc.id!, { reviewRequestedAt: new Date().toISOString() });
+    } catch (e) {
+      notify(errMsg(e), 'err');
+    }
+  };
+  const text = `Bonjour ${client?.contact || client?.name || ''}, merci d’avoir fait affaire avec ${s.companyName}! Pourriez-vous prendre 30 secondes pour nous donner votre avis?`;
+  return (
+    <>
+      <button className="btn" disabled={st.status === 'off'} title={st.status === 'off' ? 'Active la synchronisation' : 'Demander un avis au client'} onClick={open}><Star size={16} /> Demander un avis</button>
+      {link && (
+        <Modal title="Demander un avis" onClose={() => setLink(null)}>
+          <p style={{ marginTop: 0 }}>{text}</p>
+          <div className="row" style={{ flexWrap: 'nowrap' }}><input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Lien d’avis" /></div>
+          <div className="row" style={{ marginTop: 12, justifyContent: 'flex-end' }}>
+            {client?.phone && <a className="btn" href={smsLink(client.phone, `${text} ${link}`)}>Texto</a>}
+            <a className="btn" href={`mailto:${client?.email ?? ''}?subject=${encodeURIComponent(`Votre avis — ${s.companyName}`)}&body=${encodeURIComponent(`${text}\n${link}`)}`}>Courriel</a>
+            <button className="btn accent" onClick={() => void shareLink('Votre avis', text, link)}><Share2 size={16} /> Partager</button>
+          </div>
+          {!s.googleReviewUrl && <div className="notice" style={{ marginTop: 10 }}>Ajoute le lien de ta fiche Google dans Paramètres → Avis clients pour que les 5 étoiles aillent sur Google.</div>}
+        </Modal>
+      )}
+    </>
   );
 }

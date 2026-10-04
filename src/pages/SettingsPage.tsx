@@ -28,6 +28,16 @@ export default function SettingsPage() {
   const [homeCheck, setHomeCheck] = useState('');
   const restoreRef = useRef<HTMLInputElement>(null);
   useEffect(() => { getSettings().then((x) => { setS(x); setOrig(x); }); }, []);
+  const st = useSyncState();
+  if (st.role === 'employe' || st.role === 'vendeur') {
+    // Les membres de l'équipe ne voient que leur connexion
+    return (
+      <>
+        <div className="page-head"><h1>Paramètres</h1></div>
+        <SyncSection />
+      </>
+    );
+  }
   if (!s) return null;
 
   const up = (p: Partial<Settings>) => setS({ ...s, ...p });
@@ -145,6 +155,14 @@ export default function SettingsPage() {
           <label className="field full">Modes de paiement<textarea value={s.paymentInstructions} onChange={(e) => up({ paymentInstructions: e.target.value })} /></label>
           <label className="field full">Conditions (bas de facture)<textarea value={s.invoiceConditions} onChange={(e) => up({ invoiceConditions: e.target.value })} /></label>
           <label className="field full">Signature des courriels<textarea value={s.emailSignature} onChange={(e) => up({ emailSignature: e.target.value })} /></label>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2>Avis clients</h2>
+        <p className="small muted" style={{ marginTop: 0 }}>Après une job payée, envoie « Demander un avis »: 4-5 étoiles → le client est invité sur ta fiche Google; 1-3 étoiles → le commentaire reste privé, pour toi.</p>
+        <div className="form-grid">
+          {txt('googleReviewUrl', 'Lien de ta fiche Google (« Demander des avis »)', { full: true, placeholder: 'https://g.page/r/…/review' })}
         </div>
       </div>
 

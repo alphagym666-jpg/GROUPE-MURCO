@@ -10,6 +10,8 @@ import { isNative } from './lib/native';
 import { seedServices } from './lib/db';
 import { startSync } from './lib/sync';
 import './lib/portal';
+import './lib/team';
+import './lib/crm';
 
 applyTheme();
 seedServices().catch(() => undefined);

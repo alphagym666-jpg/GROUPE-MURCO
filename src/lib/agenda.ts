@@ -189,7 +189,7 @@ export async function dayRouteLink(date: string): Promise<string | null> {
 }
 
 /** Marque le job comme fait, crée le prochain s'il est récurrent et met à jour le journal de bord. */
-export async function completeJob(id: number): Promise<{ next?: Job; trips: Trip[] }> {
+export async function completeJob(id: number, routes = true): Promise<{ next?: Job; trips: Trip[] }> {
   const j = await db.jobs.get(id);
   if (!j) return { trips: [] };
   await db.jobs.update(id, { status: j.status === 'facture' ? 'facture' : 'fait', doneAt: new Date().toISOString() });
@@ -202,7 +202,7 @@ export async function completeJob(id: number): Promise<{ next?: Job; trips: Trip
   }
   let trips: Trip[] = [];
   try {
-    trips = await syncDayRoute(j.date);
+    if (routes) trips = await syncDayRoute(j.date);
   } catch {
     /* adresse du domicile manquante: le journal se fera plus tard */
   }
@@ -259,4 +259,13 @@ export function reminderText(j: Job, c: Client | undefined, companyName: string,
 export function smsLink(phone: string, body: string): string {
   const num = phone.replace(/[^\d+]/g, '');
   return `sms:${num}?&body=${encodeURIComponent(body)}`;
+}
+
+/** Route du jour manquante (ex.: jobs terminés par un employé): la calculer côté propriétaire. */
+export async function ensureDayRoute(date: string): Promise<void> {
+  const done = (await jobsOfDay(date)).filter((j) => j.status === 'fait' || j.status === 'facture');
+  if (!done.length) return;
+  const legs = await db.trips.where('routeDate').equals(date).toArray();
+  const covered = new Set(legs.map((t) => t.jobId));
+  if (done.some((j) => !covered.has(j.id))) await syncDayRoute(date).catch(() => undefined);
 }

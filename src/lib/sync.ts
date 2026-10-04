@@ -29,7 +29,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { useSyncExternalStore } from 'react';
-import { db, onLocalChange, remoteTx, SYNC_TABLES, type SyncTable } from './db';
+import { db, onLocalChange, remoteTx, SYNC_TABLES, type MemberRole, type SyncTable } from './db';
 import { blobToBase64 } from './utils';
 import { publicBase } from './native';
 
@@ -54,15 +54,20 @@ export interface FirebaseConfig {
 const CONFIG_KEY = 'murco.firebase';
 const PENDING_DELETES = 'murco.pendingDeletes';
 
+export type Role = 'owner' | MemberRole;
+
 export interface SyncState {
   status: 'off' | 'signedout' | 'connecting' | 'syncing' | 'ok' | 'error';
   email?: string;
   lastSync?: number;
   error?: string;
   configured: boolean;
+  role: Role; // propriétaire, employé, vendeur, admin
+  memberId?: number;
+  workspace?: string; // uid du propriétaire de l'entreprise
 }
 
-let state: SyncState = { status: 'off', configured: false };
+let state: SyncState = { status: 'off', configured: false, role: 'owner' };
 const subs = new Set<() => void>();
 function setState(p: Partial<SyncState>) {
   state = { ...state, ...p };
@@ -141,8 +146,16 @@ let unsubs: Unsubscribe[] = [];
 let stopLocal: (() => void) | null = null;
 
 /** Accès Firestore pour les autres modules (portail client). */
-export function syncContext(): { fs: Firestore; uid: string } | null {
-  return fs && user ? { fs, uid: user.uid } : null;
+export function syncContext(): { fs: Firestore; uid: string; workspace: string; role: Role } | null {
+  return fs && user ? { fs, uid: user.uid, workspace: workspace ?? user.uid, role } : null;
+}
+
+/** Après avoir rejoint une équipe: recharge l'espace de travail et resynchronise. */
+export async function reattach() {
+  if (!user) return;
+  detach();
+  await resolveWorkspace(user);
+  attach();
 }
 const attachListeners = new Set<() => (() => void) | void>();
 /** Exécuté à chaque connexion au compte (ex.: écoute du portail client). */
@@ -154,8 +167,69 @@ export function onSyncedPut(fn: (table: SyncTable, v: Record<string, unknown>) =
   localDocHooks.add(fn);
 }
 
+// Espace de travail: celui du propriétaire (même pour un employé invité)
+let workspace: string | null = null;
+let role: Role = 'owner';
+
+/** Tables que chaque rôle synchronise (lecture) et peut modifier (écriture). */
+const READ: Record<Role, readonly SyncTable[]> = {
+  owner: SYNC_TABLES,
+  admin: SYNC_TABLES,
+  vendeur: ['settings', 'clients', 'services', 'jobs', 'media', 'punches', 'members', 'projects', 'leads', 'docs'],
+  employe: ['settings', 'clients', 'services', 'jobs', 'media', 'punches', 'members', 'projects'],
+};
+const WRITE: Record<Role, readonly SyncTable[]> = {
+  owner: SYNC_TABLES,
+  admin: SYNC_TABLES,
+  vendeur: ['clients', 'jobs', 'media', 'punches', 'leads', 'docs'],
+  employe: ['jobs', 'media', 'punches'],
+};
+const canWrite = (t: SyncTable) => WRITE[role].includes(t);
+
 function base() {
-  return `users/${user!.uid}`;
+  return `users/${workspace ?? user!.uid}`;
+}
+
+/** Détermine si l'utilisateur est le propriétaire ou un membre invité d'une entreprise. */
+async function resolveWorkspace(u: User) {
+  workspace = u.uid;
+  role = 'owner';
+  let memberId: number | undefined;
+  try {
+    const m = await getDoc(doc(fs!, 'memberships', u.uid));
+    if (m.exists()) {
+      const d = m.data() as { ownerUid: string; role: MemberRole; memberId: number };
+      workspace = d.ownerUid;
+      role = d.role;
+      memberId = d.memberId;
+    }
+  } catch {
+    /* hors ligne: on garde le dernier état connu */
+    try {
+      const last = JSON.parse(localStorage.getItem('murco.workspace') ?? 'null');
+      if (last?.uid === u.uid) ({ workspace, role, memberId } = last);
+    } catch {
+      /* ignore */
+    }
+  }
+  // Un appareil qui passe dans l'espace d'une autre entreprise repart à neuf (pas de mélange de données)
+  try {
+    const prev = localStorage.getItem('murco.deviceWorkspace');
+    if (prev && prev !== workspace) {
+      await remoteTx(SYNC_TABLES.map((t) => db.table(t)), async () => {
+        for (const t of SYNC_TABLES) await db.table(t).clear();
+      });
+    }
+    localStorage.setItem('murco.deviceWorkspace', workspace ?? '');
+  } catch {
+    /* ignore */
+  }
+  try {
+    localStorage.setItem('murco.workspace', JSON.stringify({ uid: u.uid, workspace, role, memberId }));
+  } catch {
+    /* ignore */
+  }
+  setState({ role, memberId, workspace: workspace ?? undefined });
 }
 
 export function startSync(): void {
@@ -180,11 +254,13 @@ export function startSync(): void {
     return;
   }
   setState({ configured: true, status: 'signedout' });
-  onAuthStateChanged(auth, (u) => {
+  onAuthStateChanged(auth, async (u) => {
     detach();
     user = u;
-    if (u) attach();
-    else setState({ status: 'signedout', email: undefined });
+    if (u) {
+      await resolveWorkspace(u);
+      attach();
+    } else setState({ status: 'signedout', email: undefined, role: 'owner', memberId: undefined });
   });
 }
 
@@ -285,7 +361,7 @@ async function shrinkForCloud(b: Blob): Promise<Blob> {
 }
 
 async function pushRecord(table: SyncTable, v: Rec) {
-  if (!fs || !user) return;
+  if (!fs || !user || !canWrite(table)) return;
   const rec = { ...clean(table, v) };
   const cfg = BLOBS[table];
   const file = cfg ? v[cfg.field] : undefined;
@@ -313,6 +389,7 @@ async function pushRecord(table: SyncTable, v: Rec) {
 }
 
 async function pushDelete(table: SyncTable, id: unknown) {
+  if (fs && user && !canWrite(table)) return;
   if (!fs || !user) {
     // hors connexion au compte: on retient la suppression pour plus tard
     try {
@@ -399,8 +476,9 @@ function attach() {
   });
 
   // Nuage → local (temps réel)
-  let pendingFirst = SYNC_TABLES.length;
-  for (const table of SYNC_TABLES) {
+  const tables = READ[role];
+  let pendingFirst = tables.length;
+  for (const table of tables) {
     let first = true;
     let queue = Promise.resolve();
     const u = onSnapshot(

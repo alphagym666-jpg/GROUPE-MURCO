@@ -1,8 +1,8 @@
 import {
-  CalendarDays, Camera, FolderOpen, TrendingUp, Car, ClipboardList, FileText, Home, Mail, Menu, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Users, Zap, ImagePlus, type LucideIcon,
+  CalendarDays, Camera, FolderOpen, TrendingUp, Inbox, Clock, Briefcase, UsersRound, Car, ClipboardList, FileText, Home, Mail, Menu, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Users, Zap, ImagePlus, type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { CommandPalette } from './components/CommandPalette';
 import { SyncBadge } from './components/SyncBadge';
 import { ToastProvider } from './components/Toast';
@@ -26,6 +26,14 @@ import Reports from './pages/Reports';
 import Portal from './pages/Portal';
 import Services from './pages/Services';
 import SettingsPage from './pages/SettingsPage';
+import Leads from './pages/Leads';
+import LeadForm from './pages/LeadForm';
+import Join from './pages/Join';
+import PunchPage from './pages/Punch';
+import Timesheets from './pages/Timesheets';
+import Team from './pages/Team';
+import Projects, { ProjectDetail } from './pages/Projects';
+import { useSyncState, type Role } from './lib/sync';
 
 interface NavItem {
   to: string;
@@ -34,14 +42,19 @@ interface NavItem {
   icon: LucideIcon;
   end?: boolean;
   sep?: boolean;
+  roles?: Role[]; // rôles qui voient l'élément (tous si absent → propriétaire/admin seulement)
 }
 
 const NAV: NavItem[] = [
   { to: '/', label: 'Tableau de bord', short: 'Accueil', icon: Home, end: true },
-  { to: '/agenda', label: 'Agenda', short: 'Agenda', icon: CalendarDays },
+  { to: '/demandes', label: 'Demandes', short: 'Demandes', icon: Inbox, roles: ['vendeur'] },
+  { to: '/agenda', label: 'Agenda', short: 'Agenda', icon: CalendarDays, roles: ['employe', 'vendeur'] },
+  { to: '/pointage', label: 'Pointage', short: 'Pointage', icon: Clock, roles: ['employe', 'vendeur'] },
   { to: '/factures', label: 'Factures', short: 'Factures', icon: FileText },
-  { to: '/soumissions', label: 'Soumissions', short: 'Soumissions', icon: ClipboardList },
-  { to: '/clients', label: 'Clients', short: 'Clients', icon: Users },
+  { to: '/soumissions', label: 'Soumissions', short: 'Soumissions', icon: ClipboardList, roles: ['vendeur'] },
+  { to: '/clients', label: 'Clients', short: 'Clients', icon: Users, roles: ['vendeur'] },
+  { to: '/projets', label: 'Projets', short: 'Projets', icon: Briefcase },
+  { to: '/equipe', label: 'Équipe', short: 'Équipe', icon: UsersRound },
   { to: '/rapports', label: 'Rapports', short: 'Rapports', icon: TrendingUp },
   { to: '/codes', label: 'Codes et prix', short: 'Codes', icon: Tag, sep: true },
   { to: '/km', label: 'Journal de bord', short: 'Km', icon: Car },
@@ -49,17 +62,26 @@ const NAV: NavItem[] = [
   { to: '/classeur', label: 'Classeur', short: 'Classeur', icon: FolderOpen },
   { to: '/gmail', label: 'Gmail', short: 'Gmail', icon: Mail },
   { to: '/comptable', label: 'Dossier comptable', short: 'Comptable', icon: Package },
-  { to: '/parametres', label: 'Paramètres', short: 'Paramètres', icon: Settings },
+  { to: '/parametres', label: 'Paramètres', short: 'Paramètres', icon: Settings, roles: ['employe', 'vendeur'] },
 ];
 
-const MOBILE_MAIN = ['/', '/agenda', '/factures', '/km'];
+const canSee = (n: { roles?: Role[] }, role: Role) => role === 'owner' || role === 'admin' || !!n.roles?.includes(role);
 
-const QUICK = [
+const MOBILE_MAIN: Record<Role, string[]> = {
+  owner: ['/', '/agenda', '/demandes', '/factures'],
+  admin: ['/', '/agenda', '/demandes', '/factures'],
+  vendeur: ['/demandes', '/agenda', '/soumissions', '/pointage'],
+  employe: ['/agenda', '/pointage', '/parametres'],
+};
+
+const QUICK: { label: string; icon: LucideIcon; to: string; roles?: Role[] }[] = [
+  { label: 'Punch in / out', icon: Clock, to: '/pointage', roles: ['employe', 'vendeur'] },
+  { label: 'Photo de job', icon: ImagePlus, to: '/job/new?photo=1', roles: ['employe', 'vendeur'] },
+  { label: 'Nouvelle demande', icon: Inbox, to: '/demandes?new=1', roles: ['vendeur'] },
   { label: 'Facture express', icon: Zap, to: '/express' },
   { label: 'Planifier un job', icon: CalendarDays, to: '/job/new' },
   { label: 'Photo de reçu', icon: Camera, to: '/depenses/new' },
-  { label: 'Photo de job', icon: ImagePlus, to: '/job/new?photo=1' },
-  { label: 'Soumission', icon: ClipboardList, to: '/doc/new?type=quote' },
+  { label: 'Soumission', icon: ClipboardList, to: '/doc/new?type=quote', roles: ['vendeur'] },
 ];
 
 const THEME_LABEL: Record<ThemePref, string> = { system: 'Thème: auto', dark: 'Thème: sombre', light: 'Thème: clair' };
@@ -67,12 +89,14 @@ const THEME_ICON: Record<ThemePref, LucideIcon> = { system: SunMoon, dark: Moon,
 
 export default function App() {
   const loc = useLocation();
-  // Portail client: page publique, sans le menu de l'app
-  if (loc.pathname.startsWith('/p/')) {
+  // Pages publiques (client, formulaire, invitation): sans le menu de l'app
+  if (loc.pathname.startsWith('/p/') || loc.pathname.startsWith('/demande/') || loc.pathname.startsWith('/rejoindre')) {
     return (
       <ToastProvider>
         <Routes>
           <Route path="/p/:token" element={<Portal />} />
+          <Route path="/demande/:owner" element={<LeadForm />} />
+          <Route path="/rejoindre" element={<Join />} />
         </Routes>
       </ToastProvider>
     );
@@ -82,6 +106,9 @@ export default function App() {
 
 function Shell() {
   const s = useSettings();
+  const st = useSyncState();
+  const role = st.role;
+  const full = role === 'owner' || role === 'admin';
   const nav = useNavigate();
   const loc = useLocation();
   const [more, setMore] = useState(false);
@@ -118,11 +145,13 @@ function Shell() {
             </div>
           </div>
           <SyncBadge />
-          <button className="btn accent" style={{ margin: '0 4px 12px' }} onClick={() => nav('/express')}>
-            <Zap size={17} /> Facture express
-          </button>
+          {full && (
+            <button className="btn accent" style={{ margin: '0 4px 12px' }} onClick={() => nav('/express')}>
+              <Zap size={17} /> Facture express
+            </button>
+          )}
           <nav className="nav">
-            {NAV.map((n) => (
+            {NAV.filter((n) => canSee(n, role)).map((n) => (
               <div key={n.to}>
                 {n.sep && <div className="nav-sep" />}
                 <NavLink to={n.to} end={n.end}>
@@ -144,7 +173,13 @@ function Shell() {
 
         <main className="main" onClick={() => (more || fab) && (setMore(false), setFab(false))}>
           <Routes>
-            <Route path="/" element={<Dashboard onSearch={() => setCmd(true)} />} />
+            <Route path="/" element={full ? <Dashboard onSearch={() => setCmd(true)} /> : <Navigate to={role === 'vendeur' ? '/demandes' : '/pointage'} replace />} />
+            <Route path="/demandes" element={<Leads />} />
+            <Route path="/pointage" element={<PunchPage />} />
+            <Route path="/temps" element={<Timesheets />} />
+            <Route path="/equipe" element={<Team />} />
+            <Route path="/projets" element={<Projects />} />
+            <Route path="/projets/:id" element={<ProjectDetail />} />
             <Route path="/agenda" element={<Agenda />} />
             <Route path="/job/:id" element={<JobEditor />} />
             <Route path="/express" element={<Express />} />
@@ -162,7 +197,7 @@ function Shell() {
             <Route path="/gmail" element={<GmailPage />} />
             <Route path="/comptable" element={<Accountant />} />
             <Route path="/parametres" element={<SettingsPage />} />
-            <Route path="*" element={<Dashboard onSearch={() => setCmd(true)} />} />
+            <Route path="*" element={full ? <Dashboard onSearch={() => setCmd(true)} /> : <Navigate to="/agenda" replace />} />
           </Routes>
         </main>
 
@@ -173,7 +208,7 @@ function Shell() {
         )}
         {fab && (
           <div className="fab-menu hide-desktop">
-            {QUICK.map((q) => (
+            {QUICK.filter((q) => canSee(q, role)).map((q) => (
               <button key={q.to} onClick={() => nav(q.to)}>
                 <q.icon size={18} /> {q.label}
               </button>
@@ -182,7 +217,7 @@ function Shell() {
         )}
 
         <nav className="bottomnav">
-          {NAV.filter((n) => MOBILE_MAIN.includes(n.to)).map((n) => (
+          {MOBILE_MAIN[role].map((to) => NAV.find((n) => n.to === to)!).map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end}>
               <n.icon size={22} />
               {n.short}
@@ -195,7 +230,7 @@ function Shell() {
         </nav>
         {more && (
           <div className="more-menu hide-desktop">
-            {NAV.filter((n) => !MOBILE_MAIN.includes(n.to)).map((n) => (
+            {NAV.filter((n) => canSee(n, role) && !MOBILE_MAIN[role].includes(n.to)).map((n) => (
               <NavLink key={n.to} to={n.to} className={loc.pathname.startsWith(n.to) ? 'active' : ''}>
                 <n.icon size={18} />
                 {n.label}

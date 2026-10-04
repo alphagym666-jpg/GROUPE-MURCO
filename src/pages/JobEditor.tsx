@@ -12,6 +12,7 @@ import { blankJob, completeJob, JOB_STATUS_LABEL, jobToInvoice, RECURRENCE_LABEL
 import { db, type Job, type JobStatus, type Recurrence } from '../lib/db';
 import { directionsLink } from '../lib/geo';
 import { useSettings } from '../lib/hooks';
+import { useSyncState } from '../lib/sync';
 import { addDays, formatDate, lineAmount, money, todayISO } from '../lib/utils';
 
 export default function JobEditor() {
@@ -30,12 +31,16 @@ export default function JobEditor() {
   const [busy, setBusy] = useState(false);
   const clients = useLiveQuery(() => db.clients.orderBy('name').toArray(), []) ?? [];
   const services = useLiveQuery(() => db.services.orderBy('order').toArray(), []) ?? [];
+  const members = useLiveQuery(() => db.members.toArray(), []) ?? [];
+  const projects = useLiveQuery(() => db.projects.toArray(), []) ?? [];
+  const st = useSyncState();
+  const full = st.role === 'owner' || st.role === 'admin' || st.role === 'vendeur';
   const todayJobs = useLiveQuery(() => db.jobs.where('date').between(addDaysSafe(-1), addDaysSafe(1), true, true).toArray(), []) ?? [];
 
   useEffect(() => {
     (async () => {
       if (isNew) {
-        setJ(blankJob(params.get('d') || todayISO(), Number(params.get('client')) || 0));
+        setJ({ ...blankJob(params.get('d') || todayISO(), Number(params.get('client')) || 0), projectId: Number(params.get('project')) || undefined });
         setSavedAddress('');
       } else {
         const x = await db.jobs.get(Number(id));
@@ -102,7 +107,7 @@ export default function JobEditor() {
   const markDone = async () => {
     const x = await save({}, true);
     if (!x?.id) return;
-    const r = await completeJob(x.id);
+    const r = await completeJob(x.id, st.role === 'owner' || st.role === 'admin');
     setJ({ ...x, status: 'fait', nextJobId: r.next?.id ?? x.nextJobId });
     notify(`Job terminé${r.next ? ` · prochain planifié le ${formatDate(r.next.date)}` : ''}`);
   };
@@ -139,7 +144,7 @@ export default function JobEditor() {
         <div className="actions">
           <button className="btn accent" onClick={() => save()} disabled={busy}><Save size={17} /> Enregistrer</button>
           {j.id && j.status === 'planifie' && <button className="btn" onClick={markDone}><Check size={17} /> Fait</button>}
-          {j.id && (j.docId ? <Link className="btn primary" to={`/doc/${j.docId}`}><FileText size={17} /> Voir la facture</Link> : <button className="btn primary" onClick={invoice}><FileText size={17} /> Facturer</button>)}
+          {full && j.id && (j.docId ? <Link className="btn primary" to={`/doc/${j.docId}`}><FileText size={17} /> Voir la facture</Link> : <button className="btn primary" onClick={invoice}><FileText size={17} /> Facturer</button>)}
         </div>
       </div>
 
@@ -175,6 +180,29 @@ export default function JobEditor() {
               {address && <a className="btn icon-btn" href={directionsLink(s.homeAddress || '', address)} target="_blank" rel="noreferrer" aria-label="Itinéraire"><Navigation size={17} /></a>}
             </div>
           </label>
+          {full && (
+            <div className="field full">Équipe assignée
+              <div className="chips">
+                {members.filter((m) => m.active).map((m) => {
+                  const on = j.assignees?.includes(m.id!);
+                  return (
+                    <button key={m.id} type="button" className={`chip-btn ${on ? 'on' : ''}`} onClick={() => up({ assignees: on ? j.assignees!.filter((x) => x !== m.id) : [...(j.assignees ?? []), m.id!] })}>
+                      <span className="dot" style={{ background: m.color }} /> {m.name}
+                    </button>
+                  );
+                })}
+                {members.filter((m) => m.active).length === 0 && <span className="small muted">Ajoute ton équipe dans « Équipe ».</span>}
+              </div>
+            </div>
+          )}
+          {full && (
+            <label className="field">Projet
+              <select value={j.projectId ?? ''} onChange={(e) => up({ projectId: e.target.value ? Number(e.target.value) : undefined })}>
+                <option value="">—</option>
+                {projects.filter((p) => !j.clientId || p.clientId === j.clientId || p.id === j.projectId).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </label>
+          )}
           <label className="field">Récurrence
             <select value={j.recurrence} onChange={(e) => up({ recurrence: e.target.value as Recurrence })}>
               {(Object.keys(RECURRENCE_LABEL) as Recurrence[]).map((k) => <option key={k} value={k}>{RECURRENCE_LABEL[k]}</option>)}
@@ -189,8 +217,15 @@ export default function JobEditor() {
       </div>
 
       <div className="card">
-        <div className="card-head"><h2>Travaux prévus (codes)</h2><span className="spacer" />{total > 0 && <strong>{money(total)}</strong>}</div>
-        <LineItems items={j.items} services={services} onChange={(items) => up({ items })} />
+        <div className="card-head"><h2>Travaux prévus (codes)</h2><span className="spacer" />{full && total > 0 && <strong>{money(total)}</strong>}</div>
+        {full ? (
+          <LineItems items={j.items} services={services} onChange={(items) => up({ items })} />
+        ) : (
+          <table className="list"><tbody>
+            {j.items.map((it, i) => <tr key={i}><td><b style={{ color: 'var(--amber-ink)' }}>{it.code}</b> {it.description}</td><td className="num">{it.quantity} {it.unit}</td></tr>)}
+            {j.items.length === 0 && <tr><td className="muted">—</td></tr>}
+          </tbody></table>
+        )}
       </div>
 
       {j.id ? (
@@ -202,7 +237,7 @@ export default function JobEditor() {
       <div className="row">
         {j.id && j.status === 'planifie' && <button className="btn" onClick={() => setRemind(true)}><Bell size={16} /> Rappel au client</button>}
         <span className="spacer" />
-        <button className="btn danger" onClick={remove}><Trash2 size={16} /> Supprimer</button>
+        {full && <button className="btn danger" onClick={remove}><Trash2 size={16} /> Supprimer</button>}
       </div>
 
       {showClient && <ClientFormModal onClose={() => setShowClient(false)} onSaved={(cid) => up({ clientId: cid })} />}
