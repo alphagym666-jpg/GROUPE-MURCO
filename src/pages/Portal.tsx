@@ -1,11 +1,11 @@
-import { CircleCheck, Copy, Download, PenLine } from 'lucide-react';
+import { CircleCheck, Copy, CreditCard, Download, PenLine } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { SignaturePad } from '../components/SignaturePad';
 import { errMsg, useToast } from '../components/Toast';
 import { DEFAULT_SETTINGS, type Doc, type Settings } from '../lib/db';
 import { buildDocPdf } from '../lib/pdf';
-import { loadPortal, signPortal, type PortalData } from '../lib/portal';
+import { loadPortal, signPortal, startCardPayment, type PortalData } from '../lib/portal';
 import { downloadBlob, formatDate, lineAmount, money } from '../lib/utils';
 
 /** Page publique envoyée au client: voir, accepter (signer) et payer. */
@@ -82,6 +82,18 @@ export default function Portal() {
   };
 
   const interac = p.company.paymentInstructions.match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0];
+  const paidOnline = (p.cardPayments ?? []).reduce((a, x) => a + x.amount, 0);
+  const due = Math.max(0, Math.round(((t.balance || t.total) - paidOnline) * 100) / 100);
+  const justPaid = params.get('paid') === '1';
+  const payCard = async () => {
+    setBusy(true);
+    try {
+      location.href = await startCardPayment(p);
+    } catch (e) {
+      notify(errMsg(e), 'err');
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="portal">
@@ -157,7 +169,16 @@ export default function Portal() {
       {!isQuote && (
         <div className="card">
           <h2>Comment payer</h2>
-          <p style={{ marginTop: 0 }}>{p.company.paymentInstructions}</p>
+          {(justPaid || (paidOnline > 0 && due <= 0)) && (
+            <div className="notice ok row"><CircleCheck size={18} /> Merci! Votre paiement par carte {justPaid && !paidOnline ? 'est en cours de confirmation' : `de ${money(paidOnline)} est reçu`}.</div>
+          )}
+          {p.company.cardPayments && due > 0 && !justPaid && (
+            <div style={{ marginBottom: 14 }}>
+              <button className="btn accent big block" disabled={busy} onClick={payCard}><CreditCard size={20} /> {busy ? 'Ouverture…' : `Payer ${money(due)} par carte`}</button>
+              <div className="small muted" style={{ marginTop: 6, textAlign: 'center' }}>Visa, Mastercard, Amex, Apple Pay, Google Pay — paiement sécurisé par Stripe</div>
+            </div>
+          )}
+          <p style={{ marginTop: 0 }}>{p.company.cardPayments && due > 0 ? 'Ou par: ' : ''}{p.company.paymentInstructions}</p>
           {interac && (
             <div className="row">
               <span>Courriel Interac: <strong>{interac}</strong></span>

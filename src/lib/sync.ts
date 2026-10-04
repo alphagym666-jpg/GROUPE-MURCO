@@ -31,6 +31,7 @@ import {
 import { useSyncExternalStore } from 'react';
 import { db, onLocalChange, remoteTx, SYNC_TABLES, type SyncTable } from './db';
 import { blobToBase64 } from './utils';
+import { publicBase } from './native';
 
 /*
  * Synchronisation entre appareils (téléphone, ordi…) avec Firebase (Google), forfait gratuit.
@@ -121,7 +122,7 @@ export function deviceLink(): string | null {
   const cfg = getFirebaseConfig();
   if (!cfg) return null;
   const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(cfg))));
-  return `${location.origin}${location.pathname}#/parametres?sync=${encodeURIComponent(b64)}`;
+  return `${publicBase()}#/parametres?sync=${encodeURIComponent(b64)}`;
 }
 
 export function configFromLink(param: string): FirebaseConfig | null {

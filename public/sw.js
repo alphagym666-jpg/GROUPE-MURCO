@@ -1,5 +1,5 @@
 // Service worker: l'app fonctionne hors-ligne (sur la route, dans un sous-sol sans réseau...).
-const CACHE = 'murco-v1';
+const CACHE = 'murco-v2';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icon.svg'])));

@@ -7,8 +7,10 @@ import { db, EXPENSE_CATEGORIES, type Expense } from '../lib/db';
 import { currentPosition, drivingDistance, geocode, mapsLink, reverseGeocode } from '../lib/geo';
 import { useSettings } from '../lib/hooks';
 import { compressImage, pendingImport, readPhotoInfo, splitTaxes } from '../lib/receipt';
+import { readReceipt } from '../lib/ocr';
 import { ensureHomeGeo, syncTripForExpense } from '../lib/trips';
-import { km, round2, todayISO } from '../lib/utils';
+import { km, money, round2, todayISO } from '../lib/utils';
+import { Camera, ImagePlus, ScanText } from 'lucide-react';
 
 const blank = (): Expense => ({
   date: todayISO(), vendor: '', category: 'Essence', subtotal: 0, tps: 0, tvq: 0, total: 0, paymentMethod: 'Carte de crédit',
@@ -94,8 +96,36 @@ export default function ExpenseEditor() {
         notify(`${next.locationLabel}${next.kmFromHome !== undefined ? ` — ${km(next.kmFromHome)} de chez toi` : ''}`);
       }
       setE(next);
+      if (c.type.startsWith('image/') && !next.total) await ocr(next, !info.date && !meta.date);
     } catch (err) {
       notify(errMsg(err), 'err');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  /** Lecture automatique du reçu: montant, taxes, date, commerce, catégorie. */
+  async function ocr(base: Expense, useDate = true) {
+    if (!base.photo) return;
+    setBusy('Lecture du reçu…');
+    try {
+      const { text, guess } = await readReceipt(base.photo, (p) => setBusy(`Lecture du reçu… ${Math.round(p * 100)} %`));
+      const next: Expense = { ...base, ocrText: text.slice(0, 4000) };
+      if (guess.total) {
+        next.total = guess.total;
+        const split = splitTaxes(guess.total, s.tpsRate, s.tvqRate);
+        next.tps = guess.tps ?? split.tps;
+        next.tvq = guess.tvq ?? split.tvq;
+        next.subtotal = guess.subtotal ?? Math.round((guess.total - next.tps - next.tvq) * 100) / 100;
+        next.ocrAuto = true;
+      }
+      if (guess.date && useDate) next.date = guess.date;
+      if (guess.vendor && !base.vendor) next.vendor = guess.vendor;
+      if (guess.category) next.category = guess.category;
+      setE((cur) => ({ ...(cur ?? next), ...next, photo: cur?.photo ?? next.photo, geo: cur?.geo ?? next.geo, locationLabel: cur?.locationLabel || next.locationLabel, kmFromHome: cur?.kmFromHome ?? next.kmFromHome }));
+      notify(guess.total ? `Reçu lu: ${money(guess.total)}${guess.vendor ? ` chez ${guess.vendor}` : ''} — vérifie les montants` : 'Je n’ai pas trouvé le total sur la photo. Entre-le à la main.', guess.total ? 'ok' : 'err');
+    } catch (err) {
+      notify(`Lecture automatique impossible: ${errMsg(err)}`, 'err');
     } finally {
       setBusy('');
     }
@@ -184,9 +214,11 @@ export default function ExpenseEditor() {
           <input ref={camRef} type="file" accept="image/*" capture="environment" hidden onChange={(ev) => ev.target.files?.[0] && handleFile(ev.target.files[0], e)} />
           <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={(ev) => ev.target.files?.[0] && handleFile(ev.target.files[0], e)} />
           <div className="row">
-            <button className="btn accent" onClick={() => camRef.current?.click()}>Prendre une photo</button>
-            <button className="btn" onClick={() => fileRef.current?.click()}>Choisir un fichier</button>
+            <button className="btn accent" onClick={() => camRef.current?.click()}><Camera size={17} /> Prendre une photo</button>
+            <button className="btn" onClick={() => fileRef.current?.click()}><ImagePlus size={17} /> Choisir un fichier</button>
+            {e.photo && e.photoType?.startsWith('image/') && <button className="btn" disabled={!!busy} onClick={() => ocr(e, true)}><ScanText size={17} /> Relire le reçu</button>}
           </div>
+          {e.ocrAuto && <div className="notice info" style={{ marginTop: 10 }}>Montants lus automatiquement sur la photo. Vérifie-les avant d’enregistrer.</div>}
           {photoUrl && (e.photoType === 'application/pdf'
             ? <p><a href={photoUrl} target="_blank" rel="noreferrer">Voir le PDF du reçu</a></p>
             : <a href={photoUrl} target="_blank" rel="noreferrer"><img src={photoUrl} className="photo-preview" style={{ marginTop: 12 }} alt="Reçu" /></a>)}

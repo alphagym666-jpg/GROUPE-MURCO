@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  ArrowLeft, ArrowRight, Banknote, Calculator, Check, CircleCheck, FileText, Mail, Mic, MicOff, Minus, Plus, Search, Share2, UserPlus, Zap,
+  ArrowLeft, ArrowRight, Banknote, CreditCard, Calculator, Check, CircleCheck, FileText, Mail, Mic, MicOff, Minus, Plus, Search, Share2, UserPlus, Zap,
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -16,6 +16,8 @@ import { docFileName } from '../lib/pdf';
 import { listen, speechSupported, type Listening } from '../lib/speech';
 import { syncTripForDoc } from '../lib/trips';
 import { syncDayRoute } from '../lib/agenda';
+import { publishPortal } from '../lib/portal';
+import { shareFiles } from '../lib/native';
 import { addDays, docTotals, downloadBlob, km, lineAmount, money, round2, todayISO } from '../lib/utils';
 import { parseDictation } from '../lib/voice';
 
@@ -188,17 +190,10 @@ export default function Express() {
   };
 
   const share = async (d: Doc, c?: Client) => {
-    const file = new File([await makeDocPdf(d, c, await getSettings())], docFileName(d, c), { type: 'application/pdf' });
-    if (navigator.canShare?.({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: `Facture ${d.number}`, text: `Facture ${d.number} — ${s.companyName}` });
-        if (d.status === 'draft') await db.docs.update(d.id!, { status: 'sent', sentAt: new Date().toISOString() });
-      } catch {
-        /* annulé */
-      }
-    } else {
-      downloadBlob(file, file.name);
-    }
+    const blob = await makeDocPdf(d, c, await getSettings());
+    if (await shareFiles([{ blob, name: docFileName(d, c) }], `Facture ${d.number}`, `Facture ${d.number} — ${s.companyName}`)) {
+      if (d.status === 'draft') await db.docs.update(d.id!, { status: 'sent', sentAt: new Date().toISOString() });
+    } else downloadBlob(blob, docFileName(d, c));
   };
 
   // ---------- Écran final ----------
@@ -217,6 +212,16 @@ export default function Express() {
         <div className="grid" style={{ gap: 8 }}>
           <button className="btn accent big block" onClick={() => share(created.doc, created.client)}><Share2 size={20} /> Partager le PDF (texto, courriel…)</button>
           <button className="btn big block" onClick={async () => setMailPdf(await makeDocPdf(created.doc, created.client, s))}><Mail size={20} /> Envoyer par Gmail</button>
+          {s.cardPayments && created.doc.status !== 'paid' && (
+            <button className="btn primary big block" onClick={async () => {
+              try {
+                const link = await publishPortal(created.doc.id!);
+                location.href = link; // le client paie sur ton téléphone
+              } catch (e) {
+                notify(errMsg(e), 'err');
+              }
+            }}><CreditCard size={20} /> Faire payer par carte maintenant</button>
+          )}
           <Link className="btn big block" to={`/doc/${created.doc.id}`}><FileText size={20} /> Ouvrir la facture</Link>
         </div>
         <div style={{ marginTop: 16 }}>

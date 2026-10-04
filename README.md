@@ -21,7 +21,13 @@ Tout est relié ensemble.
 | **Tableau de bord** | Jobs du jour, factures à encaisser avec **relance** en 1 clic, revenus des 12 derniers mois, ventes par code de job, soumissions vues/signées |
 | **Synchronisation** | Ordi ↔ cell en temps réel (Firebase, gratuit), hors-ligne, photos incluses |
 | **Dossier comptable** | ZIP: sommaire, factures PDF, reçus par catégorie, preuves de paiement, journal de bord, fichiers Excel/CSV |
-| **Pro** | Recherche rapide partout (Ctrl+K), bouton + sur le cell, mode sombre, annulation après suppression, fonctionne hors-ligne |
+| **Classeur** | Tous les reçus, photos de jobs, preuves de paiement, factures et soumissions au même endroit, classés par mois; recherche (même dans le texte des reçus); ZIP classé `Année/Mois/Type` |
+| **Lecture des reçus** | Photo du reçu → montant, TPS, TVQ, date, commerce et catégorie remplis tout seuls (lecture sur l'appareil, sans Internet) |
+| **Rentabilité** | Profit réel par job (prix − matériaux − km − heures), marge, taux horaire réel, ventes par code, meilleurs clients |
+| **TPS/TVQ** | Rapport par période (mensuel, trimestriel, annuel) avec PDF; suivi du seuil de 30 000 $ du petit fournisseur |
+| **Paiement par carte** | Bouton « Payer par carte » dans le lien client (Stripe: Visa, Mastercard, Apple Pay, Google Pay); le paiement s'ajoute tout seul à la facture |
+| **Apps mobiles** | App Android (APK construit automatiquement) et projet iPhone prêt pour l'App Store |
+| **Pro** | Recherche rapide partout (Ctrl+K), bouton + sur le cell, mode sombre, annulation après suppression, vérification avant d'envoyer au comptable, fonctionne hors-ligne |
 
 ## Démarrer
 
@@ -70,6 +76,43 @@ Forfait gratuit Firebase (Spark): 1 Go de données et 50 000 lectures/jour, larg
 
 Google offre un crédit mensuel gratuit qui couvre largement l'usage d'une petite entreprise.
 
+## App Android
+
+À chaque mise à jour, GitHub construit l'app: **https://github.com/alphagym666-jpg/GROUPE-MURCO/releases/tag/android-latest**
+→ télécharge `Murco.apk` sur le téléphone et ouvre-le (autorise « sources inconnues » la première fois).
+Les mises à jour s'installent par-dessus. Pour le Play Store (25 $ une fois): créer une clé de publication privée
+(secret GitHub) et produire un AAB signé.
+
+## App iPhone
+
+Le projet Xcode est dans `ios/` (GitHub vérifie qu'il se compile). Pour l'App Store il faut un compte
+**Apple Developer** (99 $ US/an). Ensuite: certificats dans les secrets GitHub et publication via TestFlight.
+
+Dans l'app mobile, l'envoi de courriels passe par la feuille de partage du téléphone (Gmail, Outlook…)
+avec le PDF déjà attaché. Ajouter aussi `https://localhost/*` et `capacitor://localhost/*` aux sites autorisés
+de la clé Google Maps.
+
+## Paiement par carte (Stripe)
+
+1. Compte sur <https://stripe.com> (Canada).
+2. Firebase: passer au forfait **Blaze** (paiement à l'usage, ~0 $ à petit volume) — nécessaire pour les fonctions.
+3. Dans Stripe → Développeurs → Webhooks → ajouter
+   `https://northamerica-northeast1-<ID-du-projet>.cloudfunctions.net/stripeWebhook`
+   (événement `checkout.session.completed`) et copier le « secret de signature » (`whsec_…`).
+4. Ouvrir **Cloud Shell** (<https://shell.cloud.google.com>, bouton `>_` dans la console Google Cloud) et coller:
+   ```bash
+   git clone https://github.com/alphagym666-jpg/GROUPE-MURCO && cd GROUPE-MURCO
+   npx -y firebase-tools login --no-localhost
+   npx -y firebase-tools functions:secrets:set STRIPE_SECRET_KEY --project <ID-du-projet>      # colle sk_live_…
+   npx -y firebase-tools functions:secrets:set STRIPE_WEBHOOK_SECRET --project <ID-du-projet>  # colle whsec_…
+   npx -y firebase-tools deploy --only functions,firestore:rules --project <ID-du-projet>
+   ```
+   (installe le service de paiement **et** les règles de sécurité Firestore).
+5. Dans l'app: Paramètres → Paiement par carte → cocher et enregistrer.
+
+Frais Stripe: environ 2,9 % + 0,30 $ par paiement. Au Québec, la Loi sur la protection du consommateur
+interdit d'ajouter ces frais au client.
+
 ## Relier Gmail (une seule fois)
 
 1. <https://console.cloud.google.com/> → nouveau projet « Murco ».
@@ -90,11 +133,12 @@ pour le calcul des km, et les courriels par ton propre Gmail.
 
 ## Technique
 
-React + TypeScript + Vite, Dexie (IndexedDB), Firebase (Auth + Firestore) pour la synchronisation,
+React + TypeScript + Vite, Capacitor (Android/iOS), Tesseract (lecture des reçus sur l'appareil),
+Stripe + Firebase Functions (paiement par carte), Dexie (IndexedDB), Firebase (Auth + Firestore) pour la synchronisation,
 Google Maps (Routes, Geocoding, Places, Embed) avec repli OpenStreetMap, jsPDF, JSZip, exifr (GPS des photos),
 Google Identity Services + Gmail API.
 
-Tests: `npm test` (analyse de la dictée).
+Tests: `npm test` (dictée et lecture des reçus) et `npm --prefix functions test` (paiement).
 Tester la synchronisation en local: `npx firebase-tools emulators:start --only auth,firestore --project demo-murco`,
 puis dans Paramètres → Synchronisation, coller `{"apiKey":"x","projectId":"demo-murco","authDomain":"x","emulator":true}`.
 Pour publier dans l'App Store / Play Store plus tard: envelopper avec Capacitor (`npx cap init`).

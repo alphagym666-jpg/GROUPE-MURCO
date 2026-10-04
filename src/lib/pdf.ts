@@ -430,3 +430,59 @@ export function buildSummaryPdf(d: SummaryData, s: Settings): Blob {
   footer(pdf, s);
   return pdf.output('blob');
 }
+
+/** Rapport TPS/TVQ d'une période (pour la déclaration ou le comptable). */
+export function buildTaxReportPdf(p: { label: string; sales: number; tpsCollected: number; tvqCollected: number; tpsPaid: number; tvqPaid: number; tpsNet: number; tvqNet: number; invoices: number; receipts: number; from: string; to: string }, s: Settings): Blob {
+  const pdf = new jsPDF({ unit: 'mm', format: 'letter' });
+  header(pdf, s, 'RAPPORT TPS / TVQ');
+  pdf.setFontSize(10);
+  pdf.text(t(`Période: ${p.label} (${formatDate(p.from)} au ${formatDate(p.to)})`), 15, 50);
+  pdf.text(t(`No TPS: ${s.tpsNumber || '-'}    No TVQ: ${s.tvqNumber || '-'}`), 15, 55);
+  autoTable(pdf, {
+    startY: 62,
+    head: [['TPS (fédéral)', '']],
+    body: [
+      ['Ventes et autres revenus (avant taxes) — ligne 101', m(p.sales)],
+      ['TPS perçue ou à percevoir — ligne 103', m(p.tpsCollected)],
+      ['Crédits de taxe sur les intrants (CTI) — ligne 106', m(p.tpsPaid)],
+      ['TPS nette à remettre — ligne 109', m(p.tpsNet)],
+    ],
+    theme: 'grid',
+    headStyles: { fillColor: NAVY },
+    columnStyles: { 1: { halign: 'right', cellWidth: 40 } },
+    margin: { left: 15, right: 15 },
+  });
+  autoTable(pdf, {
+    head: [['TVQ (Québec)', '']],
+    body: [
+      ['Ventes (avant taxes)', m(p.sales)],
+      ['TVQ perçue ou à percevoir', m(p.tvqCollected)],
+      ['Remboursements de taxe sur les intrants (RTI)', m(p.tvqPaid)],
+      ['TVQ nette à remettre', m(p.tvqNet)],
+    ],
+    theme: 'grid',
+    headStyles: { fillColor: NAVY },
+    columnStyles: { 1: { halign: 'right', cellWidth: 40 } },
+    margin: { left: 15, right: 15 },
+  });
+  autoTable(pdf, {
+    body: [['TOTAL À REMETTRE (TPS + TVQ)', m(p.tpsNet + p.tvqNet)]],
+    theme: 'grid',
+    bodyStyles: { fillColor: ORANGE, textColor: 20, fontStyle: 'bold' },
+    columnStyles: { 1: { halign: 'right', cellWidth: 40 } },
+    margin: { left: 15, right: 15 },
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const y = (pdf as any).lastAutoTable.finalY + 8;
+  pdf.setFontSize(8);
+  pdf.setTextColor(90);
+  const note = pdf.splitTextToSize(
+    t(`Basé sur ${p.invoices} facture(s) émise(s) (date de facture) et ${p.receipts} reçu(s) de dépenses. Méthode régulière. Les numéros de ligne TPS sont ceux du formulaire fédéral; vérifie avec ton comptable avant de produire la déclaration (Revenu Québec, formulaire FPZ-500).`),
+    W_LETTER - 30,
+  ) as string[];
+  pdf.text(note, 15, y);
+  footer(pdf, s);
+  return pdf.output('blob');
+}
+
+const W_LETTER = 215.9;

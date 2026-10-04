@@ -1,0 +1,48 @@
+name: App Android (APK)
+
+on:
+  push:
+    branches: [main, claude/zen-cray-9q339i]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run build
+        env:
+          VITE_FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
+      - run: npx cap sync android
+      - name: Construire l'APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - run: cp android/app/build/outputs/apk/debug/app-debug.apk Murco.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Murco-android
+          path: Murco.apk
+      - name: Publier (lien de téléchargement fixe)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android-latest --yes --cleanup-tag || true
+          gh release create android-latest Murco.apk --prerelease --target "$GITHUB_SHA" \
+            --title "App Android Murco (dernière version)" \
+            --notes "Télécharge Murco.apk sur ton téléphone Android et ouvre-le pour l'installer (autorise « sources inconnues » la première fois). Version 1.${GITHUB_RUN_NUMBER}."

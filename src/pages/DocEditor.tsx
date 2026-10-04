@@ -12,11 +12,13 @@ import { directionsLink, embedDirectionsUrl } from '../lib/geo';
 import { useSettings } from '../lib/hooks';
 import { docFileName } from '../lib/pdf';
 import { makeDocPdf } from '../lib/docPdf';
+import { isNative, shareFiles, shareLink } from '../lib/native';
 import { publishPortal } from '../lib/portal';
+import { profitOfDoc } from '../lib/profit';
 import { useSyncState } from '../lib/sync';
 import { smsLink } from '../lib/agenda';
 import { MediaGallery, ProofPhoto } from '../components/MediaGallery';
-import { Banknote, Copy, Download, Eye, Link2, Save, Send, Share2, Trash2, Navigation, RefreshCw } from 'lucide-react';
+import { Banknote, Copy, Download, Eye, Link2, Plus, Save, Send, Share2, Trash2, Navigation, RefreshCw, TrendingUp } from 'lucide-react';
 import { deleteDocCascade, syncTripForDoc } from '../lib/trips';
 import { addDays, METHOD_LABEL, docTotals, downloadBlob, formatDate, km, money, round2, STATUS_LABELS, statusClass, statusLabel, todayISO } from '../lib/utils';
 
@@ -172,16 +174,12 @@ export default function DocEditor() {
   const share = async () => {
     const d = await ready();
     if (!d) return;
-    const file = new File([await pdfBlob(d)], docFileName(d, client), { type: 'application/pdf' });
-    if (navigator.canShare?.({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: `${kind} ${d.number}`, text: `${kind} ${d.number} — ${s.companyName} — ${money(docTotals(d, s).balance || docTotals(d, s).total)}` });
-        if (d.status === 'draft') await save({ status: 'sent', sentAt: new Date().toISOString() }, true);
-      } catch {
-        /* partage annulé */
-      }
+    const blob = await pdfBlob(d);
+    const ok = await shareFiles([{ blob, name: docFileName(d, client) }], `${kind} ${d.number}`, `${kind} ${d.number} — ${s.companyName} — ${money(docTotals(d, s).balance || docTotals(d, s).total)}`);
+    if (ok) {
+      if (d.status === 'draft') await save({ status: 'sent', sentAt: new Date().toISOString() }, true);
     } else {
-      downloadBlob(file, file.name);
+      downloadBlob(blob, docFileName(d, client));
       notify('PDF téléchargé (le partage direct n’est pas disponible sur cet appareil).');
     }
   };
@@ -363,6 +361,8 @@ export default function DocEditor() {
         <label className="field" style={{ marginTop: 12 }}>Notes (apparaissent sur le PDF)<textarea value={doc.notes} onChange={(e) => upd({ notes: e.target.value })} /></label>
       </div>
 
+      {doc.id && isInvoice && <ProfitCard doc={doc} onChange={(p) => upd(p)} />}
+
       {doc.id ? (
         <>
           <MediaGallery link={{ docId: doc.id, jobId: doc.jobId, clientId: doc.clientId }} kinds={['avant', 'apres', 'job']} title="Photos des travaux" />
@@ -535,7 +535,7 @@ function PortalButton({ doc }: { doc: Doc }) {
             <button className="btn" onClick={async () => { try { await navigator.clipboard.writeText(link); notify('Lien copié'); } catch { notify('Sélectionne et copie le lien.', 'err'); } }}><Copy size={16} /></button>
           </div>
           <div className="row" style={{ marginTop: 12 }}>
-            {navigator.share && <button className="btn accent" onClick={() => navigator.share({ title: `${doc.number}`, text, url: link }).catch(() => undefined)}><Share2 size={16} /> Partager</button>}
+            {(isNative() || !!navigator.share) && <button className="btn accent" onClick={() => void shareLink(`${doc.number}`, text, link)}><Share2 size={16} /> Partager</button>}
             {client?.phone && <a className="btn" href={smsLink(client.phone, `${text} ${link}`)}>Texto</a>}
             <a className="btn" href={`mailto:${client?.email ?? ''}?subject=${encodeURIComponent(`${kind[0].toUpperCase()}${kind.slice(1)} ${doc.number}`)}&body=${encodeURIComponent(`${text}\n${link}`)}`}>Courriel</a>
           </div>
@@ -544,5 +544,42 @@ function PortalButton({ doc }: { doc: Doc }) {
         </Modal>
       )}
     </>
+  );
+}
+
+function ProfitCard({ doc, onChange }: { doc: Doc; onChange: (p: Partial<Doc>) => void }) {
+  const nav = useNavigate();
+  const p = useLiveQuery(() => profitOfDoc(doc.id!), [doc.id, doc._u]);
+  const receipts = useLiveQuery(() => db.expenses.where('docId').equals(doc.id!).toArray(), [doc.id]) ?? [];
+  return (
+    <div className="card">
+      <div className="card-head">
+        <TrendingUp size={18} /><h2>Rentabilité de la job</h2><span className="spacer" />
+        {p && <span className={`badge ${p.margin >= 50 ? 'green' : p.margin >= 25 ? 'amber' : 'red'}`}>marge {p.margin} %</span>}
+      </div>
+      <div className="grid two" style={{ alignItems: 'start' }}>
+        <div className="form-grid">
+          <label className="field">Heures travaillées<input type="number" inputMode="decimal" step="0.25" value={doc.hoursWorked || ''} placeholder="0" onChange={(e) => onChange({ hoursWorked: Number(e.target.value) || undefined })} /></label>
+          <label className="field">Autres coûts ($)<input type="number" inputMode="decimal" step="0.01" value={doc.otherCost || ''} placeholder="sous-traitant…" onChange={(e) => onChange({ otherCost: Number(e.target.value) || undefined })} /></label>
+          <div className="full">
+            <div className="small muted" style={{ marginBottom: 6 }}>Reçus liés à cette job ({receipts.length})</div>
+            {receipts.map((r) => <div key={r.id} className="small"><Link to={`/depenses/${r.id}`}>{r.date} — {r.vendor || r.category}</Link> · {money(r.subtotal)}</div>)}
+            <button className="btn small" style={{ marginTop: 6 }} onClick={() => nav(`/depenses/new?doc=${doc.id}`)}><Plus size={14} /> Ajouter un reçu de matériaux</button>
+          </div>
+        </div>
+        {p && (
+          <div className="totals">
+            <div><span>Revenu (avant taxes)</span><span>{money(p.revenue)}</span></div>
+            <div><span>Matériaux</span><span>−{money(p.materials)}</span></div>
+            <div><span>Km ({p.km} km)</span><span>−{money(p.kmCost)}</span></div>
+            {p.labor > 0 && <div><span>Main-d’œuvre</span><span>−{money(p.labor)}</span></div>}
+            {p.other > 0 && <div><span>Autres coûts</span><span>−{money(p.other)}</span></div>}
+            <div className="grand"><span>Profit</span><span>{money(p.profit)}</span></div>
+            {p.perHour !== undefined && <div className="small muted"><span>Ton taux horaire réel</span><span>{money(p.perHour)}/h</span></div>}
+          </div>
+        )}
+      </div>
+      <div className="small muted" style={{ marginTop: 8 }}>Enregistre la facture pour mettre le calcul à jour.</div>
+    </div>
   );
 }

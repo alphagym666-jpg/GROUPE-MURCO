@@ -52,6 +52,13 @@ export interface Settings extends Synced {
   kmRateFirst5000: number;
   kmRateAfter5000: number;
   vehicle: string;
+  // Rentabilité et taxes
+  laborCostPerHour: number; // coût d'une heure de main-d'œuvre (0 = ton propre temps)
+  kmCost: number; // coût réel d'un km (essence, usure)
+  taxFiling: 'mensuel' | 'trimestriel' | 'annuel';
+  // Paiement par carte (Stripe, via les fonctions Firebase)
+  cardPayments: boolean;
+  paymentsEndpoint: string; // ex.: https://northamerica-northeast1-<projet>.cloudfunctions.net
   // Google Maps (distances et adresses)
   googleMapsKey: string;
   // Gmail / Comptable
@@ -112,6 +119,7 @@ export interface Payment {
   method: string;
   mediaId?: number; // photo de l'argent comptant / du bordereau de dépôt
   note?: string;
+  ref?: string; // référence externe (paiement Stripe)
 }
 
 export interface Signature {
@@ -145,6 +153,8 @@ export interface Doc extends Synced {
   jobId?: number; // job de l'agenda d'où vient la facture
   depositMediaId?: number; // photo du dépôt reçu
   pdfPhotos?: boolean; // joindre les photos avant/après au PDF
+  hoursWorked?: number; // heures travaillées (rentabilité)
+  otherCost?: number; // autres coûts directs non liés à un reçu (sous-traitant…)
   portalToken?: string; // lien client (portail)
   signature?: Signature; // acceptation signée en ligne
   viewedAt?: string; // vu par le client dans le portail
@@ -258,6 +268,8 @@ export interface Expense extends Synced {
   docId?: number;
   tripId?: number;
   photoSig?: string; // empreinte de la photo (synchronisation)
+  ocrText?: string; // texte lu sur le reçu (recherche)
+  ocrAuto?: boolean; // montants remplis par la lecture automatique
   createdAt: string;
 }
 
@@ -417,6 +429,11 @@ export const DEFAULT_SETTINGS: Settings = {
   kmRateFirst5000: 0.72,
   kmRateAfter5000: 0.66,
   vehicle: '',
+  laborCostPerHour: 0,
+  kmCost: 0.72,
+  taxFiling: 'annuel',
+  cardPayments: false,
+  paymentsEndpoint: '',
   googleMapsKey: '',
   googleClientId: '',
   accountantName: '',

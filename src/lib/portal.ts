@@ -5,6 +5,7 @@ import {
 import { db, getSettings, type Doc, type LineItem, type Signature } from './db';
 import { configFromLink, getFirebaseConfig, onSyncAttach, onSyncedPut, syncContext, type FirebaseConfig } from './sync';
 import { companyAddressLines, docTotals, type Totals } from './utils';
+import { publicBase } from './native';
 
 /*
  * Portail client: le client ouvre un lien (sans compte) pour voir sa soumission ou sa facture,
@@ -30,6 +31,8 @@ export interface PortalData {
     tpsNumber: string;
     tvqNumber: string;
     chargeTaxes: boolean;
+    cardPayments?: boolean;
+    payEndpoint?: string;
   };
   client: { name: string; address: string };
   doc: {
@@ -51,6 +54,7 @@ export interface PortalData {
   };
   signature?: Signature | null;
   viewedAt?: string | null;
+  cardPayments?: { id: string; amount: number; at: string; method: string }[];
   updatedAt: string;
 }
 
@@ -81,6 +85,8 @@ export async function buildPortalData(d: Doc, token: string, owner: string): Pro
       tpsNumber: s.tpsNumber,
       tvqNumber: s.tvqNumber,
       chargeTaxes: s.chargeTaxes,
+      cardPayments: s.cardPayments && !!s.paymentsEndpoint,
+      payEndpoint: s.cardPayments ? s.paymentsEndpoint.replace(/\/+$/, '') : '',
     },
     client: { name: c?.name ?? '', address: c?.address ?? '' },
     doc: {
@@ -117,7 +123,7 @@ export async function publishPortal(docId: number): Promise<string> {
 }
 
 export function portalLink(token: string): string {
-  const base = `${location.origin}${location.pathname}#/p/${token}`;
+  const base = `${publicBase()}#/p/${token}`;
   const built = import.meta.env.VITE_FIREBASE_CONFIG as string | undefined;
   if (built) return base;
   const cfg = getFirebaseConfig();
@@ -148,6 +154,15 @@ onSyncAttach(() => {
       if (p.signature && !local.signature) {
         patch.signature = p.signature;
         if (local.type === 'quote' && (local.status === 'draft' || local.status === 'sent')) patch.status = 'accepted';
+      }
+      // Paiements par carte reçus par Stripe → ajoutés à la facture (une seule fois)
+      const fresh = (p.cardPayments ?? []).filter((cp) => !local.payments.some((x) => x.ref === cp.id));
+      if (fresh.length) {
+        const s = await getSettings();
+        const payments = [...local.payments, ...fresh.map((cp) => ({ date: cp.at.slice(0, 10), amount: cp.amount, method: 'Carte de crédit (en ligne)', ref: cp.id, note: 'Payé en ligne par le client (Stripe)' }))];
+        const t = docTotals({ ...local, payments }, s);
+        patch.payments = payments;
+        patch.status = t.balance <= 0.004 ? 'paid' : 'partial';
       }
       if (Object.keys(patch).length) await db.docs.update(local.id, patch);
     }
@@ -196,4 +211,18 @@ export async function loadPortal(token: string, cfgParam: string | null): Promis
 export async function signPortal(token: string, cfgParam: string | null, sig: Signature): Promise<void> {
   const fs = portalFs(cfgParam);
   await updateDoc(doc(fs, 'portal', token), { signature: sig });
+}
+
+/** Démarre le paiement par carte: retourne l'adresse de la page Stripe. */
+export async function startCardPayment(p: PortalData): Promise<string> {
+  const ep = p.company.payEndpoint;
+  if (!ep) throw new Error('Paiement par carte non disponible.');
+  const res = await fetch(`${ep}/createCheckout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: p.token, returnUrl: location.href.replace(/([?&])paid=1&?/, '$1').replace(/[?&]$/, '') }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+  if (!res.ok || !data.url) throw new Error(data.error || 'Paiement impossible pour le moment.');
+  return data.url;
 }

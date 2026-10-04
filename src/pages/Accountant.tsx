@@ -5,6 +5,8 @@ import { SendEmailModal } from '../components/SendEmailModal';
 import { errMsg, useToast } from '../components/Toast';
 import { db } from '../lib/db';
 import { buildAccountantZip } from '../lib/exportZip';
+import { auditPeriod } from '../lib/audit';
+import { AlertTriangle, CircleCheck, XCircle } from 'lucide-react';
 import type { Attachment } from '../lib/gmail';
 import { useSettings } from '../lib/hooks';
 import { docTotals, downloadBlob, formatDate, km, money, toISODate } from '../lib/utils';
@@ -92,6 +94,8 @@ export default function Accountant() {
         </div>
       </div>
 
+      <AuditCard from={from} to={to} />
+
       {stats && (
         <div className="card">
           <h2>2. Aperçu — {formatDate(from)} au {formatDate(to)}</h2>
@@ -131,5 +135,34 @@ export default function Accountant() {
         />
       )}
     </>
+  );
+}
+
+function AuditCard({ from, to }: { from: string; to: string }) {
+  const issues = useLiveQuery(() => auditPeriod(from, to), [from, to]);
+  if (!issues) return null;
+  const errs = issues.filter((i) => i.level === 'erreur');
+  return (
+    <div className="card">
+      <div className="card-head">
+        {issues.length === 0 ? <CircleCheck size={20} color="var(--green)" /> : errs.length ? <XCircle size={20} color="var(--red)" /> : <AlertTriangle size={20} color="var(--amber-ink)" />}
+        <h2>Vérification avant d’envoyer</h2>
+        <span className="spacer" />
+        {issues.length > 0 && <span className={`badge ${errs.length ? 'red' : 'amber'}`}>{issues.length} point{issues.length > 1 ? 's' : ''}</span>}
+      </div>
+      {issues.length === 0 ? (
+        <div className="small">Tout est complet pour cette période: chaque reçu a sa photo, chaque paiement comptant a sa preuve.</div>
+      ) : (
+        <ul className="audit">
+          {issues.slice(0, 30).map((i, k) => (
+            <li key={k}>
+              <span className={`badge ${i.level === 'erreur' ? 'red' : 'amber'}`}>{i.level === 'erreur' ? 'À corriger' : 'À vérifier'}</span>
+              <Link to={i.to}>{i.text}</Link>
+            </li>
+          ))}
+          {issues.length > 30 && <li className="small muted">… et {issues.length - 30} autres</li>}
+        </ul>
+      )}
+    </div>
   );
 }

@@ -6,6 +6,7 @@ import { AddressInput } from '../components/AddressInput';
 import { drivingDistance, geocode, mapsLastError } from '../lib/geo';
 import { configFromLink, deviceLink, getFirebaseConfig, parseFirebaseConfig, resetPassword, saveFirebaseConfig, signInEmail, signInGoogle, signOutSync, useSyncState } from '../lib/sync';
 import { useSearchParams } from 'react-router-dom';
+import { isNative } from '../lib/native';
 import { connectGmail, isGmailConnected } from '../lib/gmail';
 import { downloadBlob, todayISO } from '../lib/utils';
 
@@ -117,6 +118,8 @@ export default function SettingsPage() {
           {txt('vehicle', 'Véhicule (marque, modèle, année)')}
           {txt('kmRateFirst5000', 'Taux $/km (5 000 premiers)', { type: 'number' })}
           {txt('kmRateAfter5000', 'Taux $/km (après 5 000)', { type: 'number' })}
+          {txt('kmCost', 'Coût réel d’un km (rentabilité)', { type: 'number' })}
+          {txt('laborCostPerHour', 'Coût d’une heure de main-d’œuvre (0 = toi)', { type: 'number' })}
         </div>
         <label className="check" style={{ marginTop: 10 }}><input type="checkbox" checked={s.autoTripFromInvoices} onChange={(e) => up({ autoTripFromInvoices: e.target.checked })} /> Ajouter automatiquement le trajet au journal de bord pour chaque facture</label>
         <label className="check"><input type="checkbox" checked={s.autoTripRoundTrip} onChange={(e) => up({ autoTripRoundTrip: e.target.checked })} /> Compter l’aller-retour</label>
@@ -148,6 +151,27 @@ export default function SettingsPage() {
       <MapsSection s={s} up={up} />
 
       <SyncSection />
+
+      <div className="card">
+        <h2>Paiement par carte de crédit (Stripe)</h2>
+        <p className="small muted" style={{ marginTop: 0 }}>Tes clients paient leur facture par carte (ou Apple Pay / Google Pay) directement dans le lien client. Le paiement s’ajoute tout seul à la facture. Frais Stripe: environ 2,9 % + 0,30 $ par paiement (au Québec, la loi interdit de les refacturer au client).</p>
+        <label className="check"><input type="checkbox" checked={s.cardPayments} onChange={(e) => up({ cardPayments: e.target.checked, paymentsEndpoint: s.paymentsEndpoint || defaultEndpoint() })} /> Offrir le paiement par carte dans le lien client</label>
+        {s.cardPayments && (
+          <div className="form-grid" style={{ marginTop: 10 }}>
+            {txt('paymentsEndpoint', 'Adresse du service de paiement', { full: true, placeholder: 'https://northamerica-northeast1-<projet>.cloudfunctions.net' })}
+          </div>
+        )}
+        <details style={{ marginTop: 12 }}>
+          <summary><strong>Comment l’activer (une seule fois)</strong></summary>
+          <ol className="small" style={{ lineHeight: 1.6 }}>
+            <li>Crée un compte sur <a href="https://dashboard.stripe.com/register" target="_blank" rel="noreferrer">stripe.com</a> (Canada, ton compte bancaire d’entreprise).</li>
+            <li>Dans Firebase, passe au forfait <strong>Blaze</strong> (paiement à l’usage; à ton volume, ça reste à 0 $ ou presque).</li>
+            <li>Suis la section « Paiement par carte » du fichier README du projet: elle installe le service de paiement et les règles de sécurité en un clic avec GitHub.</li>
+            <li>Dans Stripe → Développeurs → Webhooks, ajoute l’adresse <code>…/stripeWebhook</code> (événement <code>checkout.session.completed</code>).</li>
+            <li>Coche la case ci-dessus et enregistre.</li>
+          </ol>
+        </details>
+      </div>
 
       <div className="card">
         <h2>Gmail</h2>
@@ -333,7 +357,7 @@ function SyncSection() {
           <div className="row" style={{ marginTop: 10 }}>
             <button className="btn accent" disabled={busy} onClick={() => run(() => signInEmail(email, pw))}>Se connecter</button>
             <button className="btn" disabled={busy} onClick={() => run(() => signInEmail(email, pw, true))}>Créer mon compte</button>
-            <button className="btn" disabled={busy} onClick={() => run(signInGoogle)}>Avec Google</button>
+            {!isNative() && <button className="btn" disabled={busy} onClick={() => run(signInGoogle)}>Avec Google</button>}
             <button className="btn small" disabled={busy || !email} onClick={() => run(async () => { await resetPassword(email); notify('Courriel de réinitialisation envoyé.'); })}>Mot de passe oublié</button>
           </div>
         </>
@@ -363,4 +387,9 @@ function SyncSection() {
       )}
     </div>
   );
+}
+
+function defaultEndpoint(): string {
+  const cfg = getFirebaseConfig();
+  return cfg?.projectId ? `https://northamerica-northeast1-${cfg.projectId}.cloudfunctions.net` : '';
 }

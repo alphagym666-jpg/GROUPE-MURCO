@@ -1,5 +1,5 @@
 import {
-  CalendarDays, Camera, Car, ClipboardList, FileText, Home, Mail, Menu, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Users, Zap, ImagePlus, type LucideIcon,
+  CalendarDays, Camera, FolderOpen, TrendingUp, Car, ClipboardList, FileText, Home, Mail, Menu, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Users, Zap, ImagePlus, type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
@@ -21,6 +21,8 @@ import Express from './pages/Express';
 import GmailPage from './pages/GmailPage';
 import JobEditor from './pages/JobEditor';
 import Logbook from './pages/Logbook';
+import Library from './pages/Library';
+import Reports from './pages/Reports';
 import Portal from './pages/Portal';
 import Services from './pages/Services';
 import SettingsPage from './pages/SettingsPage';
@@ -40,9 +42,11 @@ const NAV: NavItem[] = [
   { to: '/factures', label: 'Factures', short: 'Factures', icon: FileText },
   { to: '/soumissions', label: 'Soumissions', short: 'Soumissions', icon: ClipboardList },
   { to: '/clients', label: 'Clients', short: 'Clients', icon: Users },
+  { to: '/rapports', label: 'Rapports', short: 'Rapports', icon: TrendingUp },
   { to: '/codes', label: 'Codes et prix', short: 'Codes', icon: Tag, sep: true },
   { to: '/km', label: 'Journal de bord', short: 'Km', icon: Car },
   { to: '/depenses', label: 'Reçus et dépenses', short: 'Reçus', icon: Camera },
+  { to: '/classeur', label: 'Classeur', short: 'Classeur', icon: FolderOpen },
   { to: '/gmail', label: 'Gmail', short: 'Gmail', icon: Mail },
   { to: '/comptable', label: 'Dossier comptable', short: 'Comptable', icon: Package },
   { to: '/parametres', label: 'Paramètres', short: 'Paramètres', icon: Settings },
@@ -153,6 +157,8 @@ function Shell() {
             <Route path="/km" element={<Logbook />} />
             <Route path="/depenses" element={<Expenses />} />
             <Route path="/depenses/:id" element={<ExpenseEditor />} />
+            <Route path="/classeur" element={<Library />} />
+            <Route path="/rapports" element={<Reports />} />
             <Route path="/gmail" element={<GmailPage />} />
             <Route path="/comptable" element={<Accountant />} />
             <Route path="/parametres" element={<SettingsPage />} />

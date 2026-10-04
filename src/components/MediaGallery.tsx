@@ -3,6 +3,7 @@ import { Camera, ChevronLeft, ChevronRight, ImagePlus, Share2, Trash2, X } from 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { db, type Media, type MediaKind } from '../lib/db';
 import { addPhotos, KIND_LABEL, type MediaLink } from '../lib/media';
+import { shareFiles } from '../lib/native';
 import { errMsg, useToast } from './Toast';
 
 function useObjectUrl(b?: Blob) {
@@ -133,8 +134,8 @@ export function Lightbox({ list, index, onIndex, onClose }: { list: Media[]; ind
   };
   const share = async () => {
     try {
-      if (file && navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: KIND_LABEL[m.kind] });
-      else if (url) window.open(url, '_blank');
+      const ok = file ? await shareFiles([{ blob: file, name: file.name }], KIND_LABEL[m.kind]) : false;
+      if (!ok && url) window.open(url, '_blank');
     } catch {
       /* partage annulé */
     }

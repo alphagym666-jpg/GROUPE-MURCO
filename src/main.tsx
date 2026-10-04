@@ -6,6 +6,7 @@ import '@fontsource-variable/archivo/wdth.css';
 import '@fontsource-variable/figtree';
 import './styles.css';
 import { applyTheme } from './lib/theme';
+import { isNative } from './lib/native';
 import { seedServices } from './lib/db';
 import { startSync } from './lib/sync';
 import './lib/portal';
@@ -23,7 +24,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 );
 
 // Mode hors-ligne / installation comme application mobile
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+if ('serviceWorker' in navigator && import.meta.env.PROD && !isNative()) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => undefined);
   });

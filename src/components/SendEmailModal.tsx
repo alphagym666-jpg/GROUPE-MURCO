@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { connectGmail, isGmailConnected, mailtoLink, sendEmail, type Attachment } from '../lib/gmail';
 import { useSettings } from '../lib/hooks';
 import { downloadBlob } from '../lib/utils';
+import { isNative, shareFiles } from '../lib/native';
 import { Modal } from './Modal';
 import { errMsg, useToast } from './Toast';
 
@@ -52,6 +53,12 @@ export function SendEmailModal(p: Props) {
   };
 
   const fallback = async () => {
+    // Sur cellulaire: feuille de partage (Gmail, Outlook…) avec la pièce jointe déjà attachée
+    if (p.attachments.length && (await shareFiles(p.attachments.map((a) => ({ blob: a.blob, name: a.filename })), subject, `${body}`))) {
+      await p.onSent({ to, subject });
+      p.onClose();
+      return;
+    }
     p.attachments.forEach((a) => downloadBlob(a.blob, a.filename));
     window.location.href = mailtoLink(to, subject, body + '\n\n(Pièce jointe téléchargée — glisse-la dans le courriel.)');
     await p.onSent({ to, subject });
@@ -61,7 +68,7 @@ export function SendEmailModal(p: Props) {
 
   return (
     <Modal title={p.title ?? 'Envoyer par courriel'} onClose={p.onClose}>
-      {!connected && (
+      {!connected && !isNative() && (
         <div className="notice info">
           {s.googleClientId ? (
             <>
@@ -89,8 +96,8 @@ export function SendEmailModal(p: Props) {
         )}
       </div>
       <div className="row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
-        <button className="btn" onClick={fallback}>Ouvrir dans ma messagerie</button>
-        <button className="btn accent" onClick={send} disabled={!connected || busy}>{busy ? 'Envoi…' : 'Envoyer avec Gmail'}</button>
+        <button className={`btn ${isNative() ? 'accent' : ''}`} onClick={fallback}>{isNative() ? 'Envoyer (Gmail, Outlook…)' : 'Ouvrir dans ma messagerie'}</button>
+        {!isNative() && <button className="btn accent" onClick={send} disabled={!connected || busy}>{busy ? 'Envoi…' : 'Envoyer avec Gmail'}</button>}
       </div>
     </Modal>
   );

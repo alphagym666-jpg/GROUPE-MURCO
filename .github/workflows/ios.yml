@@ -1,0 +1,29 @@
+name: App iPhone (vérification)
+
+# Vérifie que l'app iPhone se compile (simulateur, sans signature).
+# Pour l'App Store: compte Apple Developer requis — voir README, section « App iPhone ».
+on:
+  push:
+    branches: [main, claude/zen-cray-9q339i]
+    paths: ['ios/**', 'src/**', 'package.json', 'capacitor.config.ts', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          VITE_FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
+      - run: npx cap sync ios
+      - name: Compiler pour le simulateur
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -30
