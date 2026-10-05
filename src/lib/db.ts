@@ -363,6 +363,7 @@ export interface Member extends Synced {
   email: string;
   phone: string;
   role: MemberRole;
+  access?: 'pointage' | 'complet'; // employé: app Pointage seulement, ou pointage + agenda et photos
   hourlyCost: number; // coût horaire (salaire + charges)
   commissionRate: number; // % sur les ventes payées
   active: boolean;

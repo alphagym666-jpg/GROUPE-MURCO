@@ -10,7 +10,7 @@ export const PUBLIC_URL = (import.meta.env.VITE_PUBLIC_URL as string | undefined
 
 export function publicBase(): string {
   if (isNative()) return PUBLIC_URL.replace(/\/?$/, '/');
-  return `${location.origin}${location.pathname}`;
+  return `${location.origin}${location.pathname.replace(/[^/]*$/, '')}`; // dossier de l'app (index.html ou pointage.html)
 }
 
 function blobToBase64(b: Blob): Promise<string> {

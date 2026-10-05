@@ -5,6 +5,7 @@ import { PRODUCT } from '../brand';
 import { errMsg, useToast } from '../components/Toast';
 import { tr, useLang } from '../lib/i18n';
 import { getFirebaseConfig, resetPassword, signInEmail, signInGoogle } from '../lib/sync';
+import { isPunchApp } from '../lib/team';
 
 /** Connexion à un compte existant (nouvel appareil, employé, etc.). */
 export default function Login() {
@@ -35,7 +36,7 @@ export default function Login() {
         <Link to="/produit" className="lp-brand"><span className="lp-logo">{PRODUCT.name.slice(0, 1)}</span>{PRODUCT.name}</Link>
       </div>
       <div className="su-card" style={{ maxWidth: 440 }}>
-        <h1>{t('Bon retour!', 'Welcome back!')}</h1>
+        <h1>{isPunchApp() ? t('Pointage', 'Time clock') : t('Bon retour!', 'Welcome back!')}</h1>
         {!configured ? (
           <div className="notice">{t('La connexion n’est pas encore configurée sur cette installation. Va dans Paramètres → Synchronisation.', 'Login is not configured on this installation yet. Go to Settings → Sync.')}</div>
         ) : (
@@ -51,7 +52,11 @@ export default function Login() {
           </form>
         )}
       </div>
-      <p className="su-foot small muted">{t('Pas encore de compte?', 'No account yet?')} <Link to="/demarrer">{t(`Essai gratuit ${PRODUCT.trialDays} jours`, `${PRODUCT.trialDays}-day free trial`)} <ArrowRight size={13} /></Link></p>
+      {isPunchApp() ? (
+        <p className="su-foot small muted">{t('Première fois? Ouvre le lien d’invitation que ton patron t’a envoyé par texto.', 'First time? Open the invitation link your boss texted you.')}</p>
+      ) : (
+        <p className="su-foot small muted">{t('Pas encore de compte?', 'No account yet?')} <Link to="/demarrer">{t(`Essai gratuit ${PRODUCT.trialDays} jours`, `${PRODUCT.trialDays}-day free trial`)} <ArrowRight size={13} /></Link></p>
+      )}
     </div>
   );
 }

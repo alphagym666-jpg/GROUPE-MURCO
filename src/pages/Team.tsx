@@ -94,6 +94,14 @@ function MemberModal({ m, onClose }: { m: Member; onClose: () => void }) {
           </select>
           <span className="small muted" style={{ fontWeight: 400 }}>{ROLE_HELP[x.role]}</span>
         </label>
+        {x.role === 'employe' && (
+          <div className="field full">App de l’employé
+            <div className="su-yn" style={{ marginTop: 4 }}>
+              <button type="button" className={x.access !== 'complet' ? 'on' : ''} onClick={() => up({ access: 'pointage' })}>⏱️ Pointage seulement<br /><small className="muted" style={{ fontWeight: 500 }}>Un gros bouton punch in / out</small></button>
+              <button type="button" className={x.access === 'complet' ? 'on' : ''} onClick={() => up({ access: 'complet' })}>📅 Pointage + jobs<br /><small className="muted" style={{ fontWeight: 500 }}>Son agenda et les photos</small></button>
+            </div>
+          </div>
+        )}
         <label className="field">Coût horaire ($)<input id="mb-cost" type="number" inputMode="decimal" value={x.hourlyCost || ''} onChange={(e) => up({ hourlyCost: Number(e.target.value) })} /></label>
         <label className="field">Commission (%)<input id="mb-com" type="number" inputMode="decimal" value={x.commissionRate || ''} onChange={(e) => up({ commissionRate: Number(e.target.value) })} /></label>
         <div className="field full">Couleur dans l’agenda

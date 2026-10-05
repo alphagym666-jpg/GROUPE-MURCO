@@ -1,8 +1,8 @@
 // Service worker: l'app fonctionne hors-ligne (sur la route, dans un sous-sol sans réseau...).
-const CACHE = 'murco-v2';
+const CACHE = 'murco-v3';
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icon.svg'])));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './pointage.html', './manifest.webmanifest', './pointage.webmanifest', './icon.svg'])));
   self.skipWaiting();
 });
 
@@ -17,7 +17,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== self.location.origin) return; // Gmail, cartes: toujours en ligne
   if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).catch(() => caches.match('./index.html')));
+    e.respondWith(fetch(req).catch(async () => (await caches.match(req)) || caches.match(url.pathname.endsWith('pointage.html') ? './pointage.html' : './index.html')));
     return;
   }
   e.respondWith(

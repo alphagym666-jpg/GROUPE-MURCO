@@ -39,6 +39,8 @@ import Signup from './pages/Signup';
 import Login from './pages/Login';
 import Legal from './pages/Legal';
 import Subscription from './pages/Subscription';
+import PunchApp from './pages/PunchApp';
+import { isPunchApp } from './lib/team';
 import { useBilling } from './lib/billing';
 import { PRODUCT } from './brand';
 import { CompanyMark } from './components/CompanyMark';
@@ -153,12 +155,19 @@ function Gate() {
   const st = useSyncState();
   const booted = useSyncExternalStore(onBooted, isBooted);
   const raw = useLiveQuery(() => db.settings.get('main').then((x) => x ?? null), []);
+  const member = useLiveQuery(() => (st.memberId ? db.members.get(st.memberId) : undefined), [st.memberId]);
+  const punchApp = isPunchApp();
   if (!booted || raw === undefined) return <Splash />;
   const configured = !!(raw && (raw.setupComplete || raw.companyName));
+  // App Pointage (pointage.html) ou employé en accès « Pointage seulement »: le gros bouton, rien d'autre
+  if (configured && (punchApp || (st.role === 'employe' && member?.access !== 'complet' && member !== undefined))) {
+    if (punchApp && (st.status === 'signedout' || st.status === 'off') && !raw?.setupComplete) return <Navigate to="/connexion" replace />;
+    return <PunchApp />;
+  }
   if (configured) return <Shell />;
   if (st.status === 'connecting' || st.status === 'syncing' || (st.status === 'ok' && st.role !== 'owner')) return <Splash text="Chargement de ton entreprise…" />;
   if (st.status === 'ok') return <Navigate to="/demarrer" replace />;
-  return <Navigate to="/produit" replace />;
+  return <Navigate to={punchApp ? '/connexion' : '/produit'} replace />;
 }
 
 function Paywall() {

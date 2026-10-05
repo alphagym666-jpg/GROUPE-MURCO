@@ -27,10 +27,13 @@ export function newInviteCode(): string {
 
 export function blankMember(n = 0): Member {
   return {
-    name: '', email: '', phone: '', role: 'employe', hourlyCost: 25, commissionRate: 0, active: true,
+    name: '', email: '', phone: '', role: 'employe', access: 'pointage', hourlyCost: 25, commissionRate: 0, active: true,
     inviteCode: newInviteCode(), color: MEMBER_COLORS[n % MEMBER_COLORS.length], createdAt: new Date().toISOString(),
   };
 }
+
+/** Lien d'invitation à envoyer à l'employé (app Pointage ou app complète selon son accès). */
+export const isPunchApp = () => typeof location !== 'undefined' && /pointage\.html$/.test(location.pathname);
 
 /** Lien d'invitation à envoyer à l'employé. */
 export function inviteLink(m: Member): string | null {
@@ -38,7 +41,8 @@ export function inviteLink(m: Member): string | null {
   const cfg = getFirebaseConfig();
   if (!ctx || !cfg) return null;
   const c = btoa(JSON.stringify({ apiKey: cfg.apiKey, authDomain: cfg.authDomain, projectId: cfg.projectId, appId: cfg.appId, emulator: cfg.emulator })).replace(/=+$/, '');
-  return `${publicBase()}#/rejoindre?o=${encodeURIComponent(ctx.workspace)}&i=${encodeURIComponent(m.inviteCode)}&c=${encodeURIComponent(c)}`;
+  const page = m.role === 'employe' && m.access !== 'complet' ? 'pointage.html' : ''; // app Pointage seulement
+  return `${publicBase()}${page}#/rejoindre?o=${encodeURIComponent(ctx.workspace)}&i=${encodeURIComponent(m.inviteCode)}&c=${encodeURIComponent(c)}`;
 }
 
 // Le propriétaire publie / retire les invitations quand il modifie un membre

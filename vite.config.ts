@@ -27,5 +27,6 @@ export default defineConfig({
       },
     },
   ],
-  build: { chunkSizeWarningLimit: 2000 },
+  // Deux apps: l'app complète (index.html) et l'app Pointage des employés (pointage.html)
+  build: { chunkSizeWarningLimit: 2000, rollupOptions: { input: { main: 'index.html', pointage: 'pointage.html' } } },
 });

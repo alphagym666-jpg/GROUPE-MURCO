@@ -1,0 +1,17 @@
+{
+  "name": "Pointage — Chantio",
+  "short_name": "Pointage",
+  "description": "Punch in / punch out des employés, relié à l'app de l'entrepreneur.",
+  "start_url": "./pointage.html#/pointage",
+  "scope": "./",
+  "id": "./pointage.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1114",
+  "theme_color": "#157f5b",
+  "lang": "fr-CA",
+  "icons": [
+    { "src": "punch-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "punch-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
