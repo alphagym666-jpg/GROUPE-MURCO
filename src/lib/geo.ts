@@ -185,31 +185,73 @@ export interface AddressSuggestion {
 }
 
 const PHOTON = 'https://photon.komoot.io/api/';
+const CANADA_POST = 'https://ws1.postescanada-canadapost.ca/AddressComplete/Interactive';
+
+/**
+ * Postes Canada AddressComplete: les adresses officielles (comme sur leur site).
+ * L'adresse choisie est ensuite placée sur la carte (Google Maps si une clé existe, sinon OpenStreetMap).
+ */
+async function canadaPostSuggest(key: string, input: string, lastId = ''): Promise<AddressSuggestion[]> {
+  const url = `${CANADA_POST}/Find/v2.10/json3.ws?Key=${encodeURIComponent(key)}&SearchTerm=${encodeURIComponent(input)}&Country=CAN&LanguagePreference=fr&MaxSuggestions=6${lastId ? `&LastId=${encodeURIComponent(lastId)}` : ''}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = (await res.json()) as { Items?: { Id: string; Text: string; Description: string; Next: string; Error?: string }[] };
+  const items = (data.Items ?? []).filter((i) => !i.Error);
+  const out: AddressSuggestion[] = [];
+  for (const it of items) {
+    if (it.Next === 'Find') {
+      // Un immeuble / une rue: on descend d'un niveau pour avoir de vraies adresses
+      if (out.length < 6) out.push(...(await canadaPostSuggest(key, input, it.Id)).slice(0, 6 - out.length));
+      continue;
+    }
+    const label = `${it.Text}, ${it.Description}`.replace(/,\s*$/, '');
+    out.push({
+      label,
+      resolve: async () => {
+        const r = await fetch(`${CANADA_POST}/Retrieve/v2.11/json3.ws?Key=${encodeURIComponent(key)}&Id=${encodeURIComponent(it.Id)}`);
+        const d = (await r.json()) as { Items?: { Line1?: string; City?: string; ProvinceCode?: string; PostalCode?: string; Language?: string }[] };
+        const a = d.Items?.find((x) => x.Language === 'FRE') ?? d.Items?.[0];
+        const full = a ? [a.Line1, a.City, [a.ProvinceCode, a.PostalCode].filter(Boolean).join(' ')].filter(Boolean).join(', ') : label;
+        const g = await geocode(full);
+        return g ? { geo: g.geo, label: full } : null;
+      },
+    });
+    if (out.length >= 6) break;
+  }
+  return out;
+}
 
 /** Suggestions gratuites (OpenStreetMap / Photon), sans clé. Si on a tapé un numéro civique, il est gardé. */
 async function photonSuggest(input: string): Promise<AddressSuggestion[]> {
   const st = await getSettings();
   const near = st.homeGeo ? `&lat=${st.homeGeo.lat}&lon=${st.homeGeo.lon}` : '&lat=45.55&lon=-73.65';
-  const res = await fetch(`${PHOTON}?q=${encodeURIComponent(input)}&limit=8&lang=fr${near}&bbox=-79.8,44.9,-57,62.7`);
-  if (!res.ok) return [];
-  const data = (await res.json()) as { features?: { geometry: { coordinates: [number, number] }; properties: Record<string, string | undefined> }[] };
-  const typedNum = input.trim().match(/^(\d+[a-zA-Z]?)\s/)?.[1];
+  const base = `${PHOTON}?lang=fr${near}&bbox=-79.8,44.9,-57,62.7`;
+  type F = { geometry: { coordinates: [number, number] }; properties: Record<string, string | undefined> };
+  const get = async (q: string, extra = ''): Promise<F[]> => {
+    const res = await fetch(`${base}&limit=15&q=${encodeURIComponent(q)}${extra}`);
+    if (!res.ok) return [];
+    return ((await res.json()) as { features?: F[] }).features ?? [];
+  };
+  const typedNum = input.trim().match(/^(\d+[a-zA-Z]?)[\s,]+(.+)/);
+  // « 1562 Edmond »: les adresses exactes, puis toutes les rues qui ressemblent (avec ton numéro civique)
+  const [exact, streets] = await Promise.all([get(input), typedNum && typedNum[2].trim().length >= 2 ? get(typedNum[2], '&osm_tag=highway') : Promise.resolve([] as F[])]);
   const seen = new Set<string>();
   const out: AddressSuggestion[] = [];
-  for (const f of data.features ?? []) {
+  for (const f of [...exact, ...streets]) {
     const p = f.properties;
     if (p.countrycode && p.countrycode !== 'CA') continue;
     const street = p.street ?? (p.osm_key === 'highway' ? p.name : undefined);
     const city = p.city ?? p.town ?? p.village ?? p.locality ?? p.county;
     if (!street && !city) continue;
-    const num = p.housenumber ?? (street && typedNum ? typedNum : undefined);
+    const num = p.housenumber ?? (street && typedNum ? typedNum[1] : undefined);
     const line1 = street ? `${num ? `${num} ` : ''}${street}` : (p.name ?? '');
     const label = [line1, city, [p.state === 'Québec' || p.state === 'Quebec' ? 'QC' : p.state, p.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-    if (!label || seen.has(label)) continue;
-    seen.add(label);
+    const dedupe = `${line1}|${city}`.toLowerCase();
+    if (!label || seen.has(dedupe)) continue;
+    seen.add(dedupe);
     const geo = { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
     out.push({ label, resolve: async () => ({ geo, label }) });
-    if (out.length >= 5) break;
+    if (out.length >= 10) break;
   }
   return out;
 }
@@ -218,6 +260,15 @@ let sessionToken: unknown = null;
 /** Suggestions d'adresses pendant la saisie: Google Maps si une clé est configurée, sinon OpenStreetMap (gratuit). */
 export async function suggestAddresses(input: string): Promise<AddressSuggestion[]> {
   if (input.trim().length < 3) return [];
+  const cp = (await getSettings()).canadaPostKey?.trim();
+  if (cp) {
+    try {
+      const r = await canadaPostSuggest(cp, input);
+      if (r.length) return r;
+    } catch {
+      /* Postes Canada indisponible: on continue */
+    }
+  }
   const key = await mapsKey();
   if (!key) return photonSuggest(input);
   try {

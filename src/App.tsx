@@ -104,7 +104,7 @@ const MENU_GROUPS: { title: string; items: string[] }[] = [
 
 const PAGE_TITLE: [RegExp, string][] = [
   [/^\/doc\//, 'Facture / soumission'], [/^\/job\//, 'Job'], [/^\/depenses\/.+/, 'Reçu'], [/^\/clients\/.+/, 'Client'],
-  [/^\/projets\/.+/, 'Projet'], [/^\/express/, 'Facture express'], [/^\/dicter/, 'Dicter une job'], [/^\/temps/, 'Feuilles de temps'],
+  [/^\/projets\/.+/, 'Projet'], [/^\/express/, 'Facture express'], [/^\/dicter/, 'Assistant'], [/^\/temps/, 'Feuilles de temps'],
 ];
 /** Où mène « Retour » quand on arrive directement sur une page (lien, notification). */
 const PARENT: [RegExp, string][] = [
@@ -116,7 +116,7 @@ const PARENT: [RegExp, string][] = [
 const isEditorRoute = (p: string) => /^\/(doc|job)\//.test(p) || /^\/depenses\/.+/.test(p);
 
 const QUICK: { label: string; icon: LucideIcon; to: string; roles?: Role[] }[] = [
-  { label: 'Dicter une job', icon: Mic, to: '/dicter' },
+  { label: 'Assistant', icon: Mic, to: '/dicter' },
   { label: 'Facture express', icon: Zap, to: '/express' },
   { label: 'Punch in / out', icon: Clock, to: '/pointage', roles: ['employe', 'vendeur'] },
   { label: 'Planifier un job', icon: CalendarDays, to: '/job/new' },

@@ -28,7 +28,7 @@ const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart
 const cap = (s: string) => s.replace(/\s+/g, ' ').trim().replace(/(^|[\s-])(\p{L})/gu, (_, a, b) => a + b.toUpperCase());
 
 /** Date et heure dites (« demain », « mardi », « le 14 octobre », « à 9 h 30 », « en après-midi »). */
-function findWhen(t: string, today: string): { date: string; time?: string; rest: string } {
+export function findWhen(t: string, today: string): { date: string; time?: string; rest: string } {
   const base = new Date(today + 'T12:00:00');
   let date = today;
   let rest = t;

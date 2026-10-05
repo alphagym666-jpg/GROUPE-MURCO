@@ -14,8 +14,14 @@ import { listen, speechSupported, type Listening } from '../lib/speech';
 import { addDays, docTotals, lineAmount, money, todayISO } from '../lib/utils';
 import { parseDictation } from '../lib/voice';
 import { parseJobCommand } from '../lib/voiceJob';
+import { detectIntent } from '../lib/assistant';
+import { propose, quoteToInvoice, type Outcome, type Proposal, type Step } from '../lib/assistantActions';
+import { ConfirmList } from '../components/ConfirmList';
+import { RelanceModal } from '../components/RelanceModal';
+import { Link } from 'react-router-dom';
 
 const EXAMPLE = '« Véronique Girard, 12 rue des Pins à Laval, entretien de gouttières 60 pieds linéaires mardi à 9 h »';
+const IDEAS = ['Facture la job de Girard', 'Roy a payé comptant', '45 $ d’essence chez Petro-Canada', 'Déplace Roy à vendredi 9 h', 'J’ai fini la job chez Gagnon', 'Mon horaire demain', 'Combien j’ai fait ce mois-ci?', 'Qu’est-ce que j’ai à faire?', 'Relance les factures en retard'];
 
 interface Draft {
   clientId?: number;
@@ -66,9 +72,35 @@ export default function VoiceJob() {
   const up = (p: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...p } : d));
 
   useEffect(() => () => rec.current?.stop(), []);
+  const [prop, setProp] = useState<Proposal | null>(null);
+  const [relanceDoc, setRelanceDoc] = useState<Proposal['relance'] | null>(null);
+
+  const show = (p: Outcome) => {
+    setProp(p);
+    if (p.say) say(p.say);
+  };
+  const doStep = async (step: Step) => {
+    setBusy(true);
+    try {
+      show(await step.run());
+    } catch (e) {
+      notify(errMsg(e), 'err');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const analyse = (text: string) => {
     if (!text.trim()) return;
+    setProp(null);
+    const intent = detectIntent(text, clients, todayISO());
+    if (intent.kind !== 'planifier') {
+      setDraft(null);
+      setDone(null);
+      void propose(intent).then(show).catch((e) => notify(errMsg(e), 'err'));
+      return;
+    }
+    setProp(null);
     const r = parseJobCommand(text, services, clients.map((c) => ({ id: c.id, name: c.name })), todayISO());
     const c = r.clientId ? clients.find((x) => x.id === r.clientId) : undefined;
     const items = r.lines.map((l) => {
@@ -199,14 +231,7 @@ export default function VoiceJob() {
     try {
       // Après une visite, la facture vient de la soumission; sinon, de la job
       if (done.quoteId && done.visit) {
-        const q = (await db.docs.get(done.quoteId))!;
-        if (q.convertedInvoiceId && (await db.docs.get(q.convertedInvoiceId))) return nav(`/doc/${q.convertedInvoiceId}`);
-        const st = await getSettings();
-        const now = new Date().toISOString();
-        const date = todayISO();
-        const invId = await db.docs.add({ ...q, id: undefined, type: 'invoice', number: await takeNextNumber('invoice'), date, dueDate: addDays(date, st.paymentTermsDays), notes: st.invoiceNotes, status: 'draft', payments: [], sourceQuoteId: q.id, signature: undefined, portalToken: undefined, viewedAt: undefined, sentAt: undefined, createdAt: now, updatedAt: now });
-        await db.docs.update(q.id!, { convertedInvoiceId: invId, status: q.status === 'draft' || q.status === 'sent' ? 'accepted' : q.status });
-        return nav(`/doc/${invId}`);
+        return nav(`/doc/${await quoteToInvoice((await db.docs.get(done.quoteId))!)}`);
       }
       nav(`/doc/${await jobToInvoice(done.jobId)}`);
     } catch (e) {
@@ -221,10 +246,27 @@ export default function VoiceJob() {
     <div className="vj">
       <div className="page-head">
         <div>
-          <div className="eyebrow"><Sparkles size={14} /> Commande vocale</div>
-          <h1>Dicte ta job</h1>
+          <div className="eyebrow"><Sparkles size={14} /> Assistant</div>
+          <h1>Qu’est-ce que je fais pour toi?</h1>
         </div>
       </div>
+
+      {prop && (
+        <div className="card vj-prop">
+          <div className="vj-bubble">{prop.say}</div>
+          {(prop.confirm || prop.next?.length || prop.links?.length || prop.relance) && (
+            <div className="vj-done-actions">
+              {prop.confirm && <button className="btn accent big" disabled={busy} onClick={() => void doStep(prop.confirm!)}><Check size={18} /> {prop.confirm.label}</button>}
+              {prop.next?.map((n) => <button key={n.label} className="btn accent" disabled={busy} onClick={() => void doStep(n)}>{n.label}</button>)}
+              {prop.relance && <button className="btn accent" onClick={() => setRelanceDoc(prop.relance)}>Texto ou courriel de relance</button>}
+              {prop.links?.map((l) => <Link key={l.to} className="btn" to={l.to}>{l.label}</Link>)}
+            </div>
+          )}
+          <button className="btn small" style={{ marginTop: 10 }} onClick={() => { setProp(null); setHeard(''); }}>{prop.confirm ? 'Annuler' : 'Autre chose'}</button>
+        </div>
+      )}
+      {prop?.todo && <ConfirmList limit={8} />}
+      {relanceDoc && <RelanceModal doc={relanceDoc} client={clients.find((c) => c.id === relanceDoc.clientId)} onClose={() => setRelanceDoc(null)} />}
 
       {!draft && !done && (
         <div className="card vj-mic">
@@ -234,8 +276,11 @@ export default function VoiceJob() {
             </button>
           )}
           <div className="vj-hint">{listening ? 'J’écoute… touche le micro quand t’as fini.' : speechSupported() ? 'Touche le micro et dis tout d’un coup :' : 'Écris la phrase :'}</div>
-          <div className="small muted">{EXAMPLE}</div>
-          <textarea className="vj-text" value={heard} placeholder="Client, adresse, job, quantités, journée…" onChange={(e) => setHeard(e.target.value)} rows={3} />
+          {!prop && <div className="small muted">Une job: {EXAMPLE}</div>}
+          <div className={`vj-ideas ${prop ? 'hide' : ''}`}>
+            {IDEAS.map((t) => <button key={t} onClick={() => { setHeard(t); analyse(t); }}>{t}</button>)}
+          </div>
+          <textarea className="vj-text" value={heard} placeholder="Dis ou écris ce que tu veux: planifier, facturer, relancer, une dépense…" onChange={(e) => setHeard(e.target.value)} rows={3} />
           {!listening && heard.trim() && <button className="btn accent big" onClick={() => analyse(heard)}><Check size={18} /> Analyser</button>}
         </div>
       )}

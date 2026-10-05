@@ -1,4 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
+import { ConfirmList } from '../components/ConfirmList';
 import { CountUp } from '../components/CountUp';
 import { Modal } from '../components/Modal';
 import { PageHero, Ring } from '../components/PageHero';
@@ -15,6 +16,7 @@ import { OPEN_STAGES } from '../lib/crm';
 import { addDays, docTotals, km, kmAllowance, lineAmount, money, statusClass, statusLabel, todayISO } from '../lib/utils';
 
 export const DASH_TILES: { key: string; label: string }[] = [
+  { key: 'todo', label: 'À confirmer (le travail de bureau préparé pour toi)' },
   { key: 'kpi', label: 'Chiffres clés (ventes, à recevoir, km, taxes)' },
   { key: 'today', label: 'Jobs d’aujourd’hui' },
   { key: 'unpaid', label: 'À encaisser' },
@@ -115,7 +117,7 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
         actions={
           <>
             <button className="agh-btn hide-mobile" onClick={onSearch}><Search size={16} /> Rechercher</button>
-            <button className="agh-btn hide-mobile" onClick={() => nav('/dicter')}><Mic size={16} /> Dicter une job</button>
+            <button className="agh-btn hide-mobile" onClick={() => nav('/dicter')}><Mic size={16} /> Assistant</button>
             <button className="agh-btn hide-mobile" onClick={() => nav('/doc/new?type=quote')}><ClipboardList size={16} /> Soumission</button>
             <button className="agh-btn hide-mobile" onClick={() => nav('/depenses/new')}><Camera size={16} /> Reçu</button>
             <button className="agh-btn icon corner" onClick={() => setTilesOpen(true)} aria-label="Choisir les tuiles" title="Choisir ce qui s’affiche"><LayoutGrid size={17} /></button>
@@ -147,9 +149,10 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
         <button onClick={() => nav('/express')}><Zap size={22} /> Facture express</button>
         <button onClick={() => nav('/job/new')}><CalendarPlus size={22} /> Job</button>
         <button onClick={() => nav('/depenses/new')}><Camera size={22} /> Reçu</button>
-        <button onClick={() => nav('/doc/new?type=quote')}><ClipboardList size={22} /> Soumission</button>
+        <button onClick={() => nav('/dicter')}><Mic size={22} /> Assistant</button>
       </div>
 
+      {show('todo') && <ConfirmList />}
       <Onboarding s={s} />
       {s.setupHidden && missing.length > 0 && <div className="notice">À compléter: <strong>{missing.join(', ')}</strong>. <Link to="/parametres">Paramètres →</Link></div>}
 

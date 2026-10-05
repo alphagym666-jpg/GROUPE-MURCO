@@ -81,6 +81,8 @@ export interface Settings extends Synced {
   paymentsEndpoint: string; // ex.: https://northamerica-northeast1-<projet>.cloudfunctions.net
   // Google Maps (distances et adresses)
   googleMapsKey: string;
+  canadaPostKey?: string; // Postes Canada AddressComplete (adresses officielles pendant la saisie)
+  todoSnooze?: Record<string, string>; // « À confirmer »: éléments remis à plus tard (clé → date de retour)
   // Gmail / Comptable
   googleClientId: string;
   accountantName: string;

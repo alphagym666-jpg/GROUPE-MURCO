@@ -312,6 +312,12 @@ function MapsSection({ s, up }: { s: Settings; up: (p: Partial<Settings>) => voi
         <button className="btn primary" onClick={test}>Tester</button>
         <span className="small">{result}</span>
       </div>
+      <div className="form-grid" style={{ marginTop: 14 }}>
+        <label className="field full">Clé Postes Canada AddressComplete (facultatif)
+          <input value={s.canadaPostKey ?? ''} placeholder="AA11-AA11-AA11-AA11" onChange={(e) => up({ canadaPostKey: e.target.value })} />
+        </label>
+      </div>
+      <p className="small muted">Avec une clé Postes Canada, les adresses proposées pendant la saisie sont les adresses officielles (code postal exact), comme sur le site de Postes Canada. Clé sur <a href="https://www.canadapost-postescanada.ca/ac/" target="_blank" rel="noreferrer">canadapost-postescanada.ca/ac</a>. Sans clé: Google Maps, sinon OpenStreetMap (gratuit).</p>
       <details style={{ marginTop: 12 }}>
         <summary><strong>Comment obtenir la clé (~5 min, gratuit pour ton volume)</strong></summary>
         <ol className="small" style={{ lineHeight: 1.6 }}>
