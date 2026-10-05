@@ -1,4 +1,4 @@
-import {
+import { Mic,
   CalendarDays, Camera, ChevronLeft, Crown, Download, Lock, FolderOpen, TrendingUp, Inbox, Clock, Briefcase, UsersRound, Car, ClipboardList, FileText, Home, LayoutGrid, Mail, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Timer, Users, X, Zap, ImagePlus, type LucideIcon,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -19,6 +19,7 @@ import DocList from './pages/DocList';
 import ExpenseEditor from './pages/ExpenseEditor';
 import Expenses from './pages/Expenses';
 import Express from './pages/Express';
+import VoiceJob from './pages/VoiceJob';
 import GmailPage from './pages/GmailPage';
 import JobEditor from './pages/JobEditor';
 import Logbook from './pages/Logbook';
@@ -103,7 +104,7 @@ const MENU_GROUPS: { title: string; items: string[] }[] = [
 
 const PAGE_TITLE: [RegExp, string][] = [
   [/^\/doc\//, 'Facture / soumission'], [/^\/job\//, 'Job'], [/^\/depenses\/.+/, 'Reçu'], [/^\/clients\/.+/, 'Client'],
-  [/^\/projets\/.+/, 'Projet'], [/^\/express/, 'Facture express'], [/^\/temps/, 'Feuilles de temps'],
+  [/^\/projets\/.+/, 'Projet'], [/^\/express/, 'Facture express'], [/^\/dicter/, 'Dicter une job'], [/^\/temps/, 'Feuilles de temps'],
 ];
 /** Où mène « Retour » quand on arrive directement sur une page (lien, notification). */
 const PARENT: [RegExp, string][] = [
@@ -115,6 +116,7 @@ const PARENT: [RegExp, string][] = [
 const isEditorRoute = (p: string) => /^\/(doc|job)\//.test(p) || /^\/depenses\/.+/.test(p);
 
 const QUICK: { label: string; icon: LucideIcon; to: string; roles?: Role[] }[] = [
+  { label: 'Dicter une job', icon: Mic, to: '/dicter' },
   { label: 'Facture express', icon: Zap, to: '/express' },
   { label: 'Punch in / out', icon: Clock, to: '/pointage', roles: ['employe', 'vendeur'] },
   { label: 'Planifier un job', icon: CalendarDays, to: '/job/new' },
@@ -333,6 +335,7 @@ function Shell() {
             <Route path="/agenda" element={<Agenda />} />
             <Route path="/job/:id" element={<JobEditor />} />
             <Route path="/express" element={<Express />} />
+            <Route path="/dicter" element={<VoiceJob />} />
             <Route path="/factures" element={<DocList type="invoice" />} />
             <Route path="/soumissions" element={<DocList type="quote" />} />
             <Route path="/doc/:id" element={<DocEditor />} />

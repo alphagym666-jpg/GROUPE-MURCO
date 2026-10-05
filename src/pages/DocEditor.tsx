@@ -774,6 +774,7 @@ function ReadySheet({ doc, blob, saved, kind, clientName, phone, total, onClose,
       <div className="ready-actions">
         {phone && <button className="btn accent" disabled={busy} onClick={() => void text()}><MessageSquare size={17} /> Texto au client</button>}
         <button className={`btn ${phone ? '' : 'accent'}`} onClick={onEmail}><Mail size={17} /> Courriel</button>
+        <PortalButton doc={doc} />
         <button className="btn" onClick={onShare}><Share2 size={17} /> Partager</button>
         <button className="btn" onClick={onDownload}><Download size={17} /> Télécharger</button>
         {onPay && <button className="btn" onClick={onPay}><Banknote size={17} /> Payée</button>}

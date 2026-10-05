@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   AlertTriangle, ArrowDown, ArrowUp, Bell, CalendarClock, CalendarDays, Check, ChevronLeft, ChevronRight, Cloud, CloudDrizzle, CloudFog, CloudLightning,
-  CloudRain, CloudSnow, CloudSun, FileText, Inbox, MapPin, Navigation, Palette, Phone, Plus, Repeat, Route, Search, Shuffle, Sun, Timer, Users, type LucideIcon,
+  CloudRain, CloudSnow, CloudSun, FileText, Inbox, MapPin, Mic, Navigation, Palette, Phone, Plus, Repeat, Route, Search, Shuffle, Sun, Timer, Users, type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -270,6 +270,7 @@ export default function Agenda() {
             <button className="agh-btn icon" onClick={() => shift(-1)} aria-label="Précédent"><ChevronLeft size={18} /></button>
             <button className="agh-btn" onClick={() => go(today)}>Aujourd’hui</button>
             <button className="agh-btn icon" onClick={() => shift(1)} aria-label="Suivant"><ChevronRight size={18} /></button>
+            {canEdit && <button className="agh-btn icon" onClick={() => nav('/dicter')} aria-label="Dicter une job" title="Dicter une job"><Mic size={17} /></button>}
             {canEdit && <button className="agh-btn icon" onClick={() => setCustom(true)} aria-label="Personnaliser l’agenda" title="Personnaliser"><Palette size={17} /></button>}
             {canEdit && <button className="agh-btn solid" onClick={() => nav(`/job/new?d=${sel}`)}><Plus size={17} /> Job</button>}
           </div>

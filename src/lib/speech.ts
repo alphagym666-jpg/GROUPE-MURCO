@@ -18,24 +18,62 @@ export function listen(onText: (text: string, final: boolean) => void, onEnd: (e
   const w = window as any;
   const Rec = w.SpeechRecognition || w.webkitSpeechRecognition;
   if (!Rec) return null;
-  const rec = new Rec();
-  rec.lang = 'fr-CA';
-  rec.interimResults = true;
-  rec.continuous = true;
-  let finalText = '';
-  rec.onresult = (e: any) => {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const r = e.results[i];
-      if (r.isFinal) finalText += r[0].transcript + ' ';
-      else interim += r[0].transcript;
-    }
-    onText((finalText + interim).trim(), !interim);
+  // Android (Chrome): le mode continu répète les mots → phrases courtes relancées automatiquement
+  const android = /Android/i.test(navigator.userAgent);
+  let before = ''; // texte des sessions précédentes (Android)
+  let last = '';
+  let stopped = false;
+  let rec: any;
+  const start = () => {
+    rec = new Rec();
+    rec.lang = 'fr-CA';
+    rec.interimResults = true;
+    rec.continuous = !android;
+    rec.onresult = (e: any) => {
+      let fin = '';
+      let interim = '';
+      for (let i = 0; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) fin += r[0].transcript + ' ';
+        else interim += r[0].transcript + ' ';
+      }
+      last = `${before} ${fin}${interim}`.replace(/\s+/g, ' ').trim();
+      onText(last, !interim.trim());
+    };
+    rec.onerror = (e: any) => {
+      if (e.error === 'no-speech' && android && !stopped) return; // silence: on relance
+      stopped = true;
+      onEnd(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Micro refusé: autorise le micro pour cette app (icône du cadenas à côté de l’adresse).' : e.error === 'no-speech' ? 'Je n’ai rien entendu.' : e.error === 'network' ? 'La dictée a besoin d’Internet.' : `Dictée: ${e.error}`);
+    };
+    rec.onend = () => {
+      if (android && !stopped) {
+        before = last;
+        try {
+          start();
+          return;
+        } catch {
+          /* fin */
+        }
+      }
+      if (!stopped) {
+        stopped = true;
+        onEnd();
+      }
+    };
+    rec.start();
   };
-  rec.onerror = (e: any) => onEnd(e.error === 'not-allowed' ? 'Micro refusé: autorise le micro pour cette app.' : e.error === 'no-speech' ? 'Je n’ai rien entendu.' : `Dictée: ${e.error}`);
-  rec.onend = () => onEnd();
-  rec.start();
-  return { stop: () => rec.stop() };
+  start();
+  return {
+    stop: () => {
+      stopped = true;
+      try {
+        rec.stop();
+      } catch {
+        /* déjà arrêté */
+      }
+      onEnd();
+    },
+  };
 }
 
 function listenNative(onText: (text: string, final: boolean) => void, onEnd: (err?: string) => void): Listening {

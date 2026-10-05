@@ -5,7 +5,7 @@ import { PageHero, Ring } from '../components/PageHero';
 import { Onboarding } from '../components/Onboarding';
 import { RelanceModal } from '../components/RelanceModal';
 import {
-  AlertTriangle, Bell, CalendarDays, CalendarPlus, Camera, Car, CircleCheck, ClipboardList, Clock, Eye, FileText, Inbox, LayoutGrid, MapPin, Phone, Plus, Search, Star, Target, TrendingDown, TrendingUp, Zap,
+  AlertTriangle, Bell, Mic, CalendarDays, CalendarPlus, Camera, Car, CircleCheck, ClipboardList, Clock, Eye, FileText, Inbox, LayoutGrid, MapPin, Phone, Plus, Search, Star, Target, TrendingDown, TrendingUp, Zap,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -115,6 +115,7 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
         actions={
           <>
             <button className="agh-btn hide-mobile" onClick={onSearch}><Search size={16} /> Rechercher</button>
+            <button className="agh-btn hide-mobile" onClick={() => nav('/dicter')}><Mic size={16} /> Dicter une job</button>
             <button className="agh-btn hide-mobile" onClick={() => nav('/doc/new?type=quote')}><ClipboardList size={16} /> Soumission</button>
             <button className="agh-btn hide-mobile" onClick={() => nav('/depenses/new')}><Camera size={16} /> Reçu</button>
             <button className="agh-btn icon corner" onClick={() => setTilesOpen(true)} aria-label="Choisir les tuiles" title="Choisir ce qui s’affiche"><LayoutGrid size={17} /></button>

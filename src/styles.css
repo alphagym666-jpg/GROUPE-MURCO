@@ -1256,3 +1256,31 @@ button.agh-ring:hover .fg { stroke: var(--amber-ink); }
 }
 
 @media (max-width: 860px) { .items-table .calc-btn { width: 46px; min-height: 44px; flex: none; } }
+
+/* Commande vocale */
+.vj { max-width: 760px; margin: 0 auto; }
+.vj-mic { display: grid; justify-items: center; gap: 12px; text-align: center; padding: 28px 18px; }
+.vj-btn { width: 96px; height: 96px; border-radius: 50%; border: 0; background: var(--amber); color: var(--on-amber); display: grid; place-items: center; cursor: pointer; box-shadow: 0 8px 24px color-mix(in srgb, var(--amber) 35%, transparent); transition: transform 0.15s; }
+.vj-btn:active { transform: scale(0.95); }
+.vj-btn.on { background: var(--red); color: #fff; box-shadow: 0 0 0 0 color-mix(in srgb, var(--red) 40%, transparent); animation: vj-ring 1.4s ease-out infinite; }
+@keyframes vj-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--red) 40%, transparent); } 100% { box-shadow: 0 0 0 22px transparent; } }
+.vj-hint { font-weight: 600; font-size: 1.05rem; }
+.vj-text { width: 100%; font-size: 1rem; }
+.vj-said { font-style: italic; }
+.vj-found { display: flex; align-items: center; gap: 8px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px dashed color-mix(in srgb, var(--green) 55%, var(--line)); background: color-mix(in srgb, var(--green) 6%, var(--surface)); color: var(--ink); font: inherit; font-size: 0.9rem; cursor: pointer; }
+.vj-found svg { color: var(--green); flex: none; }
+.vj-found .vj-use { margin-left: auto; font-weight: 700; color: var(--green); }
+.vj-total { display: flex; justify-content: space-between; align-items: baseline; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.vj-total b { font-family: var(--font-display); font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.vj-actions { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 20px; }
+.vj-done { text-align: center; padding: 28px 18px; }
+.vj-ok { width: 56px; height: 56px; border-radius: 50%; margin: 0 auto 8px; display: grid; place-items: center; background: color-mix(in srgb, var(--green) 12%, var(--surface)); color: var(--green); }
+.vj-done-actions { display: grid; gap: 8px; max-width: 380px; margin: 14px auto 0; }
+.vj-done-actions .btn { justify-content: center; min-height: 46px; }
+@media (max-width: 860px) {
+  .vj-actions { position: sticky; bottom: calc(76px + var(--sab)); background: var(--bg); padding: 10px 0; }
+  .vj-actions .btn.big { flex: 1; justify-content: center; }
+}
+.vj-ask { display: grid; justify-items: center; gap: 12px; text-align: center; padding: 24px 18px; }
+.vj-bubble { position: relative; padding: 12px 16px; border-radius: 16px 16px 16px 4px; background: var(--surface-2); border: 1px solid var(--line); font-weight: 600; font-size: 1.05rem; }
+.vj-btn.small { width: 72px; height: 72px; }
