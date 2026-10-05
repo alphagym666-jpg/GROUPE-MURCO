@@ -1,6 +1,7 @@
-import { Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_AGENDA, saveAgendaPrefs, THEMES, useAgendaPrefs, type AgendaPrefs, type ColorBy, type Density } from '../lib/agendaPrefs';
+import { DEFAULT_AGENDA, JOB_COLORS, saveAgendaPrefs, useAgendaPrefs, type AgendaPrefs, type ColorBy, type Density } from '../lib/agendaPrefs';
+import { JOB_ICONS, jobIcon } from '../lib/jobIcons';
 import { useSettings } from '../lib/hooks';
 import { Modal } from './Modal';
 
@@ -29,6 +30,7 @@ export function AgendaCustomize({ onClose }: { onClose: () => void }) {
   const s = useSettings();
   const saved = useAgendaPrefs();
   const [p, setP] = useState<AgendaPrefs>(saved);
+  const [openRow, setOpenRow] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const latest = useRef(s);
   latest.current = s;
@@ -48,18 +50,6 @@ export function AgendaCustomize({ onClose }: { onClose: () => void }) {
     <Modal title="Personnaliser l’agenda" onClose={onClose}>
       <div className="agc">
         <section>
-          <h3>Thème du bandeau</h3>
-          <div className="agc-themes">
-            {THEMES.map((t) => (
-              <button key={t.key} className={p.theme === t.key ? 'on' : ''} onClick={() => set({ theme: t.key })} aria-pressed={p.theme === t.key}>
-                <span style={{ background: t.css }} />
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section>
           <h3>Couleur des jobs selon</h3>
           <div className="fix-chips">
             {COLOR_BY.map((c) => <button key={c.key} className={p.colorBy === c.key ? 'on' : ''} onClick={() => set({ colorBy: c.key })}>{c.label}</button>)}
@@ -70,16 +60,35 @@ export function AgendaCustomize({ onClose }: { onClose: () => void }) {
         <section>
           <h3>Types de jobs</h3>
           <div className="agc-types">
-            {p.types.map((t, i) => (
-              <div key={t.key} className="agc-type" style={{ ['--c' as string]: t.color }}>
-                <input className="emo" value={t.emoji} maxLength={4} aria-label="Émoji" onChange={(e) => setType(i, { emoji: e.target.value })} />
-                <input value={t.label} aria-label="Nom du type" onChange={(e) => setType(i, { label: e.target.value })} />
-                <input type="color" value={t.color} aria-label={`Couleur de ${t.label}`} onChange={(e) => setType(i, { color: e.target.value })} />
-                <button className="btn small icon-btn" aria-label={`Retirer ${t.label}`} onClick={() => set({ types: p.types.filter((_, k) => k !== i) })} disabled={p.types.length <= 1}><Trash2 size={14} /></button>
-              </div>
-            ))}
+            {p.types.map((t, i) => {
+              const Icon = jobIcon(t.icon);
+              return (
+                <div key={t.key} className={`agc-type ${openRow === i ? 'open' : ''}`} style={{ ['--c' as string]: t.color }}>
+                  <div className="agc-type-row">
+                    <button type="button" className="agc-type-pick" aria-label={`Icône et couleur de ${t.label}`} aria-expanded={openRow === i} onClick={() => setOpenRow(openRow === i ? null : i)}>
+                      <span className="agc-ico"><Icon size={16} /></span>
+                      <ChevronDown size={14} />
+                    </button>
+                    <input value={t.label} aria-label="Nom du type" onChange={(e) => setType(i, { label: e.target.value })} />
+                    <button className="btn small icon-btn" aria-label={`Retirer ${t.label}`} onClick={() => { setOpenRow(null); set({ types: p.types.filter((_, k) => k !== i) }); }} disabled={p.types.length <= 1}><Trash2 size={14} /></button>
+                  </div>
+                  {openRow === i && (
+                    <div className="agc-type-panel">
+                      <div className="agc-icons" role="radiogroup" aria-label="Icône">
+                        {Object.entries(JOB_ICONS).filter(([k]) => k !== 'circle').map(([k, I]) => (
+                          <button key={k} type="button" role="radio" aria-checked={t.icon === k} aria-label={k} className={t.icon === k ? 'on' : ''} onClick={() => setType(i, { icon: k })}><I size={16} /></button>
+                        ))}
+                      </div>
+                      <div className="agc-colors" role="radiogroup" aria-label="Couleur">
+                        {JOB_COLORS.map((c) => <button key={c} type="button" role="radio" aria-checked={t.color === c} aria-label={`Couleur ${c}`} className={t.color === c ? 'on' : ''} style={{ background: c }} onClick={() => setType(i, { color: c })} />)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          <button className="btn small" style={{ marginTop: 8 }} onClick={() => set({ types: [...p.types, { key: `t${Date.now().toString(36)}`, label: 'Nouveau type', emoji: '⭐', color: '#14b8a6' }] })}><Plus size={14} /> Ajouter un type</button>
+          <button className="btn small" style={{ marginTop: 8 }} onClick={() => set({ types: [...p.types, { key: `t${Date.now().toString(36)}`, label: 'Nouveau type', icon: 'circle', color: JOB_COLORS[p.types.length % JOB_COLORS.length] }] })}><Plus size={14} /> Ajouter un type</button>
         </section>
 
         <section className="agc-grid">

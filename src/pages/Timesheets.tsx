@@ -64,7 +64,7 @@ export default function Timesheets() {
           </>
         }
       >
-        <div className="agh-eyebrow" style={{ marginTop: 16, marginBottom: 8 }}><span className="live-dot" /> En ce moment</div>
+        <div className="agh-label"><span className="live-dot" /> En ce moment</div>
         {data.onSite.length === 0 ? (
           <div className="agh-sub">Personne n’est pointé en ce moment.</div>
         ) : (

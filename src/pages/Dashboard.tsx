@@ -110,7 +110,7 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
     <>
       <PageHero
         eyebrow={new Date().toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' })}
-        title={<>{hello}{s.ownerName ? ` ${s.ownerName.split(' ')[0]}` : ''}</>}
+        title={<>{hello}{s.ownerName ? `, ${s.ownerName.split(' ')[0]}` : ''}</>}
         sub={plannedToday ? `${plannedToday} job${plannedToday > 1 ? 's' : ''} au programme aujourd’hui${overdue.length ? ` · ${overdue.length} facture${overdue.length > 1 ? 's' : ''} en retard` : ''}` : overdue.length ? `${overdue.length} facture${overdue.length > 1 ? 's' : ''} en retard à relancer` : 'Journée libre — bon moment pour relancer tes soumissions.'}
         actions={
           <>
@@ -134,7 +134,7 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
             <div>
               <b><CountUp value={monthNow} format={money} /></b>
               <span>ce mois-ci</span>
-              {delta !== null && <span className={delta >= 0 ? 'up' : 'down'}>{delta >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />} {delta >= 0 ? '+' : ''}{delta} % vs mois passé</span>}
+              {delta !== null && <span className={delta >= 0 ? 'up' : 'down'}>{delta >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />} {delta >= 0 ? '+' : ''}{delta} %<em className="hide-mobile">&nbsp;vs mois passé</em></span>}
             </div>
             {goal > 0 && <div><b>{money(Math.max(0, goal - monthNow))}</b><span>{monthNow >= goal ? 'objectif atteint 🎉' : monthNow >= expected ? 'à faire · en avance' : 'à faire · en retard'}</span></div>}
             <Link to="/factures"><div><b>{money(sum(unpaid, 'balance'))}</b><span>à recevoir</span></div></Link>

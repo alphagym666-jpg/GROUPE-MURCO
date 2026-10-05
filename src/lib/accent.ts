@@ -1,7 +1,7 @@
 // Couleur de l'entreprise: appliquée à toute l'app (boutons, bandeaux), aux PDF et à la page client.
 
 export const DEFAULT_ACCENT = '#e0901f';
-export const ACCENT_SWATCHES = ['#e0901f', '#e4572e', '#d6336c', '#7c3aed', '#2563eb', '#0891b2', '#0f9d6c', '#65a30d', '#ca8a04', '#334155'];
+export const ACCENT_SWATCHES = ['#e0901f', '#c2410c', '#9f1239', '#1e3a8a', '#2563eb', '#0e7490', '#0f766e', '#3f6212', '#5b21b6', '#1f2937'];
 const KEY = 'murco.accent';
 
 type RGB = [number, number, number];

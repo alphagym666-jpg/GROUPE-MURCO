@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { AlertTriangle, Banknote, Bell, ChevronRight, CircleCheck, Plus } from 'lucide-react';
+import { Banknote, Bell, ChevronRight, Plus } from 'lucide-react';
 import { CountUp } from '../components/CountUp';
 import { PageHero, Ring } from '../components/PageHero';
 import { celebrate } from '../lib/feel';
@@ -97,13 +97,13 @@ export default function DocList({ type }: { type: DocType }) {
               <>
                 <div><b>{money(paidMonth)}</b><span>encaissé ce mois</span></div>
                 <div><b>{money(billedMonth)}</b><span>facturé ce mois</span></div>
-                {late.length > 0 && <button className="agh-stat-btn warn" onClick={() => setFilter('late')}><b><AlertTriangle size={15} /> {money(bal(late))}</b><span>en retard · voir</span></button>}
+                {late.length > 0 && <button className="agh-stat-btn warn" onClick={() => setFilter('late')}><b>{money(bal(late))}</b><span>en retard</span></button>}
               </>
             ) : (
               <>
                 <div><b>{won.length}</b><span>acceptée{won.length > 1 ? 's' : ''}</span></div>
                 <div><b>{money(billedMonth)}</b><span>soumis ce mois</span></div>
-                {open.length > 0 && <button className="agh-stat-btn" onClick={() => setFilter('sent')}><b><CircleCheck size={15} /> {open.length}</b><span>à relancer · voir</span></button>}
+                {open.length > 0 && <button className="agh-stat-btn" onClick={() => setFilter('sent')}><b>{open.length}</b><span>à relancer</span></button>}
               </>
             )}
           </div>

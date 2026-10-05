@@ -6,17 +6,16 @@ import { useSettings } from './hooks';
 export interface JobType {
   key: string;
   label: string;
-  emoji: string;
+  icon?: string; // clé de JOB_ICONS
+  emoji?: string; // ancien format (ignoré)
   color: string;
 }
 
 export type ColorBy = 'employe' | 'type' | 'statut' | 'client';
-export type AgendaTheme = 'auto' | 'marque' | 'aurore' | 'ocean' | 'foret' | 'braise' | 'graphite';
 export type Density = 'compact' | 'normal' | 'aere';
 
 export interface AgendaPrefs {
   colorBy: ColorBy;
-  theme: AgendaTheme;
   startHour: number;
   endHour: number;
   weekends: boolean;
@@ -27,17 +26,21 @@ export interface AgendaPrefs {
   types: JobType[];
 }
 
+/** Palette sobre (lisible sur fond clair et sombre, jamais criarde). */
+export const JOB_COLORS = ['#3d5a99', '#2f7d6d', '#a4572b', '#6b5b95', '#9b3d4a', '#4a7a35', '#8a6d2c', '#2d6e8e', '#5f6b7a'];
+
 export const DEFAULT_TYPES: JobType[] = [
-  { key: 'entretien', label: 'Entretien', emoji: '🧽', color: '#0ea5a4' },
-  { key: 'installation', label: 'Installation', emoji: '🔧', color: '#6d5dfc' },
-  { key: 'reparation', label: 'Réparation', emoji: '🛠️', color: '#f97316' },
-  { key: 'estimation', label: 'Estimation', emoji: '📋', color: '#2563eb' },
-  { key: 'urgence', label: 'Urgence', emoji: '🚨', color: '#e11d48' },
+  { key: 'entretien', label: 'Entretien', icon: 'sparkles', color: '#2f7d6d' },
+  { key: 'installation', label: 'Installation', icon: 'wrench', color: '#3d5a99' },
+  { key: 'reparation', label: 'Réparation', icon: 'hammer', color: '#a4572b' },
+  { key: 'estimation', label: 'Estimation', icon: 'clipboard', color: '#5f6b7a' },
+  { key: 'urgence', label: 'Urgence', icon: 'siren', color: '#9b3d4a' },
 ];
+// Premières couleurs offertes (trop vives): remplacées par la palette sobre
+const OLD_DEFAULT: Record<string, string> = { '#0ea5a4': '#2f7d6d', '#6d5dfc': '#3d5a99', '#f97316': '#a4572b', '#2563eb': '#5f6b7a', '#e11d48': '#9b3d4a', '#14b8a6': '#2f7d6d' };
 
 export const DEFAULT_AGENDA: AgendaPrefs = {
   colorBy: 'employe',
-  theme: 'auto',
   startHour: 6,
   endHour: 21,
   weekends: true,
@@ -48,45 +51,11 @@ export const DEFAULT_AGENDA: AgendaPrefs = {
   types: DEFAULT_TYPES,
 };
 
-export const THEMES: { key: AgendaTheme; label: string; css: string }[] = [
-  { key: 'auto', label: 'Selon la météo', css: 'linear-gradient(135deg, #f7b733, #fc4a1a 45%, #4a6cf7)' },
-  { key: 'marque', label: 'Ma couleur', css: 'linear-gradient(135deg, color-mix(in srgb, var(--amber) 70%, #fff), var(--amber) 45%, color-mix(in srgb, var(--amber) 50%, #000))' },
-  { key: 'aurore', label: 'Aurore', css: 'linear-gradient(135deg, #ff9a5a, #ff5e8a 50%, #8b5cf6)' },
-  { key: 'ocean', label: 'Océan', css: 'linear-gradient(135deg, #12c2e9, #2b6ef2 55%, #3d2ea8)' },
-  { key: 'foret', label: 'Forêt', css: 'linear-gradient(135deg, #a8e063, #1f9d6c 50%, #0d5546)' },
-  { key: 'braise', label: 'Braise', css: 'linear-gradient(135deg, #f6d365, #f0912a 45%, #c2362f)' },
-  { key: 'graphite', label: 'Graphite', css: 'linear-gradient(135deg, #5b6170, #2a2e36 55%, #15171b)' },
-];
-
-/** Thème « auto »: la couleur du bandeau suit la météo du jour. */
-export function themeFor(theme: AgendaTheme, weatherKind?: string): string {
-  if (theme !== 'auto') return THEMES.find((t) => t.key === theme)!.css;
-  switch (weatherKind) {
-    case 'soleil':
-      return 'linear-gradient(135deg, #ffcf5a, #ff8a3d 50%, #f0577a)';
-    case 'nuageux':
-      return 'linear-gradient(135deg, #ffc76b, #f28a5c 45%, #5b7bd5)';
-    case 'pluie':
-    case 'bruine':
-    case 'orage':
-      return 'linear-gradient(135deg, #5f8cd8, #3a4f9e 55%, #262c55)';
-    case 'neige':
-      return 'linear-gradient(135deg, #b9e3ff, #7aa7f0 50%, #5a63c8)';
-    case 'couvert':
-    case 'brouillard':
-      return 'linear-gradient(135deg, #8f9bb3, #5b6684 55%, #343a52)';
-    default:
-      return THEMES.find((t) => t.key === 'aurore')!.css;
-  }
-}
-
 export const DENSITY_PX: Record<Density, number> = { compact: 40, normal: 52, aere: 68 };
 
-/** Couleurs vives pour « couleur par client ». */
-const VIVID = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#a855f7', '#ec4899'];
-export const clientColor = (id: number) => VIVID[Math.abs(id) % VIVID.length];
+export const clientColor = (id: number) => JOB_COLORS[Math.abs(id) % JOB_COLORS.length];
 
-export const STATUS_COLOR: Record<string, string> = { planifie: '#3b82f6', fait: '#16a34a', facture: '#8b8f98', annule: '#9ca3af' };
+export const STATUS_COLOR: Record<string, string> = { planifie: '#3d5a99', fait: '#2f7d6d', facture: '#8a8f98', annule: '#a3a7ae' };
 
 /** Type deviné à partir de la description quand la job n'en a pas. */
 export function guessType(j: Pick<Job, 'title' | 'type'>, types: JobType[]): JobType | undefined {
@@ -104,8 +73,13 @@ export function guessType(j: Pick<Job, 'title' | 'type'>, types: JobType[]): Job
 }
 
 export function agendaPrefs(s: Settings): AgendaPrefs {
-  const a = { ...DEFAULT_AGENDA, ...(s.agenda ?? {}) };
+  const a = { ...DEFAULT_AGENDA, ...(s.agenda ?? {}) } as AgendaPrefs;
   if (!a.types?.length) a.types = DEFAULT_TYPES;
+  a.types = a.types.map((t) => ({
+    ...t,
+    icon: t.icon ?? DEFAULT_TYPES.find((d) => d.key === t.key)?.icon ?? 'circle',
+    color: OLD_DEFAULT[t.color?.toLowerCase()] ?? t.color,
+  }));
   if (a.endHour <= a.startHour) a.endHour = Math.min(24, a.startHour + 1);
   return a;
 }

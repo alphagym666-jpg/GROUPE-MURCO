@@ -6,11 +6,13 @@ import {
 import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { JobDoneSheet } from '../components/JobDoneSheet';
+import { Ring } from '../components/PageHero';
 import { Modal } from '../components/Modal';
 import { ReminderModal } from '../components/ReminderModal';
 import { errMsg, useToast } from '../components/Toast';
 import { AgendaCustomize } from '../components/AgendaCustomize';
-import { clientColor, DENSITY_PX, guessType, STATUS_COLOR, themeFor, useAgendaPrefs, type AgendaPrefs, type JobType } from '../lib/agendaPrefs';
+import { clientColor, DENSITY_PX, guessType, STATUS_COLOR, useAgendaPrefs, type AgendaPrefs, type JobType } from '../lib/agendaPrefs';
+import { jobIcon } from '../lib/jobIcons';
 import { completeJob, dayRouteLink, ensureDayRoute, JOB_STATUS_LABEL, jobToInvoice, optimizeDay, syncDayRoute } from '../lib/agenda';
 import { OPEN_STAGES } from '../lib/crm';
 import { db, saveSettings, type Client, type Job, type Lead, type Member } from '../lib/db';
@@ -258,8 +260,7 @@ export default function Agenda() {
 
   return (
     <>
-      <section className="ag-hero" style={{ background: themeFor(prefs.theme, heroW ? weatherKind(heroW.code) : undefined) }}>
-        <div className="agh-orb a" /><div className="agh-orb b" />
+      <section className="ag-hero">
         <div className="agh-top">
           <div className="agh-title">
             <div className="agh-eyebrow"><CalendarDays size={14} /> {view === 'jour' && sel === today ? greet : 'Agenda'}</div>
@@ -275,10 +276,7 @@ export default function Agenda() {
         </div>
         {view !== 'liste' && (
           <div className="agh-row">
-            <div className="agh-ring" aria-label={`${doneN} sur ${inRange.length} jobs terminés`}>
-              <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" className="bg" /><circle cx="32" cy="32" r="27" className="fg" style={{ strokeDasharray: `${(inRange.length ? doneN / inRange.length : 0) * 169.6} 169.6` }} /></svg>
-              <span><b>{doneN}</b>/{inRange.length}</span>
-            </div>
+            <Ring value={inRange.length ? doneN / inRange.length : 0} label={`${doneN} sur ${inRange.length} jobs terminés`}><b>{doneN}/{inRange.length}</b>faits</Ring>
             <div className="agh-stats">
               <div><b>{inRange.length}</b><span>job{inRange.length > 1 ? 's' : ''}</span></div>
               <div><b>{hoursTxt(periodMin)}</b><span>prévues</span></div>
@@ -286,23 +284,23 @@ export default function Agenda() {
               {conflictIds.size > 0 && <div className="warn"><b><AlertTriangle size={15} /> {conflictIds.size}</b><span>en conflit</span></div>}
               {unassigned > 0 && <div className="warn"><b>{unassigned}</b><span>sans employé</span></div>}
             </div>
+            {(current || next) && (
+              <Link to={`/job/${(current ?? next)!.id}`} className="agh-next">
+                <Timer size={15} style={{ flex: 'none' }} />
+                <span>
+                  {current
+                    ? <>En cours : <b>{data.clients.get(current.clientId)?.name ?? 'Client'}</b> jusqu’à {fmtMin(toMin(current.time) + (current.durationMin || 60))}</>
+                    : <>Prochain : <b>{data.clients.get(next!.clientId)?.name ?? 'Client'}</b> à {next!.time} · dans {hoursTxt(toMin(next!.time) - nowMin)}</>}
+                </span>
+              </Link>
+            )}
             {heroW && HeroIcon && (
               <div className="agh-wx">
-                <HeroIcon size={34} />
+                <HeroIcon size={22} />
                 <div><b>{heroW.tmax}°</b><span>{WEATHER_LABEL[weatherKind(heroW.code)]}{heroW.pop ? ` · ${heroW.pop} %` : ''}</span></div>
               </div>
             )}
           </div>
-        )}
-        {(current || next) && (
-          <Link to={`/job/${(current ?? next)!.id}`} className="agh-next">
-            <Timer size={15} style={{ flex: 'none' }} />
-            <span>
-              {current
-                ? <>En cours : <b>{data.clients.get(current.clientId)?.name ?? 'Client'}</b> jusqu’à {fmtMin(toMin(current.time) + (current.durationMin || 60))}</>
-                : <>Prochain : <b>{data.clients.get(next!.clientId)?.name ?? 'Client'}</b> à {next!.time} · dans {hoursTxt(toMin(next!.time) - nowMin)}</>}
-            </span>
-          </Link>
         )}
       </section>
 
@@ -395,13 +393,13 @@ function JobBlock({ ctx, j, style, compact = false, short = false, i = 0 }: { ct
       style={{ ...style, ['--c' as string]: ctx.colorOf(j), ['--i' as string]: i }} {...ctx.dragProps(j)}>
       {compact ? (
         <span className="jb-t">
-          {t && <span className="jb-emo" aria-hidden>{t.emoji}</span>}
+          {t && <TypeIcon t={t} />}
           {j.time && <span className="jb-time">{j.time}</span>}
           <strong>{c?.name ?? 'Client'}</strong>
         </span>
       ) : (
         <>
-          {(t || j.time) && <span className="jb-t">{t && <span className="jb-emo" aria-hidden>{t.emoji}</span>}{j.time && <span className="jb-time">{j.time}{end ? `–${end}` : ''}</span>}</span>}
+          {(t || j.time) && <span className="jb-t">{t && <TypeIcon t={t} />}{j.time && <span className="jb-time">{j.time}{end ? `–${end}` : ''}</span>}</span>}
           <strong className="jb-name">{c?.name ?? 'Client'}</strong>
         </>
       )}
@@ -416,6 +414,11 @@ function JobBlock({ ctx, j, style, compact = false, short = false, i = 0 }: { ct
       {ctx.conflictIds.has(j.id!) && <AlertTriangle size={12} className="jb-warn" aria-label="Conflit d’horaire" />}
     </Link>
   );
+}
+
+function TypeIcon({ t }: { t: JobType }) {
+  const I = jobIcon(t.icon);
+  return <I size={12} className="type-ico" aria-label={t.label} style={{ ['--tc' as string]: t.color }} />;
 }
 
 function LeadItem({ l }: { l: Lead }) {
@@ -596,7 +599,8 @@ function DayView({ ctx, date, jobs, trips, busy, run, s, onRemind, onPostpone, i
                     <div className="stop">{j.status === 'planifie' ? i + 1 : <Check size={16} />}</div>
                     <div className="body">
                       <div className="row" style={{ gap: 6 }}>
-                        <Link to={`/job/${j.id}`} className="title" style={{ color: 'var(--ink)' }}>{ctx.typeOf(j) && <span className="jc-emo">{ctx.typeOf(j)!.emoji}</span>}{c?.name ?? 'Client'}</Link>
+                        <Link to={`/job/${j.id}`} className="title" style={{ color: 'var(--ink)' }}>{c?.name ?? 'Client'}</Link>
+                        {ctx.typeOf(j) && <span className="type-tag" style={{ ['--c' as string]: ctx.typeOf(j)!.color }}><TypeIcon t={ctx.typeOf(j)!} />{ctx.typeOf(j)!.label}</span>}
                         {j.time && <span className="badge gray">{j.time}{j.durationMin ? ` · ${hoursTxt(j.durationMin)}` : ''}</span>}
                         <span className={`badge ${j.status === 'planifie' ? 'blue' : j.status === 'fait' ? 'green' : 'gray'}`}>{JOB_STATUS_LABEL[j.status]}</span>
                         {ctx.conflictIds.has(j.id!) && <span className="badge red"><AlertTriangle size={11} /> Conflit</span>}
@@ -701,7 +705,7 @@ function MonthView({ ctx, month, sel, today, byDay, sortDay, onPick }: { ctx: Ct
                 {list.slice(0, 3).map((j) => (
                   <span key={j.id} className={`chip ${j.status} ${ctx.conflictIds.has(j.id!) ? 'conflict' : ''}`} style={{ ['--c' as string]: ctx.colorOf(j) }}
                     onClick={(e) => { e.stopPropagation(); ctx.nav(`/job/${j.id}`); }} {...ctx.dragProps(j)}>
-                    {ctx.typeOf(j)?.emoji ? `${ctx.typeOf(j)!.emoji} ` : ''}{j.time ? `${j.time} ` : ''}{ctx.data.clients.get(j.clientId)?.name ?? j.title}
+                    {j.time ? `${j.time} ` : ''}{ctx.data.clients.get(j.clientId)?.name ?? j.title}
                   </span>
                 ))}
                 {leads.length > 0 && <span className="chip lead">{leads.length} relance{leads.length > 1 ? 's' : ''}</span>}
@@ -718,7 +722,7 @@ function MonthView({ ctx, month, sel, today, byDay, sortDay, onPick }: { ctx: Ct
             {ctx.data.memberList.filter((m) => m.role !== 'vendeur').map((m) => <span key={m.id}><span className="dot" style={{ background: ctx.memberColor(m) }} /> {m.name.split(' ')[0]}</span>)}
           </>
         )}
-        {ctx.prefs.colorBy === 'type' && ctx.prefs.types.map((t) => <span key={t.key}><span className="dot" style={{ background: t.color }} /> {t.emoji} {t.label}</span>)}
+        {ctx.prefs.colorBy === 'type' && ctx.prefs.types.map((t) => <span key={t.key}><span className="dot" style={{ background: t.color }} /> {t.label}</span>)}
         {ctx.prefs.colorBy === 'statut' && (['planifie', 'fait', 'facture'] as const).map((k) => <span key={k}><span className="dot" style={{ background: STATUS_COLOR[k] }} /> {JOB_STATUS_LABEL[k]}</span>)}
         {ctx.canEdit && <span className="hide-mobile">· Glisse un job sur une autre journée pour le déplacer</span>}
       </div>

@@ -19,30 +19,17 @@ export function haptic(kind: Kind = 'light') {
   }
 }
 
-/** Petite pluie de confettis (facture payée, objectif atteint). Rien si l'appareil demande moins d'animations. */
+/** Confirmation discrète (facture payée): un crochet qui se dessine, puis disparaît. */
 export function celebrate() {
+  haptic('success');
   try {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const root = document.createElement('div');
-    root.className = 'confetti';
+    root.className = 'done-pop';
     root.setAttribute('aria-hidden', 'true');
-    const accent = getComputedStyle(document.documentElement).getPropertyValue('--amber').trim() || '#e0901f';
-    const colors = [accent, '#22c55e', '#3b82f6', '#ec4899', '#facc15', '#a855f7'];
-    for (let i = 0; i < 48; i++) {
-      const p = document.createElement('i');
-      const angle = (Math.random() - 0.5) * Math.PI * 0.9;
-      const dist = 140 + Math.random() * 260;
-      p.style.setProperty('--x', `${Math.sin(angle) * dist}px`);
-      p.style.setProperty('--y', `${-Math.cos(angle) * dist - 60}px`);
-      p.style.setProperty('--r', `${(Math.random() - 0.5) * 720}deg`);
-      p.style.background = colors[i % colors.length];
-      p.style.animationDelay = `${Math.random() * 90}ms`;
-      if (i % 3 === 0) p.style.borderRadius = '50%';
-      root.appendChild(p);
-    }
+    root.innerHTML = '<div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>';
     document.body.appendChild(root);
-    haptic('success');
-    setTimeout(() => root.remove(), 1700);
+    setTimeout(() => root.remove(), 1300);
   } catch {
     /* ignore */
   }

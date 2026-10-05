@@ -40,7 +40,7 @@ export function BrandColorCard({ value, logo, company, onChange }: { value?: str
         {logo && <button className="btn small" disabled={busy} onClick={() => void fromLogo()}><Sparkles size={14} /> Prendre la couleur du logo</button>}
       </div>
       <div className="brand-preview" aria-hidden>
-        <div className="bp-hero"><span>Bon matin!</span><b>{company || 'Ton entreprise'}</b></div>
+        <div className="bp-hero"><span>Tableau de bord</span><b>{company || 'Ton entreprise'}</b></div>
         <div className="bp-doc">
           <div className="bp-line" />
           <div className="bp-rows"><i /><i /><i /></div>

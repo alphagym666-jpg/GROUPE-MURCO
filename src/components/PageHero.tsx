@@ -5,8 +5,7 @@ export function PageHero({ eyebrow, title, sub, actions, children, background }:
   eyebrow?: ReactNode; title: ReactNode; sub?: ReactNode; actions?: ReactNode; children?: ReactNode; background?: string;
 }) {
   return (
-    <section className={`ag-hero ${background ? '' : 'hero-brand'}`} style={background ? { background } : undefined}>
-      <div className="agh-orb a" /><div className="agh-orb b" />
+    <section className="ag-hero" style={background ? { background } : undefined}>
       <div className="agh-top">
         <div className="agh-title">
           {eyebrow && <div className="agh-eyebrow">{eyebrow}</div>}

@@ -9,7 +9,8 @@ import { LineItems } from '../components/LineItems';
 import { MediaGallery } from '../components/MediaGallery';
 import { ReminderModal } from '../components/ReminderModal';
 import { errMsg, useConfirm, useToast } from '../components/Toast';
-import { guessType, useAgendaPrefs } from '../lib/agendaPrefs';
+import { guessType, JOB_COLORS, useAgendaPrefs } from '../lib/agendaPrefs';
+import { jobIcon } from '../lib/jobIcons';
 import { blankJob, completeJob, JOB_STATUS_LABEL, jobToInvoice, RECURRENCE_LABEL, syncDayRoute } from '../lib/agenda';
 import { db, type Job, type JobStatus, type Recurrence } from '../lib/db';
 import { directionsLink } from '../lib/geo';
@@ -189,7 +190,7 @@ export default function JobEditor() {
                   const on = (j.type ?? guessType(j, prefs.types)?.key) === t.key;
                   return (
                     <button key={t.key} type="button" className={`chip-btn type-chip ${on ? 'on' : ''}`} style={{ ['--c' as string]: t.color }} onClick={() => up({ type: j.type === t.key ? undefined : t.key })}>
-                      <span aria-hidden>{t.emoji}</span> {t.label}
+                      {(() => { const I = jobIcon(t.icon); return <I size={14} className="type-ico" style={{ ['--tc' as string]: t.color }} />; })()} {t.label}
                     </button>
                   );
                 })}
@@ -197,8 +198,8 @@ export default function JobEditor() {
               <div className="row small muted" style={{ gap: 8, marginTop: 8 }}>
                 Couleur dans l’agenda
                 <span className="swatches" style={{ marginTop: 0 }}>
-                  {['', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899'].map((c) => (
-                    <button key={c || 'auto'} type="button" className={`sw ${(j.color ?? '') === c ? 'on' : ''}`} style={{ background: c || 'conic-gradient(#ef4444, #eab308, #22c55e, #3b82f6, #8b5cf6, #ef4444)' }} aria-label={c ? `Couleur ${c}` : 'Couleur automatique'} title={c ? c : 'Automatique'} onClick={() => up({ color: c || undefined })} />
+                  {['', ...JOB_COLORS].map((c) => (
+                    <button key={c || 'auto'} type="button" className={`sw ${c ? '' : 'auto'} ${(j.color ?? '') === c ? 'on' : ''}`} style={{ background: c || 'var(--surface)' }} aria-label={c ? `Couleur ${c}` : 'Couleur automatique'} title={c ? c : 'Automatique'} onClick={() => up({ color: c || undefined })} />
                   ))}
                 </span>
               </div>

@@ -16,7 +16,7 @@ import { useSettings } from '../lib/hooks';
 import { useSyncState } from '../lib/sync';
 import { addDays, downloadBlob, money, todayISO } from '../lib/utils';
 
-const STAGE_COLOR: Record<string, string> = { nouveau: '#f59e0b', contacte: '#3b82f6', visite: '#8b5cf6', soumission: '#ec4899', gagne: '#16a34a', perdu: '#9ca3af' };
+const STAGE_COLOR: Record<string, string> = { nouveau: '#b7791f', contacte: '#3d5a99', visite: '#6b5b95', soumission: '#2d6e8e', gagne: '#2f7d6d', perdu: '#a3a7ae' };
 
 const age = (iso: string) => {
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
@@ -85,18 +85,18 @@ export default function Leads() {
         <div className="agh-row">
           <Ring big value={(stats.rate ?? 0) / 100} label="Taux de conversion sur 90 jours"><b>{stats.rate === null ? '—' : `${stats.rate} %`}</b>gagnées</Ring>
           <div className="agh-stats">
-            <div><b>{stats.month}</b><span>nouvelle{stats.month > 1 ? 's' : ''} ce mois<em className="hide-mobile">{stats.bySource.length ? ` · ${stats.bySource.slice(0, 2).map(([k, v]) => `${SOURCE_LABEL[k as LeadSource]} ${v}`).join(', ')}` : ''}</em></span></div>
-            <div className={stats.due ? 'warn' : ''}><b><Bell size={14} /> {stats.due}</b><span>à relancer</span></div>
+            <div><b>{stats.month}</b><span>nouvelle{stats.month > 1 ? 's' : ''} ce mois</span>{stats.bySource.length > 0 && <span className="note hide-mobile">{stats.bySource.slice(0, 2).map(([k, v]) => `${SOURCE_LABEL[k as LeadSource]} ${v}`).join(' · ')}</span>}</div>
+            <div className={stats.due ? 'warn' : ''}><b>{stats.due}</b><span>à relancer</span></div>
             <div><b>{money(stats.pipeline)}</b><span>en jeu</span></div>
           </div>
         </div>
         {(() => {
           const open = STAGES.filter((st) => OPEN_STAGES.includes(st.key)).map((st) => ({ ...st, n: leads.filter((l) => l.stage === st.key).length }));
-          const n = open.reduce((a, x) => a + x.n, 0);
-          if (!n) return null;
+          if (!open.some((x) => x.n)) return null;
           return (
             <div className="funnel" aria-label="Demandes ouvertes par étape">
-              {open.filter((x) => x.n).map((x) => <span key={x.key} style={{ flex: x.n, background: STAGE_COLOR[x.key] }} title={`${x.label}: ${x.n}`}>{x.n}<em>&nbsp;{x.label.toLowerCase()}</em></span>)}
+              <div className="funnel-bar">{open.filter((x) => x.n).map((x) => <span key={x.key} style={{ flex: x.n, background: STAGE_COLOR[x.key] }} />)}</div>
+              <div className="funnel-legend">{open.map((x) => <span key={x.key}><i style={{ background: STAGE_COLOR[x.key] }} />{x.label} <b>{x.n}</b></span>)}</div>
             </div>
           );
         })()}
@@ -111,7 +111,7 @@ export default function Leads() {
           const list = leads.filter((l) => l.stage === col.key);
           return (
             <section key={col.key} className="board-col" style={{ ['--c' as string]: STAGE_COLOR[col.key] }}>
-              <div className="board-head"><span className="board-count">{list.length}</span> {col.label}</div>
+              <div className="board-head"><span className="stage-dot" style={{ background: STAGE_COLOR[col.key] }} />{col.label}<span className="board-count">{list.length}</span></div>
               {list.length === 0 && <div className="small muted" style={{ padding: 8 }}>—</div>}
               {list.map((l) => {
                 const late = l.nextAction && l.nextAction <= today && OPEN_STAGES.includes(l.stage);
