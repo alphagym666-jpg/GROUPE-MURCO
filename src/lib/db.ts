@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import type { AgendaPrefs } from './agendaPrefs';
 
 export interface GeoPoint {
   lat: number;
@@ -63,6 +64,7 @@ export interface Settings extends Synced {
   setupHidden?: boolean; // liste « Démarrage » masquée
   trade?: string; // métier choisi au démarrage (modèle de codes et prix)
   setupComplete?: boolean; // assistant de démarrage terminé
+  agenda?: Partial<AgendaPrefs>; // personnalisation de l'agenda
   wantedPlan?: string; // forfait choisi sur la page de vente
   accountCreatedAt?: string; // création du compte du propriétaire (début de l'essai; employés compris)
   invoiceNotesEn?: string; // textes en anglais (clients anglophones)
@@ -211,6 +213,8 @@ export interface Job extends Synced {
   remindedAt?: string;
   assignees?: number[]; // employés assignés (membres)
   projectId?: number;
+  type?: string; // type de job (couleur + émoji dans l'agenda)
+  color?: string; // couleur choisie à la main
   createdAt: string;
 }
 
