@@ -1319,3 +1319,11 @@ button.agh-ring:hover .fg { stroke: var(--amber-ink); }
 .vj-ideas button { padding: 7px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 0.82rem; cursor: pointer; }
 .vj-ideas button:hover { border-color: var(--line-strong); background: var(--surface-2); }
 .vj-ideas.hide { display: none; }
+.mic-ctl { display: grid; justify-items: center; gap: 8px; }
+.mic-label { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
+.mic-label.on { background: var(--red); border-color: var(--red); color: #fff; }
+.rec-dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: pa-pulse-soft 1s ease-in-out infinite; }
+@keyframes pa-pulse-soft { 50% { opacity: 0.35; } }
+.ex-dict { display: grid; justify-items: center; gap: 10px; text-align: center; }
+.ex-heard { font-size: 1.1rem; }
+.page-head .mic-label { flex: none; }

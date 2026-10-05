@@ -41,12 +41,13 @@ export function listen(onText: (text: string, final: boolean) => void, onEnd: (e
       onText(last, !interim.trim());
     };
     rec.onerror = (e: any) => {
-      if (e.error === 'no-speech' && android && !stopped) return; // silence: on relance
+      if ((e.error === 'no-speech' || e.error === 'aborted') && !stopped) return; // silence: on relance (onend)
       stopped = true;
       onEnd(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Micro refusé: autorise le micro pour cette app (icône du cadenas à côté de l’adresse).' : e.error === 'no-speech' ? 'Je n’ai rien entendu.' : e.error === 'network' ? 'La dictée a besoin d’Internet.' : `Dictée: ${e.error}`);
     };
     rec.onend = () => {
-      if (android && !stopped) {
+      // On écoute jusqu'à ce que la personne appuie sur « Arrêter » (une pause ne coupe plus la dictée)
+      if (!stopped) {
         before = last;
         try {
           start();
@@ -78,33 +79,49 @@ export function listen(onText: (text: string, final: boolean) => void, onEnd: (e
 
 function listenNative(onText: (text: string, final: boolean) => void, onEnd: (err?: string) => void): Listening {
   let stopped = false;
+  let ended = false;
+  let before = '';
+  let last = '';
   let handles: { remove: () => Promise<void> }[] = [];
   let SR: any;
   const finish = async (err?: string) => {
-    if (stopped) return;
+    if (ended) return;
+    ended = true;
     stopped = true;
     await Promise.all(handles.map((h) => h.remove()));
     onEnd(err);
   };
+  const go = () => SR.start({ language: 'fr-CA', partialResults: true, popup: false, maxResults: 1 }).catch(() => undefined);
   (async () => {
     try {
       SR = (await import('@capacitor-community/speech-recognition')).SpeechRecognition;
       const { available } = await SR.available();
       if (!available) return finish('La dictée n’est pas disponible sur ce téléphone.');
       const perm = await SR.requestPermissions();
-      if (perm.speechRecognition !== 'granted') return finish('Micro refusé: autorise le micro pour Murco dans les réglages.');
+      if (perm.speechRecognition !== 'granted') return finish('Micro refusé: autorise le micro pour l’app dans les réglages.');
       handles = [
-        await SR.addListener('partialResults', (d: { matches: string[] }) => d.matches?.[0] && onText(d.matches[0], false)),
-        await SR.addListener('listeningState', (d: { status: string }) => d.status === 'stopped' && finish()),
+        await SR.addListener('partialResults', (d: { matches: string[] }) => {
+          if (!d.matches?.[0]) return;
+          last = `${before} ${d.matches[0]}`.replace(/\s+/g, ' ').trim();
+          onText(last, false);
+        }),
+        // Le téléphone coupe après une pause: on relance tant qu'on n'a pas appuyé sur « Arrêter »
+        await SR.addListener('listeningState', (d: { status: string }) => {
+          if (d.status !== 'stopped') return;
+          if (stopped) return void finish();
+          before = last;
+          setTimeout(go, 150);
+        }),
       ];
-      await SR.start({ language: 'fr-CA', partialResults: true, popup: false, maxResults: 1 });
+      await go();
     } catch (e) {
       finish(e instanceof Error ? e.message : String(e));
     }
   })();
   return {
     stop: () => {
-      void SR?.stop().finally(() => finish());
+      stopped = true;
+      void SR?.stop().catch(() => undefined).finally(() => finish());
     },
   };
 }

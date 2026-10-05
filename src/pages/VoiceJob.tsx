@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { CalendarCheck, CalendarDays, Check, ClipboardList, FileText, MapPin, Mic, MicOff, RotateCcw, Sparkles, UserPlus } from 'lucide-react';
+import { CalendarCheck, CalendarDays, Check, ClipboardList, FileText, MapPin, Mic, RotateCcw, Sparkles, UserPlus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AddressInput } from '../components/AddressInput';
@@ -13,11 +13,13 @@ import { useSettings } from '../lib/hooks';
 import { listen, speechSupported, type Listening } from '../lib/speech';
 import { addDays, docTotals, lineAmount, money, todayISO } from '../lib/utils';
 import { parseDictation } from '../lib/voice';
-import { parseJobCommand } from '../lib/voiceJob';
+import { findWhen, parseJobCommand } from '../lib/voiceJob';
+import { wordsToNumbers } from '../lib/voice';
 import { detectIntent } from '../lib/assistant';
 import { propose, quoteToInvoice, type Outcome, type Proposal, type Step } from '../lib/assistantActions';
 import { ConfirmList } from '../components/ConfirmList';
 import { RelanceModal } from '../components/RelanceModal';
+import { MicButton } from '../components/MicButton';
 import { Link } from 'react-router-dom';
 
 const EXAMPLE = '« Véronique Girard, 12 rue des Pins à Laval, entretien de gouttières 60 pieds linéaires mardi à 9 h »';
@@ -35,22 +37,61 @@ interface Draft {
   items: LineItem[];
   quote: boolean;
   kind: 'visite' | 'job';
+  docType: 'quote' | 'invoice';
+  dateSaid: boolean;
+  noJob: boolean; // soumission sans journée planifiée
+  addrIncomplete: boolean;
 }
 
-const QUESTION = 'OK! C’est quoi la job pour la soumission?';
+type Slot = 'name' | 'address' | 'job' | 'date';
 
-/** L'app pose la question à voix haute (si le téléphone le permet). */
-function say(text: string) {
+const QUESTIONS: Record<Slot, (d: Draft) => string> = {
+  name: () => 'C’est pour quel client?',
+  address: (d) => (d.address ? `L’adresse, c’est ${d.address}… quoi au juste?` : 'À quelle adresse?'),
+  job: (d) => (d.kind === 'visite' ? 'OK! C’est quoi la job pour la soumission?' : d.docType === 'invoice' ? 'C’est quoi la job à facturer?' : 'C’est quoi la job?'),
+  date: () => 'C’est pour quand?',
+};
+const EXAMPLES: Record<Slot, string> = {
+  name: 'ex.: « Nathalie Bouchard »',
+  address: 'ex.: « 1835 rue des Érables à Laval »',
+  job: 'ex.: « 50 pieds de gouttières à laver »',
+  date: 'ex.: « jeudi à 10 h » — ou « pas de date »',
+};
+
+const hasWork = (d: Draft) => d.items.some((it) => it.code || it.unitPrice || it.description.trim());
+/** Prochaine info manquante (une question à la fois). */
+function nextSlot(d: Draft): Slot | null {
+  if (!d.clientId && !d.name.trim()) return 'name';
+  if (!d.address.trim() || d.addrIncomplete) return 'address';
+  if (!hasWork(d)) return 'job';
+  if (d.docType !== 'invoice' && !d.dateSaid) return 'date';
+  return null;
+}
+
+/** L'app parle (si le téléphone le permet), puis appelle « then » quand elle a fini. */
+function say(text: string, then?: () => void) {
+  let called = false;
+  const once = () => {
+    if (!called && then) {
+      called = true;
+      then();
+    }
+  };
   try {
-    const u = new SpeechSynthesisUtterance(text.replace('’', "'"));
+    const u = new SpeechSynthesisUtterance(text.replace(/’/g, "'"));
     u.lang = 'fr-CA';
     u.rate = 1.05;
+    u.onend = once;
+    u.onerror = once;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
+    // Certains Android n'annoncent jamais la fin: on rouvre le micro quand même
+    if (then) setTimeout(once, 900 + text.length * 70);
   } catch {
-    /* pas de voix */
+    once();
   }
 }
+const capName = (t: string) => t.trim().replace(/[.!?]+$/, '').replace(/(^|[\s-])(\p{L})/gu, (_, a, b) => a + b.toUpperCase());
 
 /** Une phrase → client, job planifiée et soumission prête (puis la facture d'un bouton). */
 export default function VoiceJob() {
@@ -64,9 +105,11 @@ export default function VoiceJob() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [found, setFound] = useState<{ label: string; geo: GeoPoint } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ jobId: number; quoteId?: number; date: string; time: string; total: number; number?: string; visit: boolean } | null>(null);
+  const [done, setDone] = useState<{ jobId?: number; quoteId?: number; invoiceId?: number; date: string; time: string; total: number; number?: string; visit: boolean } | null>(null);
   const rec = useRef<Listening | null>(null);
-  const [ask, setAsk] = useState(false);
+  const [slot, setSlot] = useState<Slot | null>(null);
+  const voiceMode = useRef(false);
+  const listeningRef = useRef(false); // on parle: après chaque question, le micro se rouvre tout seul
   const [answer, setAnswer] = useState('');
   const target = useRef<'cmd' | 'answer'>('cmd');
   const up = (p: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...p } : d));
@@ -94,7 +137,12 @@ export default function VoiceJob() {
     if (!text.trim()) return;
     setProp(null);
     const intent = detectIntent(text, clients, todayISO());
-    if (intent.kind !== 'planifier') {
+    // « Facture pour Nathalie Bouchard… » (nouveau client): on crée tout
+    // Le nom dit ne correspond à aucun client (« Nathalie Bouchard » ≠ « Clinique Bouchard »): nouveau client
+    const pj = parseJobCommand(text, services, clients.map((c) => ({ id: c.id, name: c.name })), todayISO());
+    const spokenNew = pj.isNew && pj.clientName.split(' ').length >= 2;
+    const create = intent.kind === 'planifier' || (intent.kind === 'facturer' && ((!intent.clientId && /\b(pour|chez|a|à)\s+\p{L}/iu.test(text)) || spokenNew));
+    if (!create) {
       setDraft(null);
       setDone(null);
       void propose(intent).then(show).catch((e) => notify(errMsg(e), 'err'));
@@ -116,28 +164,49 @@ export default function VoiceJob() {
       date: r.date,
       time: r.time ?? '',
       durationMin: 120,
-      items: items.length ? items : [{ code: '', description: r.leftovers.join(' ') || '', quantity: 1, unitPrice: 0 }],
+      items: items.length ? items : r.kind !== 'visite' && r.leftovers.join(' ').trim().length > 3 ? [{ code: '', description: r.leftovers.join(' '), quantity: 1, unitPrice: 0 }] : [],
       quote: true,
       kind: r.kind,
+      docType: r.docType,
+      dateSaid: r.dateSaid,
+      noJob: false,
+      addrIncomplete: r.addressIncomplete,
     };
-    setDraft(d);
-    // Visite (ou job sans travaux compris): on demande ce qu'il y a à faire pour la soumission
-    if (r.kind === 'visite' || !items.length) {
-      setAsk(true);
-      setAnswer('');
-      say(QUESTION);
-    }
     setFound(null);
-    // Adresse dite → l'adresse exacte qui existe, proposée d'un toucher
-    if (r.address) void suggestAddresses(r.address).then((list) => list[0]?.resolve()).then((g) => g && setFound({ label: g.label, geo: g.geo })).catch(() => undefined);
+    setDone(null);
+    proceed(d);
+    // Adresse dite → l'adresse exacte qui existe
+    if (r.address && !r.addressIncomplete) autoAddress(r.address);
   };
 
-  const mic = (to: 'cmd' | 'answer' = 'cmd') => {
-    if (listening) {
-      rec.current?.stop();
+  /** Adresse dite → la première adresse qui existe, appliquée tout de suite (modifiable). */
+  const autoAddress = (spoken: string) => {
+    void suggestAddresses(spoken).then((list) => list[0]?.resolve()).then((g) => {
+      if (g) setDraft((x) => (x && (x.address === spoken || !x.geo) ? { ...x, address: g.label, geo: g.geo, addrIncomplete: false } : x));
+    }).catch(() => undefined);
+  };
+
+  /** Met à jour le brouillon et pose la prochaine question qui manque (ou montre le résumé). */
+  const proceed = (d: Draft) => {
+    if (d.docType === 'invoice') d = { ...d, quote: false };
+    setDraft(d);
+    const next = nextSlot(d);
+    setSlot(next);
+    setAnswer('');
+    if (next) {
+      say(QUESTIONS[next](d), () => { if (voiceMode.current && speechSupported()) mic('answer', true); });
+    } else {
+      say(d.docType === 'invoice' ? 'Parfait. Vérifie, puis crée la facture.' : 'Parfait. Vérifie, puis confirme.');
+    }
+  };
+
+  const mic = (to: 'cmd' | 'answer' = 'cmd', auto = false) => {
+    if (listeningRef.current) {
+      if (!auto) rec.current?.stop();
       return;
     }
     target.current = to;
+    voiceMode.current = true;
     if (to === 'cmd') {
       setHeard('');
       setDone(null);
@@ -146,12 +215,14 @@ export default function VoiceJob() {
     const r = listen(
       (text) => (to === 'cmd' ? setHeard(text) : setAnswer(text)),
       (err) => {
+        listeningRef.current = false;
         setListening(false);
-        if (err) notify(err, 'err');
+        if (err && !(auto && /rien entendu/.test(err))) notify(err, 'err');
       },
     );
     if (!r) return notify('La dictée n’est pas disponible sur ce navigateur — écris la phrase dans la case.', 'err');
     rec.current = r;
+    listeningRef.current = true;
     setListening(true);
   };
 
@@ -166,19 +237,40 @@ export default function VoiceJob() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listening]);
 
-  /** Réponse à « c'est quoi la job? » → lignes de la soumission. */
+  /** Réponse à la question posée → on remplit, puis prochaine question. */
   const applyAnswer = (text: string) => {
-    if (!text.trim() || !draft) return;
-    const r = parseDictation(text, services, []);
-    const c = draft.clientId ? clients.find((x) => x.id === draft.clientId) : undefined;
-    const items = r.lines.map((l) => {
-      const sv = services.find((x) => x.code === l.code)!;
-      return lineFromService(sv, l.quantity, c?.lang ?? 'fr');
-    });
-    if (r.leftovers.length) items.push({ code: '', description: r.leftovers.join(' '), quantity: 1, unitPrice: 0 });
-    up({ items: items.length ? items : [{ code: '', description: text.trim(), quantity: 1, unitPrice: 0 }], quote: true });
-    setAsk(false);
-    if (!r.lines.length) notify('Je n’ai pas reconnu de service: vérifie la ligne et le prix.', 'err');
+    if (!text.trim() || !draft || !slot) return;
+    const t = text.trim();
+    if (slot === 'name') {
+      const r = parseJobCommand(`pour ${t}`, services, clients.map((c) => ({ id: c.id, name: c.name })), todayISO());
+      const c = r.clientId ? clients.find((x) => x.id === r.clientId) : undefined;
+      const patch: Partial<Draft> = c ? { clientId: c.id, name: c.name, address: draft.address || c.address, geo: draft.address ? draft.geo : c.geo } : { name: r.clientName || capName(t) };
+      if (r.address && !draft.address) Object.assign(patch, { address: r.address, addrIncomplete: r.addressIncomplete });
+      proceed({ ...draft, ...patch });
+      if (r.address && !r.addressIncomplete) autoAddress(r.address);
+      return;
+    }
+    if (slot === 'address') {
+      const spoken = t.replace(/^(?:c est |c'est |au |à |a )/i, '').replace(/\b(\d{1,3})[-\s](\d{2,3})\b(?=\s+\D)/, '$1$2');
+      // « des Érables » seulement: on complète l'adresse déjà dite
+      const full = /^\d/.test(spoken) || !draft.address ? spoken : `${draft.address} ${spoken}`.replace(/\s+/g, ' ');
+      proceed({ ...draft, address: full, geo: undefined, addrIncomplete: false });
+      autoAddress(full);
+      return;
+    }
+    if (slot === 'job') {
+      const r = parseDictation(t, services, []);
+      const c = draft.clientId ? clients.find((x) => x.id === draft.clientId) : undefined;
+      const items = r.lines.map((l) => lineFromService(services.find((x) => x.code === l.code)!, l.quantity, c?.lang ?? 'fr'));
+      if (r.leftovers.length) items.push({ code: '', description: r.leftovers.join(' '), quantity: 1, unitPrice: 0 });
+      if (!r.lines.length) notify('Je n’ai pas reconnu de service: vérifie la ligne et le prix.', 'err');
+      proceed({ ...draft, items: items.length ? items : [{ code: '', description: t, quantity: 1, unitPrice: 0 }] });
+      return;
+    }
+    // date
+    if (/\b(pas de date|plus tard|sais pas|je ne sais pas|aucune|non)\b/i.test(t)) return proceed({ ...draft, dateSaid: true, noJob: true });
+    const w = findWhen(wordsToNumbers(t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()), todayISO());
+    proceed({ ...draft, date: w.date, time: w.time ?? draft.time, dateSaid: true, noJob: false });
   };
 
   const create = async () => {
@@ -198,6 +290,34 @@ export default function VoiceJob() {
       const work = items.map((it) => it.description).filter(Boolean).join(' + ');
       const title = work || 'Job';
       const visit = draft.kind === 'visite';
+      if (draft.docType === 'invoice') {
+        const date = todayISO();
+        const number = await takeNextNumber('invoice');
+        const invoiceId = await db.docs.add({
+          type: 'invoice', number, clientId, date, dueDate: addDays(date, st.paymentTermsDays), jobDate: date, jobAddress: draft.address.trim(), jobGeo: draft.geo, title, items,
+          applyTps: st.chargeTaxes, applyTvq: st.chargeTaxes, notes: st.invoiceNotes, status: 'draft', payments: [], createdAt: now, updatedAt: now,
+        });
+        const total = docTotals({ items, applyTps: st.chargeTaxes, applyTvq: st.chargeTaxes, payments: [] }, st).total;
+        setDone({ invoiceId, date, time: '', total, number, visit: false });
+        say(`La facture ${number} de ${Math.round(total)} dollars est prête.`);
+        setDraft(null);
+        setHeard('');
+        return;
+      }
+      if (draft.noJob) {
+        const date = todayISO();
+        const number = await takeNextNumber('quote');
+        const quoteId = await db.docs.add({
+          type: 'quote', number, clientId, date, dueDate: addDays(date, st.quoteValidityDays), jobDate: date, jobAddress: draft.address.trim(), jobGeo: draft.geo, title, items,
+          applyTps: st.chargeTaxes, applyTvq: st.chargeTaxes, notes: st.quoteNotes, status: 'draft', payments: [], createdAt: now, updatedAt: now,
+        });
+        const total = docTotals({ items, applyTps: st.chargeTaxes, applyTvq: st.chargeTaxes, payments: [] }, st).total;
+        setDone({ quoteId, date, time: '', total, number, visit: false });
+        say(`La soumission ${number} est prête.`);
+        setDraft(null);
+        setHeard('');
+        return;
+      }
       const jobId = await db.jobs.add({
         ...blankJob(draft.date, clientId), time: draft.time, durationMin: visit ? Math.min(draft.durationMin, 60) : draft.durationMin,
         address: draft.address.trim(), geo: draft.geo, title: visit ? `Visite d’estimation${work ? ` — ${work}` : ''}` : title,
@@ -229,11 +349,13 @@ export default function VoiceJob() {
   const invoice = async () => {
     if (!done) return;
     try {
+      if (done.invoiceId) return nav(`/doc/${done.invoiceId}`);
+      if (!done.jobId) return nav(`/doc/${await quoteToInvoice((await db.docs.get(done.quoteId!))!)}`);
       // Après une visite, la facture vient de la soumission; sinon, de la job
       if (done.quoteId && done.visit) {
         return nav(`/doc/${await quoteToInvoice((await db.docs.get(done.quoteId))!)}`);
       }
-      nav(`/doc/${await jobToInvoice(done.jobId)}`);
+      nav(`/doc/${await jobToInvoice(done.jobId!)}`);
     } catch (e) {
       notify(errMsg(e), 'err');
     }
@@ -271,11 +393,9 @@ export default function VoiceJob() {
       {!draft && !done && (
         <div className="card vj-mic">
           {speechSupported() && (
-            <button className={`vj-btn ${listening ? 'on' : ''}`} onClick={() => mic('cmd')} aria-label={listening ? 'Arrêter' : 'Parler'}>
-              {listening ? <MicOff size={34} /> : <Mic size={34} />}
-            </button>
+            <MicButton listening={listening} onClick={() => mic('cmd')} />
           )}
-          <div className="vj-hint">{listening ? 'J’écoute… touche le micro quand t’as fini.' : speechSupported() ? 'Touche le micro et dis tout d’un coup :' : 'Écris la phrase :'}</div>
+          <div className="vj-hint">{listening ? 'J’écoute… prends ton temps, appuie sur « Arrêter » quand t’as fini.' : speechSupported() ? 'Dis tout d’un coup, ou écris-le :' : 'Écris la phrase :'}</div>
           {!prop && <div className="small muted">Une job: {EXAMPLE}</div>}
           <div className={`vj-ideas ${prop ? 'hide' : ''}`}>
             {IDEAS.map((t) => <button key={t} onClick={() => { setHeard(t); analyse(t); }}>{t}</button>)}
@@ -285,24 +405,29 @@ export default function VoiceJob() {
         </div>
       )}
 
-      {draft && ask && (
+      {draft && slot && (
         <div className="card vj-ask">
-          <div className="vj-bubble">{QUESTION}</div>
+          <div className="vj-sofar">
+            {(draft.clientId || draft.name) && <span><UserPlus size={13} /> {draft.name}</span>}
+            {draft.address && !draft.addrIncomplete && <span><MapPin size={13} /> {draft.address}</span>}
+            {hasWork(draft) && <span><ClipboardList size={13} /> {draft.items.filter((it) => it.description).map((it) => it.description).join(', ')}</span>}
+          </div>
+          <div className="vj-bubble">{QUESTIONS[slot](draft)}</div>
           {speechSupported() && (
-            <button className={`vj-btn small ${listening ? 'on' : ''}`} onClick={() => mic('answer')} aria-label={listening ? 'Arrêter' : 'Répondre'}>
-              {listening ? <MicOff size={26} /> : <Mic size={26} />}
-            </button>
+            <MicButton small listening={listening} onClick={() => mic('answer')} startLabel="Répondre" />
           )}
-          <div className="small muted">ex.: « 50 pieds de gouttières à laver »</div>
-          <textarea className="vj-text" rows={2} value={answer} placeholder="Ce qu’il y a à faire…" onChange={(e) => setAnswer(e.target.value)} />
+          <div className="small muted">{listening ? 'J’écoute…' : EXAMPLES[slot]}</div>
+          <textarea className="vj-text" rows={2} value={answer} placeholder="Ta réponse…" onChange={(e) => setAnswer(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); applyAnswer(answer); } }} />
           <div className="row" style={{ justifyContent: 'center' }}>
             {!listening && answer.trim() && <button className="btn accent" onClick={() => applyAnswer(answer)}><Check size={17} /> OK</button>}
-            <button className="btn" onClick={() => { setAsk(false); up({ quote: false, items: [] }); }}>Pas de soumission pour l’instant</button>
+            {slot === 'job' && draft.kind === 'visite' && <button className="btn" onClick={() => proceed({ ...draft, quote: false, items: [{ code: '', description: 'Visite d’estimation', quantity: 1, unitPrice: 0 }] })}>Pas de soumission pour l’instant</button>}
+            {slot === 'date' && <button className="btn" onClick={() => proceed({ ...draft, dateSaid: true, noJob: true })}>Pas de date</button>}
+            {(slot === 'address' || slot === 'name') && <button className="btn" onClick={() => setSlot(null)}>Passer</button>}
           </div>
         </div>
       )}
 
-      {draft && !ask && (
+      {draft && !slot && (
         <>
           <div className="card">
             <div className="vj-said small muted">« {heard} »</div>
@@ -337,10 +462,10 @@ export default function VoiceJob() {
             <LineItems items={draft.items} services={services} onChange={(items) => up({ items })} />
             <div className="vj-total"><span>Total avant taxes</span><b>{money(total)}</b></div>
           </div>
-          <label className="check" style={{ margin: '0 4px 12px' }}><input type="checkbox" checked={draft.quote} onChange={(e) => up({ quote: e.target.checked })} /> Préparer la soumission en même temps</label>
+          {draft.docType !== 'invoice' && !draft.noJob && <label className="check" style={{ margin: '0 4px 12px' }}><input type="checkbox" checked={draft.quote} onChange={(e) => up({ quote: e.target.checked })} /> Préparer la soumission en même temps</label>}
           <div className="vj-actions">
             <button className="btn" onClick={() => { setDraft(null); }}><RotateCcw size={16} /> Recommencer</button>
-            <button className="btn accent big" disabled={busy} onClick={() => void create()}><CalendarCheck size={18} /> {busy ? '…' : draft.quote ? 'Planifier + soumission' : 'Planifier la job'}</button>
+            <button className="btn accent big" disabled={busy} onClick={() => void create()}><CalendarCheck size={18} /> {busy ? '…' : draft.docType === 'invoice' ? 'Créer la facture' : draft.noJob ? 'Créer la soumission' : draft.quote ? 'Planifier + soumission' : 'Planifier la job'}</button>
           </div>
         </>
       )}
@@ -348,13 +473,18 @@ export default function VoiceJob() {
       {done && (
         <div className="card vj-done">
           <div className="vj-ok"><Check size={26} /></div>
-          <h2>{done.visit ? 'Visite planifiée' : 'C’est planifié'}</h2>
-          <p className="muted">{done.visit ? 'Visite' : 'Job'} le <strong>{when(done.date, done.time)}</strong>{done.quoteId ? <> · soumission <strong>{done.number}</strong> de {money(done.total)} prête à envoyer</> : null}.</p>
+          <h2>{done.invoiceId ? 'Facture prête' : !done.jobId ? 'Soumission prête' : done.visit ? 'Visite planifiée' : 'C’est planifié'}</h2>
+          <p className="muted">
+            {done.invoiceId ? <>Facture <strong>{done.number}</strong> de {money(done.total)} prête à envoyer.</>
+              : !done.jobId ? <>Soumission <strong>{done.number}</strong> de {money(done.total)} prête à envoyer.</>
+              : <>{done.visit ? 'Visite' : 'Job'} le <strong>{when(done.date, done.time)}</strong>{done.quoteId ? <> · soumission <strong>{done.number}</strong> de {money(done.total)} prête à envoyer</> : null}.</>}
+          </p>
           <div className="vj-done-actions">
+            {done.invoiceId && <button className="btn accent" onClick={() => nav(`/doc/${done.invoiceId}`)}><FileText size={17} /> Voir et envoyer la facture</button>}
             {done.quoteId && <button className="btn accent" onClick={() => nav(`/doc/${done.quoteId}`)}><ClipboardList size={17} /> Voir et envoyer la soumission</button>}
-            <button className="btn" onClick={() => void invoice()}><FileText size={17} /> Faire la facture</button>
-            <button className="btn" onClick={() => nav(`/agenda?d=${done.date}&v=jour`)}><CalendarDays size={17} /> Voir l’agenda</button>
-            <button className="btn" onClick={() => setDone(null)}><Mic size={17} /> Dicter une autre job</button>
+            {!done.invoiceId && <button className="btn" onClick={() => void invoice()}><FileText size={17} /> Faire la facture</button>}
+            {done.jobId && <button className="btn" onClick={() => nav(`/agenda?d=${done.date}&v=jour`)}><CalendarDays size={17} /> Voir l’agenda</button>}
+            <button className="btn" onClick={() => setDone(null)}><Mic size={17} /> Autre chose</button>
           </div>
           {!s.homeAddress && <p className="small muted" style={{ marginTop: 10 }}>Ajoute ton adresse dans Paramètres pour que les km se calculent tout seuls.</p>}
         </div>

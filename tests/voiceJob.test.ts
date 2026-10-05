@@ -56,4 +56,19 @@ assert.equal(a.kind, 'job');
 
 const g = parseJobCommand('chez Roy lavage de vitres 10 fenêtres demain', S, C, today);
 assert.equal(g.clientId, 3);
-console.log('commande vocale: 7 cas OK');
+const h = parseJobCommand('facture pour Nathalie Bouchard au 18-35 rue des', S, C, today);
+assert.equal(h.clientName, 'Nathalie Bouchard');
+assert.equal(h.isNew, true);
+assert.equal(h.docType, 'invoice');
+assert.equal(h.address, '1835 rue des');
+assert.equal(h.addressIncomplete, true);
+assert.equal(h.dateSaid, false);
+assert.deepEqual(h.lines, []);
+
+const i = parseJobCommand('soumission pour Marc Tremblé au 1562 Edmond à Laval 60 pieds de gouttières', S, C, today);
+assert.equal(i.clientName, 'Marc Tremblé');
+assert.equal(i.address, '1562 Edmond, Laval');
+assert.equal(i.docType, 'quote');
+assert.deepEqual(i.lines, [{ code: 'NDG', quantity: 60 }]);
+assert.equal(a.dateSaid, true);
+console.log('commande vocale: 9 cas OK');

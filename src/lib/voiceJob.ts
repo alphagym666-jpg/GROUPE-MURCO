@@ -15,7 +15,12 @@ export interface JobCommand {
   lines: { code: string; quantity: number }[];
   leftovers: string[];
   kind: 'visite' | 'job'; // visite d'estimation (la soumission vient après) ou job à faire
+  docType: 'quote' | 'invoice'; // « facture pour … » → facture directe; sinon soumission
+  dateSaid: boolean; // une journée a été dite
+  addressIncomplete: boolean; // adresse coupée (« 1835 rue des »): à redemander
 }
+
+const NAME_STOP = ['au', 'aux', 'a', 'sur', 'dans', 'de', 'du', 'des', 'rue', 'chemin', 'boulevard', 'avenue', 'qui', 'reste', 'demeure', 'habite', 'adresse'];
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const DAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -82,7 +87,9 @@ export function findWhen(t: string, today: string): { date: string; time?: strin
 
 export function parseJobCommand(input: string, services: VoiceService[], clients: VoiceClient[], today: string): JobCommand {
   // On garde les accents pour le nom et l'adresse; les recherches se font sur une copie sans accents de même longueur
-  let orig = ` ${input.normalize('NFC').replace(/\s+/g, ' ').trim()} `;
+  // « 18-35 rue … » / « 18 35 rue … » (dictée du cell) → 1835
+  input = input.normalize('NFC').replace(/\b(\d{1,3})[-\s](\d{2,3})(?=[\s,]+(?:rue|avenue|av|boul|boulevard|chemin|ch|rang|mont[ée]e|place|croissant|route|impasse|terrasse|all[ée]e|promenade|c[ôo]te)\b)/gi, '$1$2');
+  let orig = ` ${input.replace(/\s+/g, ' ').trim()} `;
   const low = () => norm(orig);
 
   // Téléphone
@@ -119,12 +126,22 @@ export function parseJobCommand(input: string, services: VoiceService[], clients
     address = address.replace(/\b(\d+)\s*,\s*/, '$1 ');
     nameEnd = start;
     orig = orig.slice(0, start) + ' ' + orig.slice(start + raw.length);
+  } else {
+    // « au 1562 Edmond à Laval » (sans « rue »)
+    const bm = low().match(/\s(?:au|a|chez)\s+(\d{1,6}[a-z]?)\s+([a-z][a-z'-]{2,})(?:\s+(?:a|au)\s+([a-z][a-z' -]{2,}?))?(?=\s|,|$)/);
+    if (bm && bm.index !== undefined && !JOB_WORDS.includes(bm[2])) {
+      const start = bm.index + 1;
+      const raw = orig.slice(start, start + bm[0].length - 1);
+      address = raw.replace(/^(?:au|à|a|chez)\s+/i, '').replace(/\s+(?:à|a|au)\s+/i, ', ').trim();
+      nameEnd = start;
+      orig = orig.slice(0, start) + ' ' + orig.slice(start + raw.length);
+    }
   }
 
   // Nom du nouveau client: ce qui précède l'adresse (ou le début de la phrase jusqu'au premier mot de job)
   let clientName = '';
   // « Planifie une visite chez … », « mets une job pour … »: la commande du début n'est pas le nom
-  const cmd = norm(orig).match(/^\s*(?:(?:planifi|ajout|met|cre|book|fais|fait)\w*\s+)?(?:(?:une?|la|le|moi)\s+)?(?:(?:visite|job|estimation|evaluation|soumission|rendez-vous|rendez vous|rdv)\s+)?(?:(?:d'|de\s+)?(?:estimation|soumission)\s+)?(?:(?:chez|pour|avec)\s+)?/);
+  const cmd = norm(orig).match(/^\s*(?:(?:planifi|ajout|met|cre|book|fais|fait|prepar|factur)\w*\s+)?(?:(?:une?|la|le|moi)\s+)?(?:(?:visite|job|estimation|evaluation|soumission|facture|rendez-vous|rendez vous|rdv)\s+)?(?:(?:d'|de\s+)?(?:estimation|soumission)\s+)?(?:(?:chez|pour|avec)\s+)?/);
   const cmdLen = cmd ? cmd[0].length : 0;
   {
     let head = nameEnd > 0 ? orig.slice(cmdLen, nameEnd) : orig.slice(cmdLen);
@@ -133,7 +150,7 @@ export function parseJobCommand(input: string, services: VoiceService[], clients
     const out: string[] = [];
     for (const w of words) {
       const n = norm(w).replace(/[^a-z]/g, '');
-      if (!n || JOB_WORDS.includes(n) || /\d/.test(w)) break;
+      if (!n || JOB_WORDS.includes(n) || NAME_STOP.includes(n) || /\d/.test(w)) break;
       out.push(w.replace(/[,.]/g, ''));
       if (out.length >= 4) break;
     }
@@ -150,7 +167,14 @@ export function parseJobCommand(input: string, services: VoiceService[], clients
   // Date, heure, puis les services sur ce qui reste
   const kind: JobCommand['kind'] = /\b(visite|estimation|evaluation|aller voir|rendez[-\s]?vous|rdv)\b/.test(norm(input)) ? 'visite' : 'job';
   orig = cmdLen ? ' ' + orig.slice(cmdLen) : orig;
-  const when = findWhen(wordsToNumbers(norm(orig)), today);
+  const before = wordsToNumbers(norm(orig));
+  const when = findWhen(before, today);
   const r = parseDictation(when.rest, services, []);
-  return { clientId: existing?.id, clientName, isNew: !existing, phone, address, date: when.date, time: when.time, lines: r.lines, leftovers: kind === 'visite' ? [] : r.leftovers, kind };
+  const docType: JobCommand['docType'] = /\bfactur/.test(norm(input)) && !/\bsoumission/.test(norm(input)) ? 'invoice' : 'quote';
+  const last = address ? norm(address).split(/[^a-z0-9]+/).filter(Boolean).pop() ?? '' : '';
+  const addressIncomplete = !!address && (address.split(/\s+/).length < 3 || ['des', 'de', 'du', 'la', 'le', 'l', 'rue', 'chemin', 'boulevard', 'avenue', 'rang', 'boul'].includes(last));
+  return {
+    clientId: existing?.id, clientName, isNew: !existing, phone, address, date: when.date, time: when.time, lines: r.lines,
+    leftovers: kind === 'visite' ? [] : r.leftovers.filter((l) => !/^(au|a|de|des|du|pour|chez)$/.test(l.trim())), kind, docType, dateSaid: when.rest !== before, addressIncomplete,
+  };
 }

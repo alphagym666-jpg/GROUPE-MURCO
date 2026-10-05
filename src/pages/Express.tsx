@@ -1,8 +1,8 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  ArrowLeft, ArrowRight, Banknote, CreditCard, Calculator, Check, CircleCheck, FileText, Mail, Mic, MicOff, Minus, Plus, Search, Share2, UserPlus, Zap,
+  ArrowLeft, ArrowRight, Banknote, CreditCard, Calculator, Check, CircleCheck, FileText, Mail, Mic, Minus, Plus, Search, Share2, UserPlus, Zap,
 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AddressInput } from '../components/AddressInput';
 import { CalcModal, lineFromService } from '../components/LineItems';
@@ -20,6 +20,9 @@ import { publishPortal } from '../lib/portal';
 import { shareFiles } from '../lib/native';
 import { addDays, docTotals, downloadBlob, km, lineAmount, money, round2, todayISO } from '../lib/utils';
 import { parseDictation } from '../lib/voice';
+import { parseJobCommand } from '../lib/voiceJob';
+import { suggestAddresses } from '../lib/geo';
+import { MicButton } from '../components/MicButton';
 import { NumInput } from '../components/NumInput';
 
 const STEPS = ['Client', 'Travaux', 'Finaliser'];
@@ -90,12 +93,16 @@ export default function Express() {
 
   const setQty = (i: number, qty: number) => setLines((ls) => (qty <= 0 ? ls.filter((_, j) => j !== i) : ls.map((l, j) => (j === i ? { ...l, quantity: qty } : l))));
 
-  const startMic = () => {
+  // « jobOnly »: réponse à « C'est quoi la job? » (on n'ajoute que des lignes)
+  const micFor = useRef<'all' | 'job'>('all');
+  const startMic = (forWhat: 'all' | 'job' = 'all') => {
     if (listening) {
       rec.current?.stop();
       return;
     }
+    micFor.current = forWhat;
     setHeard('');
+    window.speechSynthesis?.cancel();
     const r = listen(
       (text) => setHeard(text),
       (err) => {
@@ -108,21 +115,74 @@ export default function Express() {
     setListening(true);
   };
 
-  const applyDictation = () => {
-    const r = parseDictation(heard, services, clients);
-    if (r.clientId) {
-      const c = clients.find((x) => x.id === r.clientId)!;
+  const speak = (text: string, then?: () => void) => {
+    let done = false;
+    const once = () => { if (!done && then) { done = true; then(); } };
+    try {
+      const u = new SpeechSynthesisUtterance(text.replace(/’/g, "'"));
+      u.lang = 'fr-CA';
+      u.onend = once;
+      u.onerror = once;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+      if (then) setTimeout(once, 900 + text.length * 70);
+    } catch {
+      once();
+    }
+  };
+
+  /** Dictée: client (nouveau ou existant), adresse, codes — ce qui manque est demandé. */
+  const applyDictation = (text = heard) => {
+    if (!text.trim()) return;
+    if (micFor.current === 'job') {
+      const r = parseDictation(text, services, []);
+      r.lines.forEach((l) => addCode(l.code, l.quantity));
+      notify(r.lines.length ? `Ajouté — ${r.lines.length} ligne(s)` : 'Je n’ai reconnu aucun service. Choisis-le dans la liste.', r.lines.length ? 'ok' : 'err');
+      micFor.current = 'all';
+      setHeard('');
+      return;
+    }
+    const r = parseJobCommand(text, services, clients.map((c) => ({ id: c.id, name: c.name })), todayISO());
+    const c = r.clientId ? clients.find((x) => x.id === r.clientId) : undefined;
+    let hasClient = !!clientId || !!newClient;
+    if (c) {
+      setNewClient(null);
       setClientId(c.id);
-      setAddress(c.address);
-      setAddressGeo(c.geo);
+      setAddress(r.address ?? c.address);
+      setAddressGeo(r.address ? undefined : c.geo);
+      hasClient = true;
+    } else if (r.clientName) {
+      setClientId(undefined);
+      setNewClient({ name: r.clientName, phone: r.phone ?? '', email: '', address: r.address ?? '' });
+      if (r.address) setAddress(r.address);
+      hasClient = true;
+    }
+    // Adresse dite → la vraie adresse
+    if (r.address && !r.addressIncomplete) {
+      void suggestAddresses(r.address).then((l) => l[0]?.resolve()).then((g) => {
+        if (!g) return;
+        setAddress(g.label);
+        setAddressGeo(g.geo);
+        setNewClient((n) => (n ? { ...n, address: g.label, geo: g.geo } : n));
+      }).catch(() => undefined);
     }
     r.lines.forEach((l) => addCode(l.code, l.quantity));
-    const parts = [r.clientName && `client: ${r.clientName}`, r.lines.length && `${r.lines.length} ligne(s)`].filter(Boolean).join(' · ');
-    notify(parts ? `Compris — ${parts}` : 'Je n’ai reconnu aucun code. Réessaie ou choisis à la main.', parts ? 'ok' : 'err');
-    if (r.leftovers.length) setTimeout(() => notify(`Pas compris: « ${r.leftovers.join(' / ')} »`, 'err'), 3200);
+    const parts = [c ? `client: ${c.name}` : r.clientName ? `nouveau client: ${r.clientName}` : '', r.lines.length ? `${r.lines.length} ligne(s)` : ''].filter(Boolean).join(' · ');
+    if (parts) notify(`Compris — ${parts}`);
     setHeard('');
-    setStep(r.clientId || clientId ? 1 : 0);
+    setStep(hasClient ? 1 : 0);
+    if (!hasClient) speak('C’est pour quel client?');
+    else if (!r.lines.length && !lines.length) speak('C’est quoi la job à facturer?', () => speechSupported() && startMic('job'));
+    else speak('Parfait. Vérifie et finalise.');
   };
+
+  // Fin de la dictée → on l'utilise tout de suite
+  const wasListening = useRef(false);
+  useEffect(() => {
+    if (wasListening.current && !listening && heard.trim()) applyDictation(heard);
+    wasListening.current = listening;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listening]);
 
   const create = async (then: 'share' | 'mail' | 'none') => {
     if (!lines.length) return notify('Ajoute au moins un code.', 'err');
@@ -256,21 +316,20 @@ export default function Express() {
           <div className="eyebrow"><Zap size={14} /> Facture express</div>
           <h1>{STEPS[step]}</h1>
         </div>
-        {speechSupported() && (
-          <button className={`mic ${listening ? 'on' : ''}`} onClick={startMic} aria-label={listening ? 'Arrêter la dictée' : 'Dicter la facture'}>
-            {listening ? <MicOff size={26} /> : <Mic size={26} />}
-          </button>
+        {speechSupported() && !listening && (
+          <button className="mic-label" onClick={() => startMic()} aria-label="Dicter la facture"><Mic size={17} /> Dicter</button>
         )}
       </div>
       <div className="steps">{STEPS.map((x, i) => <span key={x} className={i <= step ? 'on' : ''} />)}</div>
 
       {(listening || heard) && (
-        <div className="card">
-          <div className="small muted">{listening ? 'J’écoute… ex.: « NDG 120 pieds et lavage de vitres 12 fenêtres chez Tremblay »' : 'Dictée'}</div>
-          <div style={{ fontSize: '1.1rem', margin: '6px 0 10px' }}>{heard || '…'}</div>
+        <div className="card ex-dict">
+          <MicButton listening={listening} onClick={() => startMic(micFor.current)} startLabel="Reprendre" />
+          <div className="small muted">{listening ? (micFor.current === 'job' ? 'C’est quoi la job? ex.: « 60 pieds de gouttières »' : 'J’écoute… ex.: « Facture pour Nathalie Bouchard, 1835 rue des Érables à Laval, 60 pieds de gouttières »') : 'Dictée'}</div>
+          <div className="ex-heard">{heard || '…'}</div>
           {!listening && heard && (
-            <div className="row">
-              <button className="btn accent" onClick={applyDictation}><Check size={17} /> Utiliser</button>
+            <div className="row" style={{ justifyContent: 'center' }}>
+              <button className="btn accent" onClick={() => applyDictation()}><Check size={17} /> Utiliser</button>
               <button className="btn" onClick={() => setHeard('')}>Effacer</button>
             </div>
           )}
