@@ -967,3 +967,4 @@ table.list tr.click:hover td { background: var(--surface-2); }
 .sub-plan li { display: flex; gap: 8px; align-items: flex-start; }
 .sub-plan li svg { color: var(--green); flex: none; margin-top: 3px; }
 .danger-zone { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 16px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--red) 35%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--red) 5%, var(--surface)); }
+.svc-en { margin-top: 4px; font-size: 0.85rem !important; padding: 6px 9px !important; color: var(--muted); }

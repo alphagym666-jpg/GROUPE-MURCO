@@ -6,14 +6,14 @@ import { Modal } from './Modal';
 
 export const emptyLine = (): LineItem => ({ code: '', description: '', unit: '', quantity: 1, unitPrice: 0, minimum: 0 });
 
-export function lineFromService(sv: Service, quantity = 1): LineItem {
-  return { code: sv.code, description: sv.name, unit: sv.unit, quantity, unitPrice: sv.price, minimum: sv.minimum };
+export function lineFromService(sv: Service, quantity = 1, lang: 'fr' | 'en' = 'fr'): LineItem {
+  return { code: sv.code, description: lang === 'en' && sv.nameEn ? sv.nameEn : sv.name, unit: sv.unit, quantity, unitPrice: sv.price, minimum: sv.minimum };
 }
 
 const isEmpty = (it: LineItem) => !it.code && !it.description.trim() && !it.unitPrice;
 
 /** Lignes de facture: on tape un CODE (NDG, LAP…) → le service, l'unité, le prix et le minimum s'affichent. */
-export function LineItems({ items, services, onChange }: { items: LineItem[]; services: Service[]; onChange: (items: LineItem[]) => void }) {
+export function LineItems({ items, services, onChange, lang = 'fr' }: { items: LineItem[]; services: Service[]; onChange: (items: LineItem[]) => void; lang?: 'fr' | 'en' }) {
   const [calcFor, setCalcFor] = useState<number | null>(null);
   const byCode = new Map(services.map((s) => [s.code.toUpperCase(), s]));
 
@@ -22,13 +22,13 @@ export function LineItems({ items, services, onChange }: { items: LineItem[]; se
   const setCode = (i: number, raw: string) => {
     const code = raw.toUpperCase().trim();
     const sv = byCode.get(code);
-    if (sv) upd(i, { ...lineFromService(sv, items[i].quantity || 1), calc: items[i].calc });
+    if (sv) upd(i, { ...lineFromService(sv, items[i].quantity || 1, lang), calc: items[i].calc });
     else upd(i, { code });
   };
 
   const addService = (sv: Service) => {
     const last = items[items.length - 1];
-    const line = lineFromService(sv);
+    const line = lineFromService(sv, 1, lang);
     onChange(last && isEmpty(last) ? [...items.slice(0, -1), line] : [...items, line]);
   };
 

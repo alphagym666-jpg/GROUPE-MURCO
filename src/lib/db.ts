@@ -65,6 +65,10 @@ export interface Settings extends Synced {
   setupComplete?: boolean; // assistant de démarrage terminé
   wantedPlan?: string; // forfait choisi sur la page de vente
   accountCreatedAt?: string; // création du compte du propriétaire (début de l'essai; employés compris)
+  invoiceNotesEn?: string; // textes en anglais (clients anglophones)
+  quoteNotesEn?: string;
+  paymentInstructionsEn?: string;
+  invoiceConditionsEn?: string;
   termsAcceptedAt?: string; // consentement aux conditions et à la politique de confidentialité (Loi 25)
   leadFormIntro: string;
   // Paiement par carte (Stripe, via les fonctions Firebase)
@@ -88,6 +92,7 @@ export interface Client extends Synced {
   address: string;
   geo?: GeoPoint;
   notes: string;
+  lang?: 'fr' | 'en'; // langue des documents envoyés à ce client
   createdAt: string;
 }
 
@@ -112,6 +117,7 @@ export interface Service extends Synced {
   id?: number;
   code: string;
   name: string;
+  nameEn?: string; // description en anglais (documents des clients anglophones)
   unit: string;
   price: number;
   minimum: number;
@@ -147,6 +153,7 @@ export interface Doc extends Synced {
   date: string; // YYYY-MM-DD
   dueDate: string;
   jobDate: string;
+  lang?: 'fr' | 'en'; // langue du document (sinon celle du client)
   jobAddress: string;
   jobGeo?: GeoPoint;
   title: string; // description courte de la job (sert de raison pour le journal de bord)

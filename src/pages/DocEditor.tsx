@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AddressInput } from '../components/AddressInput';
 import { ClientPicker } from '../components/ClientPicker';
+import { companyTexts, dateFor, docLangOf, moneyFor } from '../lib/docLang';
 import { emptyLine, LineItems } from '../components/LineItems';
 import { Modal } from '../components/Modal';
 import { SendEmailModal } from '../components/SendEmailModal';
@@ -122,6 +123,16 @@ export default function DocEditor() {
 
   if (!doc || loadedFor !== loadKey) return null;
   const client = clients.find((c) => c.id === doc.clientId);
+  const L = docLangOf(doc, client);
+  /** Client ou langue choisis: les notes par défaut suivent la langue du document. */
+  const setLangPatch = (lang: 'fr' | 'en', patch: Partial<Doc> = {}) => {
+    const key = isInvoice ? 'invoiceNotes' : 'quoteNotes';
+    const fr = companyTexts(s, 'fr')[key];
+    const en = companyTexts(s, 'en')[key];
+    if (lang === 'en' && doc.notes === fr) patch.notes = en;
+    if (lang === 'fr' && doc.notes === en) patch.notes = fr;
+    upd(patch);
+  };
   const tot = docTotals(doc, s);
   const isInvoice = doc.type === 'invoice';
   const kind = isInvoice ? 'Facture' : 'Soumission';
@@ -280,6 +291,14 @@ export default function DocEditor() {
   };
 
   const emailBody = () => {
+    if (L === 'en') {
+      const hi = `Hello ${client?.contact || client?.name || ''},`;
+      const tx = companyTexts(s, 'en');
+      const lines = isInvoice
+        ? [hi, '', `Please find attached invoice ${doc.number}${doc.title ? ` for “${doc.title}”` : ''}, for ${moneyFor(tot.balance, 'en')}.`, `Due date: ${dateFor(doc.dueDate, 'en')}.`, '', tx.paymentInstructions]
+        : [hi, '', `As discussed, here is our quote ${doc.number}${doc.title ? ` for “${doc.title}”` : ''}, for ${moneyFor(tot.total, 'en')} (taxes included).`, `It is valid until ${dateFor(doc.dueDate, 'en')}.`, '', 'Feel free to contact me with any questions.'];
+      return [...lines, '', 'Thank you and have a great day!', '', s.emailSignature || s.companyName, s.phone].filter((x) => x !== undefined).join('\n');
+    }
     const hello = `Bonjour ${client?.contact || client?.name || ''},`;
     const lines = isInvoice
       ? [
@@ -334,7 +353,7 @@ export default function DocEditor() {
         <div className="form-grid">
           <div className="field full">
             Client *
-            <ClientPicker value={doc.clientId} onChange={(id) => upd({ clientId: id })} autoFocus={isNew && !doc.clientId} />
+            <ClientPicker value={doc.clientId} onChange={(id) => void db.clients.get(id).then((c) => setLangPatch(doc.lang ?? c?.lang ?? 'fr', { clientId: id }))} autoFocus={isNew && !doc.clientId} />
           </div>
           <label className="field full">Description de la job (sert aussi de raison dans le journal de bord)
             <input value={doc.title} placeholder="ex.: Installation de céramique salle de bain" onChange={(e) => upd({ title: e.target.value })} />
@@ -351,7 +370,7 @@ export default function DocEditor() {
 
       <div className="card">
         <h2>Détails</h2>
-        <LineItems items={doc.items} services={services} onChange={(items) => upd({ items })} />
+        <LineItems items={doc.items} services={services} onChange={(items) => upd({ items })} lang={L} />
         <div className="grid two" style={{ marginTop: 16, alignItems: 'start' }}>
           <div className="form-grid">
             <label className="field">Rabais ($, avant taxes)<input type="number" inputMode="decimal" step="0.01" value={doc.discount || ''} placeholder="0" onChange={(e) => upd({ discount: Number(e.target.value) })} /></label>
@@ -401,6 +420,12 @@ export default function DocEditor() {
             <select value={doc.salesRepId ?? ''} onChange={(e) => upd({ salesRepId: e.target.value ? Number(e.target.value) : undefined })}>
               <option value="">Moi</option>
               {members.filter((m) => m.active && (m.role === 'vendeur' || m.role === 'admin' || m.id === doc.salesRepId)).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </label>
+          <label className="field">Langue du document
+            <select value={L} onChange={(e) => setLangPatch(e.target.value as 'fr' | 'en', { lang: e.target.value as 'fr' | 'en' })}>
+              <option value="fr">Français</option>
+              <option value="en">English</option>
             </select>
           </label>
           <label className="field">
@@ -492,7 +517,7 @@ export default function DocEditor() {
         <SendEmailModal
           title={`Envoyer ${kind.toLowerCase()} ${doc.number}`}
           to={client?.email ?? ''}
-          subject={`${kind} ${doc.number} — ${s.companyName}`}
+          subject={`${L === 'en' ? (isInvoice ? 'Invoice' : 'Quote') : kind} ${doc.number} — ${s.companyName}`}
           body={emailBody()}
           attachments={[{ filename: docFileName(doc, client), mimeType: 'application/pdf', blob: emailPdf }]}
           onClose={() => setEmailPdf(null)}
@@ -572,7 +597,10 @@ function PortalButton({ doc }: { doc: Doc }) {
     }
   };
   const kind = doc.type === 'invoice' ? 'facture' : 'soumission';
-  const text = `Bonjour ${client?.contact || client?.name || ''}, voici votre ${kind} ${doc.number}${doc.type === 'quote' ? ' — vous pouvez l’accepter en ligne' : ''}:`;
+  const en = docLangOf(doc, client) === 'en';
+  const text = en
+    ? `Hello ${client?.contact || client?.name || ''}, here is your ${doc.type === 'invoice' ? 'invoice' : 'quote'} ${doc.number}${doc.type === 'quote' ? ' — you can accept it online' : ''}:`
+    : `Bonjour ${client?.contact || client?.name || ''}, voici votre ${kind} ${doc.number}${doc.type === 'quote' ? ' — vous pouvez l’accepter en ligne' : ''}:`;
   return (
     <>
       <button className="btn" onClick={open} disabled={busy || st.status === 'off'} title={st.status === 'off' ? 'Active la synchronisation pour utiliser le lien client' : 'Lien à envoyer au client'}>
@@ -651,7 +679,9 @@ function ReviewRequestButton({ doc }: { doc: Doc }) {
       notify(errMsg(e), 'err');
     }
   };
-  const text = `Bonjour ${client?.contact || client?.name || ''}, merci d’avoir fait affaire avec ${s.companyName}! Pourriez-vous prendre 30 secondes pour nous donner votre avis?`;
+  const text = docLangOf(doc, client) === 'en'
+    ? `Hello ${client?.contact || client?.name || ''}, thank you for choosing ${s.companyName}! Could you take 30 seconds to tell us how we did?`
+    : `Bonjour ${client?.contact || client?.name || ''}, merci d’avoir fait affaire avec ${s.companyName}! Pourriez-vous prendre 30 secondes pour nous donner votre avis?`;
   return (
     <>
       <button className="btn" disabled={st.status === 'off'} title={st.status === 'off' ? 'Active la synchronisation' : 'Demander un avis au client'} onClick={open}><Star size={16} /> Demander un avis</button>

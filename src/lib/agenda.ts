@@ -251,6 +251,11 @@ export async function jobToInvoice(id: number): Promise<number> {
 }
 
 export function reminderText(j: Job, c: Client | undefined, companyName: string, phone: string, owner: string): string {
+  if (c?.lang === 'en') {
+    const whenEn = j.date === addDays(todayISO(), 1) ? 'tomorrow' : j.date === todayISO() ? 'today' : `on ${new Date(j.date + 'T12:00:00').toLocaleDateString('en-CA', { month: 'long', day: 'numeric' })}`;
+    const hourEn = j.time ? ` around ${j.time}` : '';
+    return `Hello ${c.contact || c.name}, friendly reminder: ${companyName} will be there ${whenEn}${hourEn} for ${j.title || 'the scheduled work'}. See you soon! ${owner}${phone ? ` — ${phone}` : ''}`.replace(/\s+/g, ' ').trim();
+  }
   const when = j.date === addDays(todayISO(), 1) ? 'demain' : j.date === todayISO() ? 'aujourd’hui' : `le ${formatDate(j.date)}`;
   const hour = j.time ? ` vers ${j.time.replace(':', ' h ')}` : '';
   return `Bonjour ${c?.contact || c?.name || ''}, petit rappel: ${companyName} passera ${when}${hour} pour ${j.title || 'les travaux prévus'}. Au plaisir! ${owner}${phone ? ` — ${phone}` : ''}`.replace(/\s+/g, ' ').trim();

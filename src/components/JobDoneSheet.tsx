@@ -5,6 +5,7 @@ import { jobToInvoice, smsLink } from '../lib/agenda';
 import { db, type Client, type Job } from '../lib/db';
 import { haptic } from '../lib/feel';
 import { useSettings } from '../lib/hooks';
+import { companyTexts, moneyFor } from '../lib/docLang';
 import { publishPortal } from '../lib/portal';
 import { docTotals, km, money } from '../lib/utils';
 import { Modal } from './Modal';
@@ -34,7 +35,9 @@ export function JobDoneSheet({ job, client, canBill, routeKm, onClose }: { job: 
       }
       const tt = docTotals(d, s);
       const who = client.contact || client.name;
-      const text = `Bonjour ${who}, merci pour votre confiance! Voici votre facture ${d.number} de ${money(tt.total)}${link ? `: ${link}` : '.'} ${s.paymentInstructions}`.trim();
+      const text = (client.lang === 'en'
+        ? `Hello ${who}, thank you for your business! Here is your invoice ${d.number} for ${moneyFor(tt.total, 'en')}${link ? `: ${link}` : '.'} ${companyTexts(s, 'en').paymentInstructions}`
+        : `Bonjour ${who}, merci pour votre confiance! Voici votre facture ${d.number} de ${money(tt.total)}${link ? `: ${link}` : '.'} ${s.paymentInstructions}`).trim();
       if (d.status === 'draft') await db.docs.update(id, { status: 'sent', sentAt: new Date().toISOString() });
       haptic('success');
       window.location.href = smsLink(client.phone, text);

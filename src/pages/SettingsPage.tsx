@@ -167,6 +167,17 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      <div className="card" id="anglais">
+        <h2>Textes en anglais (clients anglophones)</h2>
+        <p className="small muted">Pour un client marqué « English », les factures, soumissions, le lien client et les courriels sont en anglais. Laisse vide pour utiliser le texte anglais par défaut.</p>
+        <div className="form-grid">
+          {txt('invoiceNotesEn', 'Notes — invoices', { full: true, placeholder: 'Thank you for your business!' })}
+          {txt('quoteNotesEn', 'Notes — quotes', { full: true, placeholder: 'This quote is valid 30 days.' })}
+          {txt('paymentInstructionsEn', 'Payment methods', { full: true, placeholder: 'Interac e-Transfer, cash or cheque.' })}
+          {txt('invoiceConditionsEn', 'Conditions (bottom of invoice)', { full: true, placeholder: 'Payment due by the date shown.' })}
+        </div>
+      </div>
+
       <div className="card">
         <h2>Avis clients</h2>
         <p className="small muted" style={{ marginTop: 0 }}>Après une job payée, envoie « Demander un avis »: 4-5 étoiles → le client est invité sur ta fiche Google; 1-3 étoiles → le commentaire reste privé, pour toi.</p>

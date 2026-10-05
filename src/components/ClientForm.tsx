@@ -35,6 +35,12 @@ export function ClientFormModal({ initial, onClose, onSaved }: { initial?: Clien
         <label className="field full">Adresse (rue, ville, code postal)
           <AddressInput value={c.address} onChange={(v) => set('address', v)} onPick={(label, geo) => setC((x) => ({ ...x, address: label, geo }))} />
         </label>
+        <label className="field">Langue des documents
+          <select value={c.lang ?? 'fr'} onChange={(e) => setC((x) => ({ ...x, lang: e.target.value as 'fr' | 'en' }))}>
+            <option value="fr">Français</option>
+            <option value="en">English (anglais)</option>
+          </select>
+        </label>
         <label className="field full">Notes<textarea value={c.notes} onChange={(e) => set('notes', e.target.value)} /></label>
       </div>
       <div className="row" style={{ marginTop: 14, justifyContent: 'flex-end' }}>

@@ -4,6 +4,7 @@ import { db, type Client, type Doc } from '../lib/db';
 import { makeDocPdf } from '../lib/docPdf';
 import { useSettings } from '../lib/hooks';
 import { docFileName } from '../lib/pdf';
+import { companyTexts, dateFor, docLangOf, moneyFor } from '../lib/docLang';
 import { docTotals, formatDate, money } from '../lib/utils';
 import { Modal } from './Modal';
 import { SendEmailModal } from './SendEmailModal';
@@ -16,7 +17,12 @@ export function RelanceModal({ doc, client, onClose }: { doc: Doc; client?: Clie
   const [pdf, setPdf] = useState<Blob | null>(null);
   const first = s.ownerName.split(' ')[0] || s.companyName;
   const who = client?.contact || client?.name || '';
-  const text = doc.type === 'invoice'
+  const en = docLangOf(doc, client) === 'en';
+  const text = en
+    ? doc.type === 'invoice'
+      ? `Hello ${who}, friendly reminder: invoice ${doc.number} for ${moneyFor(docTotals(doc, s).balance, 'en')} was due on ${dateFor(doc.dueDate, 'en')}. ${companyTexts(s, 'en').paymentInstructions} Thank you! ${first}`
+      : `Hello ${who}, following up on quote ${doc.number}${doc.title ? ` (${doc.title})` : ''}. Any questions? I can schedule you quickly. ${first} — ${s.phone}`
+    : doc.type === 'invoice'
     ? `Bonjour ${who}, petit rappel: la facture ${doc.number} de ${money(docTotals(doc, s).balance)} était payable le ${formatDate(doc.dueDate)}. ${s.paymentInstructions} Merci! ${first}`
     : `Bonjour ${who}, je fais un suivi pour la soumission ${doc.number}${doc.title ? ` (${doc.title})` : ''}. Avez-vous des questions? Je peux vous céduler rapidement. ${first} — ${s.phone}`;
   const kind = doc.type === 'invoice' ? 'facture' : 'soumission';
@@ -26,7 +32,7 @@ export function RelanceModal({ doc, client, onClose }: { doc: Doc; client?: Clie
       <SendEmailModal
         title={`Relance — ${doc.number}`}
         to={client?.email ?? ''}
-        subject={doc.type === 'invoice' ? `Rappel — facture ${doc.number} (${s.companyName})` : `Suivi — soumission ${doc.number} (${s.companyName})`}
+        subject={en ? (doc.type === 'invoice' ? `Reminder — invoice ${doc.number} (${s.companyName})` : `Follow-up — quote ${doc.number} (${s.companyName})`) : doc.type === 'invoice' ? `Rappel — facture ${doc.number} (${s.companyName})` : `Suivi — soumission ${doc.number} (${s.companyName})`}
         body={text}
         attachments={[{ filename: docFileName(doc, client), mimeType: 'application/pdf', blob: pdf }]}
         onClose={onClose}

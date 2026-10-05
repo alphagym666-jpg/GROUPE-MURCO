@@ -1,3 +1,4 @@
+import { companyTexts, docLangOf } from './docLang';
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import {
   collection, connectFirestoreEmulator, doc, getDoc, initializeFirestore, onSnapshot, query, setDoc, updateDoc, where, type Firestore,
@@ -36,6 +37,7 @@ export interface PortalData {
     reviewUrl?: string;
   };
   client: { name: string; address: string };
+  lang?: 'fr' | 'en'; // langue de la page client
   doc: {
     kind: 'invoice' | 'quote';
     number: string;
@@ -80,8 +82,8 @@ export async function buildPortalData(d: Doc, token: string, owner: string): Pro
       phone: s.phone,
       email: s.email,
       logo: s.logo && s.logo.length < 300_000 ? s.logo : undefined,
-      paymentInstructions: s.paymentInstructions,
-      conditions: s.invoiceConditions,
+      paymentInstructions: companyTexts(s, docLangOf(d, c)).paymentInstructions,
+      conditions: companyTexts(s, docLangOf(d, c)).invoiceConditions,
       tpsRate: s.tpsRate,
       tvqRate: s.tvqRate,
       tpsNumber: s.tpsNumber,
@@ -92,6 +94,7 @@ export async function buildPortalData(d: Doc, token: string, owner: string): Pro
       reviewUrl: s.googleReviewUrl || '',
     },
     client: { name: c?.name ?? '', address: c?.address ?? '' },
+    lang: docLangOf(d, c),
     doc: {
       kind: d.type,
       number: d.number,

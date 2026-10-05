@@ -7,7 +7,8 @@ import { DEFAULT_SETTINGS, type Doc, type Settings } from '../lib/db';
 import { buildDocPdf } from '../lib/pdf';
 import { loadPortal, reviewPortal, signPortal, startCardPayment, type PortalData } from '../lib/portal';
 import type { Review } from '../lib/db';
-import { downloadBlob, formatDate, lineAmount, money } from '../lib/utils';
+import { dateFor, moneyFor, unitFor, type DocLang } from '../lib/docLang';
+import { downloadBlob, lineAmount } from '../lib/utils';
 
 /** Page publique envoyée au client: voir, accepter (signer) et payer. */
 export default function Portal() {
@@ -27,11 +28,15 @@ export default function Portal() {
   }, [token, cfg]);
 
   if (err) return <div className="portal"><div className="notice err">{err}</div></div>;
-  if (p === undefined) return <div className="portal"><div className="empty">Chargement…</div></div>;
-  if (p === null) return <div className="portal"><div className="notice err">Ce lien n’est plus valide. Communique avec l’entreprise pour en recevoir un nouveau.</div></div>;
+  if (p === undefined) return <div className="portal"><div className="empty">Chargement… / Loading…</div></div>;
+  if (p === null) return <div className="portal"><div className="notice err">Ce lien n’est plus valide. Communique avec l’entreprise pour en recevoir un nouveau. / This link is no longer valid. Please contact the business for a new one.</div></div>;
 
   const d = p.doc;
   const t = d.totals;
+  const lang: DocLang = p.lang ?? 'fr';
+  const L = (fr: string, en: string) => (lang === 'en' ? en : fr);
+  const money = (n: number) => moneyFor(n, lang);
+  const formatDate = (iso: string) => dateFor(iso, lang);
   const isQuote = d.kind === 'quote';
   const signed = !!p.signature;
 
@@ -59,22 +64,22 @@ export default function Portal() {
     const docObj: Doc = {
       type: d.kind, number: d.number, clientId: 0, date: d.date, dueDate: d.dueDate, jobDate: d.jobDate, jobAddress: d.jobAddress, title: d.title,
       items: d.items, applyTps: d.applyTps, applyTvq: d.applyTvq, discount: d.discount, deposit: d.deposit, notes: d.notes, status: d.status, payments: [],
-      signature: p.signature ?? undefined, createdAt: '', updatedAt: '',
+      signature: p.signature ?? undefined, createdAt: '', updatedAt: '', lang,
     };
     const blob = buildDocPdf(docObj, { name: p.client.name, address: p.client.address, contact: '', email: '', phone: '', notes: '', createdAt: '' }, settings).output('blob');
-    downloadBlob(blob, `${isQuote ? 'Soumission' : 'Facture'}_${d.number}.pdf`);
+    downloadBlob(blob, `${isQuote ? L('Soumission', 'Quote') : L('Facture', 'Invoice')}_${d.number}.pdf`);
   };
 
   const accept = async () => {
-    if (name.trim().length < 2) return notify('Écris ton nom complet.', 'err');
-    if (!sig) return notify('Signe dans le cadre.', 'err');
-    if (!agree) return notify('Coche la case pour confirmer.', 'err');
+    if (name.trim().length < 2) return notify(L('Écris ton nom complet.', 'Enter your full name.'), 'err');
+    if (!sig) return notify(L('Signe dans le cadre.', 'Sign in the box.'), 'err');
+    if (!agree) return notify(L('Coche la case pour confirmer.', 'Check the box to confirm.'), 'err');
     setBusy(true);
     try {
       const signature = { name: name.trim(), at: new Date().toISOString(), image: sig };
       await signPortal(token, cfg, signature);
       setP({ ...p, signature });
-      notify('Merci! Ta soumission est acceptée.');
+      notify(L('Merci! Ta soumission est acceptée.', 'Thank you! Your quote is accepted.'));
     } catch (e) {
       notify(errMsg(e), 'err');
     } finally {
@@ -105,25 +110,25 @@ export default function Portal() {
           <div className="small muted">{[...p.company.lines, p.company.phone, p.company.email].filter(Boolean).join(' · ')}</div>
         </div>
         <div className="doc">
-          <div className="k">{isQuote ? 'SOUMISSION' : 'FACTURE'}</div>
-          <div className="small">No {d.number} · {formatDate(d.date)}</div>
-          <div className="small muted">{isQuote ? `Valide jusqu’au ${formatDate(d.dueDate)}` : d.dueDate <= d.date ? 'Payable sur réception' : `Échéance ${formatDate(d.dueDate)}`}</div>
+          <div className="k">{isQuote ? L('SOUMISSION', 'QUOTE') : L('FACTURE', 'INVOICE')}</div>
+          <div className="small">{L('No', 'No.')} {d.number} · {formatDate(d.date)}</div>
+          <div className="small muted">{isQuote ? `${L('Valide jusqu’au', 'Valid until')} ${formatDate(d.dueDate)}` : d.dueDate <= d.date ? L('Payable sur réception', 'Due upon receipt') : `${L('Échéance', 'Due')} ${formatDate(d.dueDate)}`}</div>
         </div>
       </div>
 
       <div className="card">
-        <div className="small muted">{isQuote ? 'Préparée pour' : 'Facturée à'}</div>
+        <div className="small muted">{isQuote ? L('Préparée pour', 'Prepared for') : L('Facturée à', 'Bill to')}</div>
         <div style={{ fontWeight: 700 }}>{p.client.name}</div>
-        {d.jobAddress && <div className="small muted">Lieu des travaux: {d.jobAddress}</div>}
+        {d.jobAddress && <div className="small muted">{L('Lieu des travaux', 'Job site')}: {d.jobAddress}</div>}
         {d.title && <h2 style={{ marginTop: 12 }}>{d.title}</h2>}
         <div className="table-wrap">
           <table className="list">
-            <thead><tr><th>Service</th><th className="num">Qté</th><th className="num hide-mobile">Prix</th><th className="num">Montant</th></tr></thead>
+            <thead><tr><th>Service</th><th className="num">{L('Qté', 'Qty')}</th><th className="num hide-mobile">{L('Prix', 'Price')}</th><th className="num">{L('Montant', 'Amount')}</th></tr></thead>
             <tbody>
               {d.items.map((it, i) => (
                 <tr key={i}>
                   <td>{it.code && <b style={{ color: 'var(--amber-ink)', marginRight: 6 }}>{it.code}</b>}{it.description}</td>
-                  <td className="num">{it.quantity} {it.unit}</td>
+                  <td className="num">{it.quantity} {unitFor(it.unit, lang)}</td>
                   <td className="num hide-mobile">{money(it.unitPrice)}</td>
                   <td className="num">{money(lineAmount(it))}</td>
                 </tr>
@@ -132,15 +137,15 @@ export default function Portal() {
           </table>
         </div>
         <div className="totals" style={{ marginTop: 12 }}>
-          {t.discount > 0 && <div><span>Rabais</span><span>−{money(t.discount)}</span></div>}
-          {d.applyTps && <div><span>TPS</span><span>{money(t.tps)}</span></div>}
-          {d.applyTvq && <div><span>TVQ</span><span>{money(t.tvq)}</span></div>}
+          {t.discount > 0 && <div><span>{L('Rabais', 'Discount')}</span><span>−{money(t.discount)}</span></div>}
+          {d.applyTps && <div><span>{L('TPS', 'GST')}</span><span>{money(t.tps)}</span></div>}
+          {d.applyTvq && <div><span>{L('TVQ', 'QST')}</span><span>{money(t.tvq)}</span></div>}
           <div className="grand"><span>Total</span><span>{money(t.total)}</span></div>
-          {t.deposit > 0 && <div><span>Dépôt reçu</span><span>−{money(t.deposit)}</span></div>}
-          {!isQuote && t.paid > 0 && <div className="grand"><span>Solde</span><span>{money(t.balance)}</span></div>}
+          {t.deposit > 0 && <div><span>{L('Dépôt reçu', 'Deposit received')}</span><span>−{money(t.deposit)}</span></div>}
+          {!isQuote && t.paid > 0 && <div className="grand"><span>{L('Solde', 'Balance')}</span><span>{money(t.balance)}</span></div>}
         </div>
         {d.notes && <p className="small" style={{ whiteSpace: 'pre-wrap' }}>{d.notes}</p>}
-        <button className="btn" onClick={pdf}><Download size={16} /> Télécharger le PDF</button>
+        <button className="btn" onClick={pdf}><Download size={16} /> {L('Télécharger le PDF', 'Download PDF')}</button>
       </div>
 
       {(params.get('avis') === '1' || p.review) && !isQuote && <ReviewCard p={p} token={token} cfg={cfg} onDone={(review) => setP({ ...p, review })} />}
@@ -151,18 +156,18 @@ export default function Portal() {
             <div className="row" style={{ gap: 12 }}>
               <CircleCheck size={36} color="var(--green)" />
               <div>
-                <div style={{ fontWeight: 700 }}>Soumission acceptée</div>
-                <div className="small muted">par {p.signature!.name} le {new Date(p.signature!.at).toLocaleString('fr-CA')}</div>
+                <div style={{ fontWeight: 700 }}>{L('Soumission acceptée', 'Quote accepted')}</div>
+                <div className="small muted">{L('par', 'by')} {p.signature!.name} {L('le', 'on')} {new Date(p.signature!.at).toLocaleString(lang === 'en' ? 'en-CA' : 'fr-CA')}</div>
               </div>
             </div>
           ) : (
             <>
-              <h2><PenLine size={18} style={{ verticalAlign: '-3px' }} /> Accepter la soumission</h2>
+              <h2><PenLine size={18} style={{ verticalAlign: '-3px' }} /> {L('Accepter la soumission', 'Accept the quote')}</h2>
               <div className="grid" style={{ gap: 12 }}>
-                <label className="field">Ton nom complet<input value={name} autoComplete="name" onChange={(e) => setName(e.target.value)} /></label>
-                <SignaturePad onChange={setSig} />
-                <label className="check"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /> J’accepte les travaux et le prix de {money(t.total)}.</label>
-                <button className="btn accent big" disabled={busy} onClick={accept}>{busy ? 'Envoi…' : 'Accepter et signer'}</button>
+                <label className="field">{L('Ton nom complet', 'Your full name')}<input value={name} autoComplete="name" onChange={(e) => setName(e.target.value)} /></label>
+                <SignaturePad onChange={setSig} lang={lang} />
+                <label className="check"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /> {L('J’accepte les travaux et le prix de', 'I accept the work and the price of')} {money(t.total)}.</label>
+                <button className="btn accent big" disabled={busy} onClick={accept}>{busy ? L('Envoi…', 'Sending…') : L('Accepter et signer', 'Accept and sign')}</button>
               </div>
             </>
           )}
@@ -171,28 +176,28 @@ export default function Portal() {
 
       {!isQuote && (
         <div className="card">
-          <h2>Comment payer</h2>
+          <h2>{L('Comment payer', 'How to pay')}</h2>
           {(justPaid || (paidOnline > 0 && due <= 0)) && (
-            <div className="notice ok row"><CircleCheck size={18} /> Merci! Votre paiement par carte {justPaid && !paidOnline ? 'est en cours de confirmation' : `de ${money(paidOnline)} est reçu`}.</div>
+            <div className="notice ok row"><CircleCheck size={18} /> {L('Merci! Votre paiement par carte', 'Thank you! Your card payment')} {justPaid && !paidOnline ? L('est en cours de confirmation', 'is being confirmed') : L(`de ${money(paidOnline)} est reçu`, `of ${money(paidOnline)} was received`)}.</div>
           )}
           {p.company.cardPayments && due > 0 && !justPaid && (
             <div style={{ marginBottom: 14 }}>
-              <button className="btn accent big block" disabled={busy} onClick={payCard}><CreditCard size={20} /> {busy ? 'Ouverture…' : `Payer ${money(due)} par carte`}</button>
-              <div className="small muted" style={{ marginTop: 6, textAlign: 'center' }}>Visa, Mastercard, Amex, Apple Pay, Google Pay — paiement sécurisé par Stripe</div>
+              <button className="btn accent big block" disabled={busy} onClick={payCard}><CreditCard size={20} /> {busy ? L('Ouverture…', 'Opening…') : L(`Payer ${money(due)} par carte`, `Pay ${money(due)} by card`)}</button>
+              <div className="small muted" style={{ marginTop: 6, textAlign: 'center' }}>Visa, Mastercard, Amex, Apple Pay, Google Pay — {L('paiement sécurisé par Stripe', 'secure payment by Stripe')}</div>
             </div>
           )}
-          <p style={{ marginTop: 0 }}>{p.company.cardPayments && due > 0 ? 'Ou par: ' : ''}{p.company.paymentInstructions}</p>
+          <p style={{ marginTop: 0 }}>{p.company.cardPayments && due > 0 ? L('Ou par: ', 'Or by: ') : ''}{p.company.paymentInstructions}</p>
           {interac && (
             <div className="row">
-              <span>Courriel Interac: <strong>{interac}</strong></span>
-              <button className="btn small" onClick={async () => { try { await navigator.clipboard.writeText(interac); notify('Courriel copié'); } catch { notify(interac); } }}><Copy size={15} /> Copier</button>
+              <span>{L('Courriel Interac', 'Interac email')}: <strong>{interac}</strong></span>
+              <button className="btn small" onClick={async () => { try { await navigator.clipboard.writeText(interac); notify(L('Courriel copié', 'Email copied')); } catch { notify(interac); } }}><Copy size={15} /> {L('Copier', 'Copy')}</button>
             </div>
           )}
-          <p className="small muted">Montant: <strong>{money(t.balance || t.total)}</strong> · Référence: {d.number}</p>
+          <p className="small muted">{L('Montant', 'Amount')}: <strong>{money(t.balance || t.total)}</strong> · {L('Référence', 'Reference')}: {d.number}</p>
           {p.company.conditions && <p className="small muted">{p.company.conditions}</p>}
         </div>
       )}
-      <p className="small muted" style={{ textAlign: 'center' }}>{p.company.legalName} · <a href="#/confidentialite" target="_blank" rel="noreferrer">Confidentialité</a></p>
+      <p className="small muted" style={{ textAlign: 'center' }}>{p.company.legalName} · <a href="#/confidentialite" target="_blank" rel="noreferrer">{L('Confidentialité', 'Privacy')}</a></p>
     </div>
   );
 }
@@ -200,6 +205,7 @@ export default function Portal() {
 /** Avis du client: 4-5 étoiles → invitation à publier sur Google; 1-3 → commentaire privé à l'entreprise. */
 function ReviewCard({ p, token, cfg, onDone }: { p: PortalData; token: string; cfg: string | null; onDone: (r: Review) => void }) {
   const notify = useToast();
+  const L = (fr: string, en: string) => (p.lang === 'en' ? en : fr);
   const [stars, setStars] = useState(p.review?.stars ?? 0);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
@@ -217,31 +223,31 @@ function ReviewCard({ p, token, cfg, onDone }: { p: PortalData; token: string; c
   };
   return (
     <div className="card" style={{ textAlign: 'center' }}>
-      <h2>Comment s’est passé le travail?</h2>
+      <h2>{L('Comment s’est passé le travail?', 'How did the job go?')}</h2>
       <div className="stars" role="radiogroup" aria-label="Note">
         {[1, 2, 3, 4, 5].map((n) => (
-          <button key={n} className={n <= stars ? 'on' : ''} disabled={done} aria-label={`${n} étoile${n > 1 ? 's' : ''}`} onClick={() => setStars(n)}>
+          <button key={n} className={n <= stars ? 'on' : ''} disabled={done} aria-label={L(`${n} étoile${n > 1 ? 's' : ''}`, `${n} star${n > 1 ? 's' : ''}`)} onClick={() => setStars(n)}>
             <Star size={36} fill={n <= stars ? 'currentColor' : 'none'} />
           </button>
         ))}
       </div>
       {done ? (
-        <p>Merci pour ton avis!</p>
+        <p>{L('Merci pour ton avis!', 'Thanks for your feedback!')}</p>
       ) : stars >= 4 ? (
         <div style={{ marginTop: 10 }}>
-          <p>Merci! Ça nous aiderait beaucoup que tu le dises aussi sur Google (30 secondes).</p>
+          <p>{L('Merci! Ça nous aiderait beaucoup que tu le dises aussi sur Google (30 secondes).', 'Thank you! It would help us a lot if you shared it on Google too (30 seconds).')}</p>
           {p.company.reviewUrl ? (
-            <a className="btn accent big block" href={p.company.reviewUrl} target="_blank" rel="noreferrer" onClick={() => void send({ stars, at: new Date().toISOString(), toGoogle: true })}><ExternalLink size={18} /> Laisser un avis Google</a>
+            <a className="btn accent big block" href={p.company.reviewUrl} target="_blank" rel="noreferrer" onClick={() => void send({ stars, at: new Date().toISOString(), toGoogle: true })}><ExternalLink size={18} /> {L('Laisser un avis Google', 'Leave a Google review')}</a>
           ) : (
-            <button className="btn accent big block" disabled={busy} onClick={() => send({ stars, at: new Date().toISOString() })}>Envoyer</button>
+            <button className="btn accent big block" disabled={busy} onClick={() => send({ stars, at: new Date().toISOString() })}>{L('Envoyer', 'Send')}</button>
           )}
         </div>
       ) : stars > 0 ? (
         <div style={{ marginTop: 10, textAlign: 'left' }}>
-          <label className="field">Qu’est-ce qu’on pourrait améliorer? (seulement {p.company.name} le voit)
+          <label className="field">{L(`Qu’est-ce qu’on pourrait améliorer? (seulement ${p.company.name} le voit)`, `What could we improve? (only ${p.company.name} sees this)`)}
             <textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
           </label>
-          <button className="btn accent block" style={{ marginTop: 8 }} disabled={busy} onClick={() => send({ stars, comment: comment.trim() || undefined, at: new Date().toISOString() })}>Envoyer</button>
+          <button className="btn accent block" style={{ marginTop: 8 }} disabled={busy} onClick={() => send({ stars, comment: comment.trim() || undefined, at: new Date().toISOString() })}>{L('Envoyer', 'Send')}</button>
         </div>
       ) : null}
     </div>

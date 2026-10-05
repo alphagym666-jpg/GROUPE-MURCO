@@ -68,7 +68,7 @@ export default function Services() {
           <thead>
             <tr>
               <th style={{ width: 80 }}>Code</th>
-              <th>Service (affiché sur la facture)</th>
+              <th>Service (affiché sur la facture) · version anglaise</th>
               <th style={{ width: 110 }}>Unité</th>
               <th style={{ width: 100 }}>Prix / unité</th>
               <th style={{ width: 110 }}>Minimum / ligne</th>
@@ -80,7 +80,10 @@ export default function Services() {
             {rows.map((r, i) => (
               <tr key={r.id ?? `n${i}`}>
                 <td><input className="code-input" value={r.code} onChange={(e) => up(i, { code: e.target.value.toUpperCase() })} aria-label="Code" /></td>
-                <td><input value={r.name} onChange={(e) => up(i, { name: e.target.value })} aria-label="Service" /></td>
+                <td>
+                  <input value={r.name} onChange={(e) => up(i, { name: e.target.value })} aria-label="Service" />
+                  <input className="svc-en" value={r.nameEn ?? ''} placeholder="English (facultatif)" onChange={(e) => up(i, { nameEn: e.target.value || undefined })} aria-label="Service en anglais" />
+                </td>
                 <td>
                   <input list="units-svc" value={r.unit} onChange={(e) => up(i, { unit: e.target.value })} aria-label="Unité" />
                 </td>

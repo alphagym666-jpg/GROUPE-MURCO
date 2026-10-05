@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 /** Zone de signature au doigt ou à la souris. */
-export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
+export function SignaturePad({ onChange, lang = 'fr' }: { onChange: (dataUrl: string | null) => void; lang?: 'fr' | 'en' }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const [empty, setEmpty] = useState(true);
@@ -53,7 +53,7 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
         }}
       />
       <div className="row" style={{ marginTop: 6 }}>
-        <span className="small muted">Signe dans le cadre avec ton doigt ou ta souris.</span>
+        <span className="small muted">{lang === 'en' ? 'Sign in the box with your finger or mouse.' : 'Signe dans le cadre avec ton doigt ou ta souris.'}</span>
         <span className="spacer" />
         <button
           type="button"
@@ -65,7 +65,7 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
             onChange(null);
           }}
         >
-          Effacer
+          {lang === 'en' ? 'Clear' : 'Effacer'}
         </button>
       </div>
     </div>
