@@ -390,6 +390,8 @@ export interface Punch extends Synced {
   breakMin: number;
   note: string;
   approved?: boolean;
+  /** Heure de fin entrée à la main par l'employé (oubli, batterie à plat…) */
+  endManual?: { reason: string; at: string };
   createdAt: string;
 }
 

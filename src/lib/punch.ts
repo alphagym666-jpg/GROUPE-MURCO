@@ -71,6 +71,22 @@ export async function stopPunch(p: Punch, breakMin = 0, note?: string): Promise<
   return { ...p, ...patch };
 }
 
+/** Punch out après coup: l'employé entre l'heure où il a vraiment fini (pas de GPS, signalé au patron). */
+export async function stopPunchAt(p: Punch, endISO: string, breakMin: number, reason: string): Promise<Punch> {
+  const end = new Date(endISO).getTime();
+  if (Number.isNaN(end)) throw new Error('Heure de fin invalide.');
+  if (end <= new Date(p.start).getTime()) throw new Error('L’heure de fin doit être après ton punch in.');
+  if (end > Date.now() + 60_000) throw new Error('L’heure de fin ne peut pas être dans le futur.');
+  const patch: Partial<Punch> = { end: new Date(end).toISOString(), endGeo: undefined, endDistM: undefined, breakMin, endManual: { reason: reason.trim() || 'Non précisée', at: new Date().toISOString() } };
+  await db.punches.update(p.id!, patch);
+  return { ...p, ...patch };
+}
+
+/** Punch resté ouvert trop longtemps (app fermée, batterie à plat, oubli). */
+export function looksForgotten(p: Punch, now = Date.now()): boolean {
+  return !p.end && (now - new Date(p.start).getTime() > 12 * 3600000 || localDay(p.start) !== toISODate(new Date(now)));
+}
+
 /** Heures travaillées (pause déduite). */
 export function hoursOf(p: Punch, now = Date.now()): number {
   const end = p.end ? new Date(p.end).getTime() : now;
@@ -84,6 +100,7 @@ export function punchFlags(p: Punch): string[] {
   if (!p.startGeo) f.push('Sans position GPS');
   if ((p.startDistM ?? 0) > FAR_M) f.push(`Punch in à ${(p.startDistM! / 1000).toFixed(1)} km du chantier`);
   if ((p.endDistM ?? 0) > FAR_M) f.push(`Punch out à ${(p.endDistM! / 1000).toFixed(1)} km du chantier`);
+  if (p.endManual) f.push(`Fin entrée à la main — ${p.endManual.reason}`);
   if (hoursOf(p) > 12) f.push('Plus de 12 h');
   return f;
 }

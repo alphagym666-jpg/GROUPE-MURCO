@@ -1003,8 +1003,17 @@ table.list tr.click:hover td { background: var(--surface-2); }
 .pa-chips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 .pa-chips button { padding: 10px 14px; border-radius: 999px; border: 1.5px solid var(--pa-line); background: var(--pa-card); color: var(--pa-ink); font: inherit; font-weight: 650; cursor: pointer; }
 .pa-chips button.on { border-color: #f2b13d; color: #f2b13d; }
+.pa-forgot { width: 100%; max-width: 420px; margin-top: 14px; display: flex; gap: 12px; align-items: center; text-align: left; padding: 14px; border-radius: 16px; background: rgba(242, 177, 61, 0.12); border: 1.5px solid rgba(242, 177, 61, 0.55); color: #f6c766; }
+.pa-forgot div { flex: 1; display: grid; gap: 3px; }
+.pa-forgot strong { color: var(--pa-ink); font-size: 0.95rem; }
+.pa-forgot small { color: var(--pa-muted); }
+.pa-forgot button { padding: 10px 14px; border-radius: 12px; border: 0; background: #f2b13d; color: #1c1406; font: inherit; font-weight: 750; cursor: pointer; }
+.pa-link { background: none; border: 0; color: var(--pa-muted); font: inherit; font-size: 0.88rem; text-decoration: underline; text-underline-offset: 3px; display: flex; gap: 6px; align-items: center; margin: -8px 0 16px; cursor: pointer; }
 .pa-gps { color: var(--pa-muted); font-size: 0.78rem; margin-top: 16px; display: flex; gap: 5px; align-items: center; }
 .pa-foot { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--pa-line); background: rgba(15, 17, 20, 0.85); padding: 12px 8px calc(12px + var(--sab)); }
 .pa-foot div { display: grid; justify-items: center; gap: 2px; }
 .pa-foot span { font-size: 0.72rem; color: var(--pa-muted); text-transform: uppercase; letter-spacing: 0.06em; }
 .pa-foot b { font-family: var(--font-display); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.fix-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.fix-chips button { padding: 9px 13px; border-radius: 999px; border: 1.5px solid var(--line-strong); background: var(--surface); color: var(--ink); font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer; }
+.fix-chips button.on { border-color: var(--primary-ink); background: var(--primary-bg); color: var(--primary-ink); }

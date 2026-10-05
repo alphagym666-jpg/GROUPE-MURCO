@@ -119,6 +119,7 @@ export function PunchModal({ p, onClose, onSaved }: { p: Punch; onClose: () => v
         <label className="field">Pause (min)<input type="number" value={x.breakMin || ''} onChange={(e) => setX({ ...x, breakMin: Number(e.target.value) })} /></label>
         <label className="field full">Note<input value={x.note} onChange={(e) => setX({ ...x, note: e.target.value })} /></label>
       </div>
+      {p.endManual && <div className="notice small" style={{ marginTop: 10 }}>Heure de fin entrée à la main par {p.name} le {new Date(p.endManual.at).toLocaleString('fr-CA', { dateStyle: 'medium', timeStyle: 'short' })} — raison : {p.endManual.reason}. Vérifie et approuve.</div>}
       <div className="row small" style={{ marginTop: 10 }}>
         {x.startGeo && <a href={mapsLink(x.startGeo)} target="_blank" rel="noreferrer"><MapPin size={12} /> Position du punch in</a>}
         {x.endGeo && <a href={mapsLink(x.endGeo)} target="_blank" rel="noreferrer"><MapPin size={12} /> Position du punch out</a>}

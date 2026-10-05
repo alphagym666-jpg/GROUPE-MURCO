@@ -1,14 +1,15 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { AlertTriangle, Coffee, LogOut, MapPin, Play, Square } from 'lucide-react';
+import { AlertTriangle, BatteryLow, Clock3, Coffee, LogOut, MapPin, Play, Square } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { CompanyMark } from '../components/CompanyMark';
+import { Modal } from '../components/Modal';
 import { errMsg, useConfirm, useToast } from '../components/Toast';
-import { db } from '../lib/db';
+import { db, type Punch } from '../lib/db';
 import { haptic } from '../lib/feel';
 import { useSettings } from '../lib/hooks';
-import { hoursOf, localDay, openPunch, punchFlags, startPunch, stopPunch, weekStart, whoAmI, type Me } from '../lib/punch';
+import { hoursOf, localDay, looksForgotten, openPunch, punchFlags, startPunch, stopPunch, stopPunchAt, weekStart, whoAmI, type Me } from '../lib/punch';
 import { signOutSync, useSyncState } from '../lib/sync';
-import { todayISO } from '../lib/utils';
+import { addDays, todayISO } from '../lib/utils';
 
 const hm = (h: number) => `${Math.floor(h)} h ${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
 const clock = (ms: number) => {
@@ -30,6 +31,7 @@ export default function PunchApp() {
   const [jobId, setJobId] = useState<number | ''>('');
   const [breakMin, setBreakMin] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [fix, setFix] = useState(false);
   const [now, setNow] = useState(Date.now());
   const today = todayISO();
 
@@ -103,13 +105,28 @@ export default function PunchApp() {
         <div className="pa-status">{open ? `Au travail depuis ${time(open.start)}` : todayPunches.length ? 'Pas en service' : 'Prêt à commencer'}</div>
         <div className="pa-clock">{open ? clock(now - new Date(open.start).getTime() - (breakMin || 0) * 60_000) : hm(todayH)}</div>
         <div className="pa-sub">{open ? jobLabel(openJob?.id ?? open.jobId) : 'aujourd’hui'}</div>
-        {open && punchFlags(open).filter((f) => !f.startsWith('Pas de punch out')).map((f) => <div key={f} className="pa-flag"><AlertTriangle size={13} /> {f}</div>)}
+        {open && punchFlags(open).filter((f) => !f.startsWith('Pas de punch out') && f !== 'Plus de 12 h').map((f) => <div key={f} className="pa-flag"><AlertTriangle size={13} /> {f}</div>)}
+
+        {open && looksForgotten(open, now) && (
+          <div className="pa-forgot" role="alert">
+            <BatteryLow size={22} />
+            <div>
+              <strong>T’es encore punché depuis {localDay(open.start) === today ? '' : `le ${dayLabel(localDay(open.start))}, `}{time(open.start)}</strong>
+              <small>Oublié de dépuncher ou batterie à plat? Entre l’heure où t’as vraiment fini.</small>
+            </div>
+            <button onClick={() => setFix(true)}>Corriger</button>
+          </div>
+        )}
 
         <button className={`pa-btn ${open ? 'stop' : ''}`} disabled={busy} onClick={() => void toggle()} aria-label={open ? 'Punch out' : 'Punch in'}>
           <span className="pa-ring" />
           {open ? <Square size={44} fill="currentColor" /> : <Play size={48} fill="currentColor" />}
           <b>{busy ? '…' : open ? 'PUNCH OUT' : 'PUNCH IN'}</b>
         </button>
+
+        {open && !looksForgotten(open, now) && (
+          <button className="pa-link" onClick={() => setFix(true)}><Clock3 size={14} /> J’ai fini plus tôt / oublié de dépuncher</button>
+        )}
 
         {open ? (
           <div className="pa-break">
@@ -138,6 +155,69 @@ export default function PunchApp() {
         <div><span>Cette semaine</span><b>{hm(weekH)}</b></div>
         <div><span>Pointages</span><b>{todayPunches.length}</b></div>
       </footer>
+
+      {fix && open && <FixEnd p={open} breakMin={breakMin} onClose={() => setFix(false)} onDone={(done) => { setFix(false); setBreakMin(0); haptic('success'); notify(`Punch out à ${time(done.end!)} — ${hm(hoursOf(done))} travaillées. Ton patron va le voir.`); }} />}
     </div>
+  );
+}
+
+const dayLabel = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' });
+const REASONS = ['Oublié de dépuncher', 'Batterie à plat', 'App fermée / pas de réseau'];
+
+/** Entrer après coup l'heure où l'employé a vraiment fini (sans GPS, signalé au patron). */
+function FixEnd({ p, breakMin, onClose, onDone }: { p: Punch; breakMin: number; onClose: () => void; onDone: (done: Punch) => void }) {
+  const notify = useToast();
+  const startDay = localDay(p.start);
+  const today = todayISO();
+  const days: string[] = [];
+  for (let d = startDay; d <= today && days.length < 4; d = addDays(d, 1)) days.push(d);
+  const [day, setDay] = useState(startDay);
+  const [hhmm, setHhmm] = useState(startDay === today ? new Date().toTimeString().slice(0, 5) : '');
+  const [brk, setBrk] = useState(breakMin);
+  const [reason, setReason] = useState(startDay === today ? '' : REASONS[0]);
+  const [other, setOther] = useState('');
+  const [busy, setBusy] = useState(false);
+  const end = hhmm ? new Date(`${day}T${hhmm}:00`) : null;
+  const preview = end ? hoursOf({ ...p, end: end.toISOString(), breakMin: brk }) : 0;
+  const bad = !end ? '' : end.getTime() <= new Date(p.start).getTime() ? 'Doit être après ton punch in.' : end.getTime() > Date.now() + 60_000 ? 'Ça ne peut pas être dans le futur.' : '';
+  const why = reason === 'Autre' ? other.trim() : reason;
+
+  const save = async () => {
+    if (!end) return;
+    setBusy(true);
+    try {
+      onDone(await stopPunchAt(p, end.toISOString(), brk, why));
+    } catch (e) {
+      notify(errMsg(e), 'err');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title="À quelle heure t’as fini?" onClose={onClose}>
+      <p className="small muted" style={{ marginTop: 0 }}>Punch in : {dayLabel(startDay)} à {time(p.start)}. L’heure que tu entres est envoyée à ton patron avec la raison.</p>
+      {days.length > 1 && (
+        <div className="fix-chips" style={{ marginBottom: 10 }}>
+          {days.map((d) => <button key={d} className={day === d ? 'on' : ''} onClick={() => setDay(d)}>{d === today ? 'Aujourd’hui' : d === addDays(today, -1) ? 'Hier' : dayLabel(d)}</button>)}
+        </div>
+      )}
+      <label className="field">Heure de fin<input id="fix-end" type="time" value={hhmm} onChange={(e) => setHhmm(e.target.value)} style={{ fontSize: '1.4rem' }} /></label>
+      {bad && <div className="small" style={{ color: 'var(--red)', marginTop: 4 }}>{bad}</div>}
+
+      <div className="small muted" style={{ margin: '12px 0 6px', fontWeight: 600 }}>Pause prise</div>
+      <div className="fix-chips">
+        {[0, 15, 30, 45, 60].map((m) => <button key={m} className={brk === m ? 'on' : ''} onClick={() => setBrk(m)}>{m ? `${m} min` : 'Aucune'}</button>)}
+      </div>
+
+      <div className="small muted" style={{ margin: '12px 0 6px', fontWeight: 600 }}>Pourquoi?</div>
+      <div className="fix-chips">
+        {[...REASONS, 'Autre'].map((r) => <button key={r} className={reason === r ? 'on' : ''} onClick={() => setReason(r)}>{r}</button>)}
+      </div>
+      {reason === 'Autre' && <input style={{ marginTop: 8, width: '100%' }} placeholder="Explique en quelques mots" value={other} onChange={(e) => setOther(e.target.value)} />}
+
+      <button className="btn accent block big" style={{ marginTop: 16 }} disabled={busy || !end || !!bad || !why} onClick={() => void save()}>
+        {end && !bad ? `Punch out à ${hhmm.replace(':', ' h ')} · ${hm(preview)}` : 'Punch out'}
+      </button>
+    </Modal>
   );
 }
