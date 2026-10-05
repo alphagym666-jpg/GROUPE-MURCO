@@ -20,10 +20,12 @@ import { syncLeadFromDoc } from '../lib/crm';
 import { useSyncState } from '../lib/sync';
 import { smsLink } from '../lib/agenda';
 import { MediaGallery, ProofPhoto } from '../components/MediaGallery';
-import { Banknote, Copy, Download, Eye, Link2, Plus, Save, Send, Share2, Star, Trash2, Navigation, RefreshCw, TrendingUp } from 'lucide-react';
+import { Banknote, CircleCheck, Copy, Download, Eye, Link2, Mail, MessageSquare, Plus, Save, Send, Share2, Star, Trash2, Navigation, RefreshCw, TrendingUp } from 'lucide-react';
 import { deleteDocCascade, syncTripForDoc } from '../lib/trips';
 import { addDays, METHOD_LABEL, docTotals, downloadBlob, formatDate, km, money, round2, STATUS_LABELS, statusClass, statusLabel, todayISO } from '../lib/utils';
 import { celebrate } from '../lib/feel';
+import { NumInput } from '../components/NumInput';
+import { PdfView } from '../components/PdfView';
 
 function newDoc(type: DocType, clientId: number, s: Awaited<ReturnType<typeof getSettings>>): Doc {
   const date = todayISO();
@@ -73,10 +75,12 @@ export default function DocEditor() {
       openEmailRef.current();
     }
   }, [loadedFor, loadKey, params]);
+  const [isMobile] = useState(() => matchMedia('(max-width: 860px)').matches);
   const [moreOpen, setMoreOpen] = useState(() => !matchMedia('(max-width: 860px)').matches);
   const [emailPdf, setEmailPdf] = useState<Blob | null>(null);
   const [showPay, setShowPay] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [readyView, setReadyView] = useState<{ doc: Doc; blob: Blob; saved: boolean } | null>(null);
 
   const clients = useLiveQuery(() => db.clients.orderBy('name').toArray(), []) ?? [];
   const services = useLiveQuery(() => db.services.orderBy('order').toArray(), []) ?? [];
@@ -200,9 +204,14 @@ export default function DocEditor() {
   const pdfBlob = (d: Doc) => makeDocPdf(d, client, s);
   const ready = async () => (dirty || !doc.id ? await save({}, true) : doc);
 
+  /** Enregistrer → la facture s'affiche tout de suite, prête à envoyer. */
+  const saveAndShow = async () => {
+    const d = await save();
+    if (d) setReadyView({ doc: d, blob: await pdfBlob(d), saved: true });
+  };
   const preview = async () => {
     const d = await ready();
-    if (d) setPdfUrl(URL.createObjectURL(await pdfBlob(d)));
+    if (d) setReadyView({ doc: d, blob: await pdfBlob(d), saved: false });
   };
   const download = async () => {
     const d = await ready();
@@ -331,12 +340,13 @@ export default function DocEditor() {
           </h1>
         </div>
         <div className="actions editor-bar">
-          <button className="btn accent" onClick={() => save()} disabled={busy}><Save size={17} /> {busy ? '…' : 'Enregistrer'}</button>
-          <button className="btn primary" onClick={openEmail}><Send size={17} /> Envoyer</button>
-          {doc.id && <PortalButton doc={doc} />}
-          <button className="btn" onClick={share}><Share2 size={17} /> Partager</button>
-          <button className="btn" onClick={download}><Download size={17} /> PDF</button>
-          <button className="btn" onClick={preview}><Eye size={17} /> Aperçu</button>
+          <div className="eb-total hide-desktop"><small>Total</small><b>{money(tot.total)}</b></div>
+          <button className="btn accent" onClick={() => void saveAndShow()} disabled={busy}><Save size={17} /> {busy ? '…' : 'Enregistrer'}</button>
+          <button className="btn primary hide-mobile" onClick={openEmail}><Send size={17} /> Envoyer</button>
+          {doc.id && <span className="hide-mobile"><PortalButton doc={doc} /></span>}
+          <button className="btn hide-mobile" onClick={share}><Share2 size={17} /> Partager</button>
+          <button className="btn hide-mobile" onClick={download}><Download size={17} /> PDF</button>
+          <button className="btn icon-mobile" onClick={preview} aria-label="Aperçu"><Eye size={17} /> <span className="hide-mobile">Aperçu</span></button>
         </div>
       </div>
 
@@ -373,9 +383,11 @@ export default function DocEditor() {
         <h2>Détails</h2>
         <LineItems items={doc.items} services={services} onChange={(items) => upd({ items })} lang={L} />
         <div className="grid two" style={{ marginTop: 16, alignItems: 'start' }}>
+          <details className="doc-extras" open={!isMobile || !!doc.discount || !!doc.deposit || !doc.applyTps !== !s.chargeTaxes}>
+          <summary className="hide-desktop">Rabais, dépôt et taxes <small>{[doc.discount ? `rabais ${money(doc.discount)}` : '', doc.deposit ? `dépôt ${money(doc.deposit)}` : '', doc.applyTps || doc.applyTvq ? 'taxes incluses' : 'sans taxes'].filter(Boolean).join(' · ')}</small></summary>
           <div className="form-grid">
-            <label className="field">Rabais ($, avant taxes)<input type="number" inputMode="decimal" step="0.01" value={doc.discount || ''} placeholder="0" onChange={(e) => upd({ discount: Number(e.target.value) })} /></label>
-            <label className="field">Dépôt reçu ($)<input type="number" inputMode="decimal" step="0.01" value={doc.deposit || ''} placeholder="0" onChange={(e) => upd({ deposit: Number(e.target.value) })} /></label>
+            <label className="field">Rabais ($, avant taxes)<NumInput value={doc.discount} placeholder="0" onChange={(n) => upd({ discount: n })} /></label>
+            <label className="field">Dépôt reçu ($)<NumInput value={doc.deposit} placeholder="0" onChange={(n) => upd({ deposit: n })} /></label>
             {(doc.deposit ?? 0) > 0 && (
               <div className="full">
                 {doc.id
@@ -386,6 +398,7 @@ export default function DocEditor() {
             <label className="check"><input type="checkbox" checked={doc.applyTps} onChange={(e) => upd({ applyTps: e.target.checked })} /> TPS {s.tpsRate} %</label>
             <label className="check"><input type="checkbox" checked={doc.applyTvq} onChange={(e) => upd({ applyTvq: e.target.checked })} /> TVQ {s.tvqRate} %</label>
           </div>
+          </details>
           <div className="totals">
             {tot.discount > 0 && <div><span>Sous-total</span><span>{money(tot.lines)}</span></div>}
             {tot.discount > 0 && <div><span>Rabais</span><span>−{money(tot.discount)}</span></div>}
@@ -398,7 +411,10 @@ export default function DocEditor() {
             {tot.paid > 0 && <div className="grand"><span>Solde à payer</span><span>{money(tot.balance)}</span></div>}
           </div>
         </div>
-        <label className="field" style={{ marginTop: 12 }}>Notes (apparaissent sur le PDF)<textarea value={doc.notes} onChange={(e) => upd({ notes: e.target.value })} /></label>
+        <details className="doc-extras" open={!isMobile}>
+          <summary className="hide-desktop">Notes sur le PDF {doc.notes.trim() ? <small>{doc.notes.trim().slice(0, 40)}</small> : null}</summary>
+          <label className="field" style={{ marginTop: 12 }}>Notes (apparaissent sur le PDF)<textarea value={doc.notes} onChange={(e) => upd({ notes: e.target.value })} /></label>
+        </details>
       </div>
 
       <details className="card more-opts" open={moreOpen} onToggle={(e) => setMoreOpen((e.target as HTMLDetailsElement).open)}>
@@ -431,7 +447,12 @@ export default function DocEditor() {
           </label>
           <label className="field">
             Statut
-            <select value={doc.status} onChange={(e) => upd({ status: e.target.value as DocStatus })}>
+            <select value={doc.status} onChange={(e) => {
+              const status = e.target.value as DocStatus;
+              // « Payée » à la main: on inscrit le paiement du solde (sinon l'encaissé du mois reste à 0)
+              if (isInvoice && status === 'paid' && tot.balance > 0.004) upd({ status, payments: [...doc.payments, { date: todayISO(), amount: tot.balance, method: 'Non précisé', note: 'Marquée payée à la main' }] });
+              else upd({ status });
+            }}>
               {(isInvoice ? ['draft', 'sent', 'partial', 'paid', 'cancelled'] : ['draft', 'sent', 'accepted', 'refused', 'cancelled']).map((k) => (
                 <option key={k} value={k}>{STATUS_LABELS[k as DocStatus]}</option>
               ))}
@@ -451,7 +472,7 @@ export default function DocEditor() {
         </>
       ) : null}
 
-      <div className="grid two">
+      <div className={`grid two ${doc.id ? '' : 'hide-mobile'}`}>
         <div className="card">
           <h2>Déplacement (journal de bord)</h2>
           {trip ? (
@@ -540,6 +561,24 @@ export default function DocEditor() {
         setShowPay(false);
       }} />}
 
+      {readyView && (
+        <ReadySheet
+          doc={readyView.doc}
+          blob={readyView.blob}
+          saved={readyView.saved}
+          kind={kind}
+          clientName={client?.name ?? ''}
+          phone={client?.phone}
+          total={docTotals(readyView.doc, s)}
+          onClose={() => setReadyView(null)}
+          onEmail={() => { setReadyView(null); void openEmail(); }}
+          onShare={() => void share()}
+          onDownload={() => downloadBlob(readyView.blob, docFileName(readyView.doc, client))}
+          onPay={isInvoice && readyView.doc.status !== 'paid' ? () => { setReadyView(null); setShowPay(true); } : undefined}
+          onSent={() => { if (readyView.doc.status === 'draft') void save({ status: 'sent', sentAt: new Date().toISOString() }, true); }}
+          smsText={(link) => `${client?.lang === 'en' ? `Hello ${client?.contact || client?.name || ''}, here is your ${isInvoice ? 'invoice' : 'quote'} ${readyView.doc.number}` : `Bonjour ${client?.contact || client?.name || ''}, voici votre ${kind.toLowerCase()} ${readyView.doc.number}`} (${money(docTotals(readyView.doc, s).balance || docTotals(readyView.doc, s).total)})${link ? ` : ${link}` : '.'}`}
+        />
+      )}
       {pdfUrl && (
         <Modal title="Aperçu" onClose={() => { URL.revokeObjectURL(pdfUrl); setPdfUrl(null); }}>
           <iframe src={pdfUrl} title="Aperçu PDF" style={{ width: '100%', height: '70vh', border: 0 }} />
@@ -559,7 +598,7 @@ export function PaymentModal({ balance, link, onClose, onSave }: { balance: numb
   return (
     <Modal title="Enregistrer un paiement" onClose={onClose}>
       <div className="form-grid">
-        <label className="field">Montant<input type="number" step="0.01" inputMode="decimal" value={amount} onChange={(e) => setAmount(Number(e.target.value))} /></label>
+        <label className="field">Montant<NumInput value={amount} onChange={(n) => setAmount(n)} /></label>
         <label className="field">Date<input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
         <label className="field full">Mode
           <select value={method} onChange={(e) => setMethod(e.target.value)}>
@@ -642,8 +681,8 @@ function ProfitCard({ doc, onChange }: { doc: Doc; onChange: (p: Partial<Doc>) =
       </div>
       <div className="grid two" style={{ alignItems: 'start' }}>
         <div className="form-grid">
-          <label className="field">Heures travaillées<input type="number" inputMode="decimal" step="0.25" value={doc.hoursWorked || ''} placeholder="0" onChange={(e) => onChange({ hoursWorked: Number(e.target.value) || undefined })} /></label>
-          <label className="field">Autres coûts ($)<input type="number" inputMode="decimal" step="0.01" value={doc.otherCost || ''} placeholder="sous-traitant…" onChange={(e) => onChange({ otherCost: Number(e.target.value) || undefined })} /></label>
+          <label className="field">Heures travaillées<NumInput value={doc.hoursWorked} placeholder="0" onChange={(n) => onChange({ hoursWorked: n || undefined })} /></label>
+          <label className="field">Autres coûts ($)<NumInput value={doc.otherCost} placeholder="sous-traitant…" onChange={(n) => onChange({ otherCost: n || undefined })} /></label>
           <div className="full">
             <div className="small muted" style={{ marginBottom: 6 }}>Reçus liés à cette job ({receipts.length})</div>
             {receipts.map((r) => <div key={r.id} className="small"><Link to={`/depenses/${r.id}`}>{r.date} — {r.vendor || r.category}</Link> · {money(r.subtotal)}</div>)}
@@ -700,5 +739,47 @@ function ReviewRequestButton({ doc }: { doc: Doc }) {
         </Modal>
       )}
     </>
+  );
+}
+
+/** Juste après « Enregistrer »: la facture en PDF, prête à envoyer en un geste. */
+function ReadySheet({ doc, blob, saved, kind, clientName, phone, total, onClose, onEmail, onShare, onDownload, onPay, onSent, smsText }: {
+  doc: Doc; blob: Blob; saved: boolean; kind: string; clientName: string; phone?: string; total: { total: number; balance: number };
+  onClose: () => void; onEmail: () => void; onShare: () => void; onDownload: () => void; onPay?: () => void; onSent: () => void; smsText: (link: string) => string;
+}) {
+  const notify = useToast();
+  const [busy, setBusy] = useState(false);
+  const text = async () => {
+    if (!phone) return;
+    setBusy(true);
+    let link = '';
+    try {
+      link = await publishPortal(doc.id!);
+    } catch {
+      notify('Envoyé sans lien en ligne (active la synchronisation pour que le client puisse voir et payer en ligne).', 'err');
+    }
+    onSent();
+    setBusy(false);
+    window.location.href = smsLink(phone, smsText(link));
+  };
+  return (
+    <Modal title={`${kind} ${doc.number}`} onClose={onClose}>
+      <div className="ready-head">
+        {saved && <CircleCheck size={22} />}
+        <div>
+          <strong>{saved ? `${kind} enregistrée` : 'Aperçu'}</strong>
+          <small>{clientName}{clientName ? ' · ' : ''}{money(total.balance > 0 && total.balance < total.total ? total.balance : total.total)}{doc.status === 'paid' ? ' · payée' : ''}</small>
+        </div>
+      </div>
+      <div className="ready-actions">
+        {phone && <button className="btn accent" disabled={busy} onClick={() => void text()}><MessageSquare size={17} /> Texto au client</button>}
+        <button className={`btn ${phone ? '' : 'accent'}`} onClick={onEmail}><Mail size={17} /> Courriel</button>
+        <button className="btn" onClick={onShare}><Share2 size={17} /> Partager</button>
+        <button className="btn" onClick={onDownload}><Download size={17} /> Télécharger</button>
+        {onPay && <button className="btn" onClick={onPay}><Banknote size={17} /> Payée</button>}
+      </div>
+      <PdfView blob={blob} />
+      <button className="btn block" style={{ marginTop: 12 }} onClick={onClose}>Continuer à modifier</button>
+    </Modal>
   );
 }

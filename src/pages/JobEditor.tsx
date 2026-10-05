@@ -17,6 +17,7 @@ import { directionsLink } from '../lib/geo';
 import { useSettings } from '../lib/hooks';
 import { useSyncState } from '../lib/sync';
 import { addDays, formatDate, lineAmount, money, todayISO } from '../lib/utils';
+import { NumInput } from '../components/NumInput';
 
 export default function JobEditor() {
   const { id } = useParams();
@@ -244,7 +245,7 @@ export default function JobEditor() {
             </select>
           </label>
           {j.recurrence === 'months' && (
-            <label className="field">Aux combien de mois<input type="number" min={1} max={24} value={j.recurEveryMonths ?? 6} onChange={(e) => up({ recurEveryMonths: Number(e.target.value) })} /></label>
+            <label className="field">Aux combien de mois<NumInput value={j.recurEveryMonths ?? 6} onChange={(n) => up({ recurEveryMonths: n })} /></label>
           )}
           </div>
         </details>

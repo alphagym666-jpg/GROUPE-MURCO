@@ -9,6 +9,7 @@ import { useSettings } from '../lib/hooks';
 import { costOf, hoursOf, localDay, punchFlags, weekDays, weekStart } from '../lib/punch';
 import { addDays, downloadBlob, money, toCSV, todayISO } from '../lib/utils';
 import { PageHero } from '../components/PageHero';
+import { NumInput } from '../components/NumInput';
 
 const DOW = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const h2 = (h: number) => (h ? h.toFixed(2).replace('.', ',') : '—');
@@ -147,7 +148,7 @@ export function PunchModal({ p, onClose, onSaved }: { p: Punch; onClose: () => v
       <div className="form-grid">
         <label className="field">Début<input type="datetime-local" value={toLocalInput(x.start)} onChange={(e) => setX({ ...x, start: fromLocal(e.target.value) ?? x.start })} /></label>
         <label className="field">Fin<input type="datetime-local" value={toLocalInput(x.end)} onChange={(e) => setX({ ...x, end: fromLocal(e.target.value) })} /></label>
-        <label className="field">Pause (min)<input type="number" value={x.breakMin || ''} onChange={(e) => setX({ ...x, breakMin: Number(e.target.value) })} /></label>
+        <label className="field">Pause (min)<NumInput value={x.breakMin} onChange={(n) => setX({ ...x, breakMin: n })} /></label>
         <label className="field full">Note<input value={x.note} onChange={(e) => setX({ ...x, note: e.target.value })} /></label>
       </div>
       {p.endManual && <div className="notice small" style={{ marginTop: 10 }}>Heure de fin entrée à la main par {p.name} le {new Date(p.endManual.at).toLocaleString('fr-CA', { dateStyle: 'medium', timeStyle: 'short' })} — raison : {p.endManual.reason}. Vérifie et approuve.</div>}

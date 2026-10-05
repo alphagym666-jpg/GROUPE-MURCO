@@ -66,7 +66,16 @@ export default function DocList({ type }: { type: DocType }) {
   const late = open.filter((d) => d.dueDate < today);
   const bal = (list: Doc[]) => list.reduce((a, d) => a + docTotals(d, s).balance, 0);
   const tot = (list: Doc[]) => list.reduce((a, d) => a + docTotals(d, s).total, 0);
-  const paidMonth = isInvoice ? live.reduce((a, d) => a + d.payments.filter((p) => p.date.startsWith(month)).reduce((x, p) => x + p.amount, 0), 0) : 0;
+  // Encaissé ce mois: paiements datés du mois, dépôts des factures du mois, et anciennes factures « Payée » sans paiement inscrit
+  const paidMonth = isInvoice
+    ? live.reduce((a, d) => {
+        const t = docTotals(d, s);
+        let x = d.payments.filter((p) => p.date.startsWith(month)).reduce((y, p) => y + p.amount, 0);
+        if (t.deposit > 0 && d.date.startsWith(month)) x += t.deposit;
+        if (d.status === 'paid' && !d.payments.length && t.balance > 0.004 && (d.updatedAt || d.date).startsWith(month)) x += t.balance;
+        return a + x;
+      }, 0)
+    : 0;
   const billedMonth = tot(live.filter((d) => d.date.startsWith(month)));
   const decided = live.filter((d) => d.status === 'accepted' || d.status === 'refused' || d.convertedInvoiceId);
   const won = decided.filter((d) => d.status === 'accepted' || d.convertedInvoiceId);

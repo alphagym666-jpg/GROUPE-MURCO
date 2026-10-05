@@ -184,11 +184,50 @@ export interface AddressSuggestion {
   resolve: () => Promise<GeocodeResult | null>;
 }
 
+const PHOTON = 'https://photon.komoot.io/api/';
+
+/** Suggestions gratuites (OpenStreetMap / Photon), sans clé. Si on a tapé un numéro civique, il est gardé. */
+async function photonSuggest(input: string): Promise<AddressSuggestion[]> {
+  const st = await getSettings();
+  const near = st.homeGeo ? `&lat=${st.homeGeo.lat}&lon=${st.homeGeo.lon}` : '&lat=45.55&lon=-73.65';
+  const res = await fetch(`${PHOTON}?q=${encodeURIComponent(input)}&limit=8&lang=fr${near}&bbox=-79.8,44.9,-57,62.7`);
+  if (!res.ok) return [];
+  const data = (await res.json()) as { features?: { geometry: { coordinates: [number, number] }; properties: Record<string, string | undefined> }[] };
+  const typedNum = input.trim().match(/^(\d+[a-zA-Z]?)\s/)?.[1];
+  const seen = new Set<string>();
+  const out: AddressSuggestion[] = [];
+  for (const f of data.features ?? []) {
+    const p = f.properties;
+    if (p.countrycode && p.countrycode !== 'CA') continue;
+    const street = p.street ?? (p.osm_key === 'highway' ? p.name : undefined);
+    const city = p.city ?? p.town ?? p.village ?? p.locality ?? p.county;
+    if (!street && !city) continue;
+    const num = p.housenumber ?? (street && typedNum ? typedNum : undefined);
+    const line1 = street ? `${num ? `${num} ` : ''}${street}` : (p.name ?? '');
+    const label = [line1, city, [p.state === 'Québec' || p.state === 'Quebec' ? 'QC' : p.state, p.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    const geo = { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
+    out.push({ label, resolve: async () => ({ geo, label }) });
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
 let sessionToken: unknown = null;
-/** Suggestions d'adresses Google Maps pendant la saisie (nécessite « Places API (New) »). */
+/** Suggestions d'adresses pendant la saisie: Google Maps si une clé est configurée, sinon OpenStreetMap (gratuit). */
 export async function suggestAddresses(input: string): Promise<AddressSuggestion[]> {
+  if (input.trim().length < 3) return [];
   const key = await mapsKey();
-  if (!key || input.trim().length < 3) return [];
+  if (!key) return photonSuggest(input);
+  try {
+    return await googleSuggest(key, input);
+  } catch {
+    return photonSuggest(input);
+  }
+}
+
+async function googleSuggest(key: string, input: string): Promise<AddressSuggestion[]> {
   const maps = await loadGoogleMaps(key);
   const { AutocompleteSuggestion, AutocompleteSessionToken } = await maps.importLibrary('places');
   sessionToken ||= new AutocompleteSessionToken();

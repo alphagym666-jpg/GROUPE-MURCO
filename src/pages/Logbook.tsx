@@ -10,6 +10,7 @@ import { useSettings } from '../lib/hooks';
 import { buildLogbookPdf } from '../lib/pdf';
 import { ensureHomeGeo } from '../lib/trips';
 import { downloadBlob, METHOD_LABEL, formatDate, km, kmAllowance, money, toCSV, todayISO } from '../lib/utils';
+import { NumInput } from '../components/NumInput';
 
 const SOURCE_LABEL: Record<Trip['source'], string> = { 'auto-facture': 'auto', 'auto-recu': 'auto', 'auto-agenda': 'route', manuel: '' };
 
@@ -199,7 +200,7 @@ function TripModal({ trip, clients, onClose, notify, mapsKey }: { trip: Trip; cl
         </label>
         <label className="field full">Raison (affaires) *<input value={t.reason} onChange={(e) => up({ reason: e.target.value })} placeholder="ex.: Achat matériaux chez Rona pour job Tremblay" /></label>
         <label className="field">Km (aller)
-          <input type="number" step="0.1" inputMode="decimal" value={t.oneWayKm} onChange={(e) => up({ oneWayKm: Number(e.target.value), distanceMethod: 'manuel' })} />
+          <NumInput value={t.oneWayKm} onChange={(n) => up({ oneWayKm: n, distanceMethod: 'manuel' })} />
         </label>
         <label className="field">&nbsp;<button className="btn" onClick={calc} disabled={busy || !t.toLabel}>{busy ? 'Calcul…' : 'Calculer les km'}</button></label>
         <label className="check full"><input type="checkbox" checked={t.roundTrip} onChange={(e) => up({ roundTrip: e.target.checked })} /> Aller-retour</label>

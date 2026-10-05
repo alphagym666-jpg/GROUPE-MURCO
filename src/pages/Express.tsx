@@ -20,6 +20,7 @@ import { publishPortal } from '../lib/portal';
 import { shareFiles } from '../lib/native';
 import { addDays, docTotals, downloadBlob, km, lineAmount, money, round2, todayISO } from '../lib/utils';
 import { parseDictation } from '../lib/voice';
+import { NumInput } from '../components/NumInput';
 
 const STEPS = ['Client', 'Travaux', 'Finaliser'];
 const PAY_METHODS = ['Comptant', 'Virement Interac', 'Chèque'];
@@ -344,7 +345,7 @@ export default function Express() {
                   </div>
                   <div className="stepper">
                     <button className="btn" onClick={() => setQty(i, round2(l.quantity - (l.quantity > 20 ? 10 : 1)))} aria-label="Moins"><Minus size={18} /></button>
-                    <input type="number" inputMode="decimal" value={l.quantity} onChange={(e) => setQty(i, Number(e.target.value))} aria-label={`Quantité ${l.code}`} />
+                    <NumInput value={l.quantity} onChange={(n) => setQty(i, n)} aria-label={`Quantité ${l.code}`} />
                     <button className="btn" onClick={() => setQty(i, round2(l.quantity + (l.quantity >= 20 ? 10 : 1)))} aria-label="Plus"><Plus size={18} /></button>
                     <button className="btn" onClick={() => setCalcFor(i)} aria-label="Calculateur"><Calculator size={18} /></button>
                   </div>
@@ -362,7 +363,7 @@ export default function Express() {
             <label className="field full">Lieu des travaux
               <AddressInput value={address} onChange={(v) => { setAddress(v); setAddressGeo(undefined); }} onPick={(label, geo) => { setAddress(label); setAddressGeo(geo); }} />
             </label>
-            <label className="field">Rabais ($)<input type="number" inputMode="decimal" value={discount || ''} placeholder="0" onChange={(e) => setDiscount(Number(e.target.value))} /></label>
+            <label className="field">Rabais ($)<NumInput value={discount} placeholder="0" onChange={(n) => setDiscount(n)} /></label>
           </div>
           <label className="check" style={{ marginTop: 14 }}>
             <input type="checkbox" checked={paidNow} onChange={(e) => setPaidNow(e.target.checked)} /> <Banknote size={17} /> Le client a payé sur place

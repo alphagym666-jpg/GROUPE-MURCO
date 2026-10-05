@@ -12,6 +12,7 @@ import { readReceipt } from '../lib/ocr';
 import { ensureHomeGeo, syncTripForExpense } from '../lib/trips';
 import { km, money, round2, todayISO } from '../lib/utils';
 import { Briefcase, Camera, Home, ImagePlus, MapPin, ScanText } from 'lucide-react';
+import { NumInput } from '../components/NumInput';
 
 const blank = (): Expense => ({
   date: todayISO(), vendor: '', category: 'Essence', subtotal: 0, tps: 0, tvq: 0, total: 0, paymentMethod: 'Carte de crédit',
@@ -334,11 +335,11 @@ export default function ExpenseEditor() {
             </label>
             <label className="field full">Fournisseur / commerce<input value={e.vendor} onChange={(ev) => up({ vendor: ev.target.value })} placeholder="ex.: Shell, Rona, Home Depot" /></label>
             <label className="field full">Total payé (taxes incluses)
-              <input type="number" step="0.01" inputMode="decimal" value={e.total || ''} onChange={(ev) => setTotal(Number(ev.target.value))} />
+              <NumInput value={e.total} onChange={(n) => setTotal(n)} />
             </label>
-            <label className="field">Avant taxes<input type="number" step="0.01" inputMode="decimal" value={e.subtotal} onChange={(ev) => up({ subtotal: Number(ev.target.value) })} /></label>
-            <label className="field">TPS<input type="number" step="0.01" inputMode="decimal" value={e.tps} onChange={(ev) => up({ tps: Number(ev.target.value) })} /></label>
-            <label className="field">TVQ<input type="number" step="0.01" inputMode="decimal" value={e.tvq} onChange={(ev) => up({ tvq: Number(ev.target.value) })} /></label>
+            <label className="field">Avant taxes<NumInput value={e.subtotal} onChange={(n) => up({ subtotal: n })} /></label>
+            <label className="field">TPS<NumInput value={e.tps} onChange={(n) => up({ tps: n })} /></label>
+            <label className="field">TVQ<NumInput value={e.tvq} onChange={(n) => up({ tvq: n })} /></label>
             <label className="field">Payé par
               <select value={e.paymentMethod} onChange={(ev) => up({ paymentMethod: ev.target.value })}>
                 {['Carte de crédit', 'Carte de débit', 'Comptant', 'Chèque', 'Virement', 'Carte personnelle (à rembourser)'].map((m) => <option key={m}>{m}</option>)}

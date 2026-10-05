@@ -8,6 +8,7 @@ import { hoursOf, localDay, openPunch, punchFlags, startPunch, stopPunch, weekSt
 import { useSyncState } from '../lib/sync';
 import { PunchModal } from './Timesheets';
 import { todayISO } from '../lib/utils';
+import { NumInput } from '../components/NumInput';
 
 const hm = (h: number) => `${Math.floor(h)} h ${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
 const time = (iso: string) => new Date(iso).toLocaleTimeString('fr-CA', { hour: '2-digit', minute: '2-digit' });
@@ -92,7 +93,7 @@ export default function PunchPage() {
             <div className="small">{openJob ? `${data.clients.get(openJob.clientId)?.name ?? ''} — ${openJob.title}` : 'Sans job précis'}</div>
             {punchFlags(open).filter((f) => !f.startsWith('Pas de punch out')).map((f) => <div key={f} className="small" style={{ color: 'var(--red)' }}><AlertTriangle size={12} /> {f}</div>)}
             <label className="field" style={{ margin: '14px auto 10px', maxWidth: 220 }}>Pause (minutes)
-              <input type="number" inputMode="numeric" value={breakMin || ''} placeholder="0" onChange={(e) => setBreakMin(Number(e.target.value))} />
+              <NumInput value={breakMin} placeholder="0" onChange={(n) => setBreakMin(n)} />
             </label>
             <button className="btn big block punch-btn stop" disabled={busy} onClick={() => stop(open)}><Square size={22} /> Punch out</button>
           </>

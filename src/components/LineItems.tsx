@@ -1,8 +1,10 @@
+import { Calculator } from 'lucide-react';
 import { useState } from 'react';
 import type { CalcRow, LineItem, Service } from '../lib/db';
 import { UNITS } from '../lib/db';
 import { lineAmount, lineHitsMinimum, money, round2 } from '../lib/utils';
 import { Modal } from './Modal';
+import { NumInput } from './NumInput';
 
 export const emptyLine = (): LineItem => ({ code: '', description: '', unit: '', quantity: 1, unitPrice: 0, minimum: 0 });
 
@@ -60,15 +62,15 @@ export function LineItems({ items, services, onChange, lang = 'fr' }: { items: L
               </td>
               <td className="c-qty">
                 <div className="row" style={{ flexWrap: 'nowrap', gap: 4 }}>
-                  <input type="number" inputMode="decimal" step="any" value={it.quantity} aria-label="Quantité" onChange={(e) => upd(i, { quantity: Number(e.target.value) })} />
-                  <button className="btn small" title="Calculateur pi² / pi lin" onClick={() => setCalcFor(i)}></button>
+                  <NumInput value={it.quantity} aria-label="Quantité" onChange={(n) => upd(i, { quantity: n })} />
+                  <button className="btn small icon-btn calc-btn" title="Calculateur pi² / pi lin" aria-label="Calculateur pi² / pi lin" onClick={() => setCalcFor(i)}><Calculator size={16} /></button>
                 </div>
               </td>
               <td className="c-unit">
                 <input list="units" value={it.unit ?? ''} placeholder="unité" aria-label="Unité" onChange={(e) => upd(i, { unit: e.target.value })} />
               </td>
               <td className="c-price">
-                <input type="number" inputMode="decimal" step="0.01" value={it.unitPrice} aria-label="Prix" onChange={(e) => upd(i, { unitPrice: Number(e.target.value) })} />
+                <NumInput value={it.unitPrice} aria-label="Prix" onChange={(n) => upd(i, { unitPrice: n })} />
               </td>
               <td className="num c-amt" style={{ paddingTop: 14 }}>
                 <strong>{money(lineAmount(it))}</strong>
@@ -134,8 +136,8 @@ export function CalcModal({ line, onClose, onApply }: { line: LineItem; onClose:
           {rows.map((r, i) => (
             <tr key={i}>
               <td><input value={r.label} onChange={(e) => up(i, { label: e.target.value })} /></td>
-              <td><input type="number" inputMode="decimal" value={r.a || ''} onChange={(e) => up(i, { a: Number(e.target.value) })} /></td>
-              {!linear && <td><input type="number" inputMode="decimal" value={r.b || ''} onChange={(e) => up(i, { b: Number(e.target.value) })} /></td>}
+              <td><NumInput value={r.a} onChange={(n) => up(i, { a: n })} /></td>
+              {!linear && <td><NumInput value={r.b} onChange={(n) => up(i, { b: n })} /></td>}
               <td className="num">{round2(val(r))}</td>
               <td><button className="btn small danger" onClick={() => setRows(rows.filter((_, j) => j !== i))}>✕</button></td>
             </tr>

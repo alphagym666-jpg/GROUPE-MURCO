@@ -11,6 +11,7 @@ import { shareLink } from '../lib/native';
 import { useSyncState } from '../lib/sync';
 import { blankMember, inviteLink, MEMBER_COLORS, revokeMember, ROLE_LABEL } from '../lib/team';
 import { money } from '../lib/utils';
+import { NumInput } from '../components/NumInput';
 
 const ROLE_HELP: Record<MemberRole, string> = {
   employe: 'Voit ses jobs à l’agenda, prend des photos et pointe ses heures. Ne voit pas les prix ni l’argent.',
@@ -102,8 +103,8 @@ function MemberModal({ m, onClose }: { m: Member; onClose: () => void }) {
             </div>
           </div>
         )}
-        <label className="field">Coût horaire ($)<input id="mb-cost" type="number" inputMode="decimal" value={x.hourlyCost || ''} onChange={(e) => up({ hourlyCost: Number(e.target.value) })} /></label>
-        <label className="field">Commission (%)<input id="mb-com" type="number" inputMode="decimal" value={x.commissionRate || ''} onChange={(e) => up({ commissionRate: Number(e.target.value) })} /></label>
+        <label className="field">Coût horaire ($)<NumInput id="mb-cost" value={x.hourlyCost} onChange={(n) => up({ hourlyCost: n })} /></label>
+        <label className="field">Commission (%)<NumInput id="mb-com" value={x.commissionRate} onChange={(n) => up({ commissionRate: n })} /></label>
         <div className="field full">Couleur dans l’agenda
           <div className="swatches">
             {MEMBER_COLORS.map((c) => (

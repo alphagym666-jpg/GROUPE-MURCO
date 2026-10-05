@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast';
 import { useSettings } from '../lib/hooks';
 import { db, UNITS, type Service } from '../lib/db';
 import { money } from '../lib/utils';
+import { NumInput } from '../components/NumInput';
 
 /** Liste de prix: le CODE est ce que tu tapes dans la facture. */
 export default function Services() {
@@ -87,8 +88,8 @@ export default function Services() {
                 <td>
                   <input list="units-svc" value={r.unit} onChange={(e) => up(i, { unit: e.target.value })} aria-label="Unité" />
                 </td>
-                <td><input type="number" inputMode="decimal" step="0.01" value={r.price} onChange={(e) => up(i, { price: Number(e.target.value) })} aria-label="Prix" /></td>
-                <td><input type="number" inputMode="decimal" step="0.01" value={r.minimum} onChange={(e) => up(i, { minimum: Number(e.target.value) })} aria-label="Minimum" /></td>
+                <td><NumInput value={r.price} onChange={(n) => up(i, { price: n })} aria-label="Prix" /></td>
+                <td><NumInput value={r.minimum} onChange={(n) => up(i, { minimum: n })} aria-label="Minimum" /></td>
                 <td className="hide-mobile"><input value={r.notes} onChange={(e) => up(i, { notes: e.target.value })} aria-label="Notes" /></td>
                 <td>
                   <div className="row" style={{ flexWrap: 'nowrap', gap: 4 }}>

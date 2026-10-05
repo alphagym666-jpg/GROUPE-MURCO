@@ -28,5 +28,10 @@ export default defineConfig({
     },
   ],
   // Deux apps: l'app complète (index.html) et l'app Pointage des employés (pointage.html)
-  build: { chunkSizeWarningLimit: 2000, rollupOptions: { input: { main: 'index.html', pointage: 'pointage.html' } } },
+  build: { chunkSizeWarningLimit: 2000, rollupOptions: {
+      input: { main: 'index.html', pointage: 'pointage.html' },
+      // Le moteur PDF (.mjs) sort en .js: certains serveurs et l'app Android ne connaissent pas .mjs
+      output: { assetFileNames: (a) => (a.names?.[0] ?? a.name ?? '').endsWith('.mjs') ? 'assets/[name]-[hash].js' : 'assets/[name]-[hash][extname]' },
+    },
+  },
 });

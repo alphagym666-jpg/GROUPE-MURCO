@@ -9,6 +9,7 @@ import { db, type Project, type ProjectStatus } from '../lib/db';
 import { useSettings } from '../lib/hooks';
 import { costOf, hoursOf } from '../lib/punch';
 import { docTotals, money, round2, todayISO } from '../lib/utils';
+import { NumInput } from '../components/NumInput';
 
 export const PROJECT_STATUS: Record<ProjectStatus, { label: string; tone: string }> = {
   estimation: { label: 'Estimation', tone: 'amber' },
@@ -103,7 +104,7 @@ function ProjectModal({ initial, onClose, onSaved }: { initial?: Project; onClos
           </select>
         </label>
         <label className="field full">Adresse<AddressInput value={p.address} onChange={(v) => up({ address: v })} /></label>
-        <label className="field">Budget ($)<input id="pj-budget" type="number" inputMode="decimal" value={p.budget || ''} onChange={(e) => up({ budget: Number(e.target.value) })} /></label>
+        <label className="field">Budget ($)<NumInput id="pj-budget" value={p.budget} onChange={(n) => up({ budget: n })} /></label>
         <label className="field">Statut
           <select id="pj-status" value={p.status} onChange={(e) => up({ status: e.target.value as ProjectStatus })}>
             {Object.entries(PROJECT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}

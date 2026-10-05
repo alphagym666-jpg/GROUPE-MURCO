@@ -15,6 +15,7 @@ import { db, saveSettings, type Lead, type LeadSource, type LeadStage } from '..
 import { useSettings } from '../lib/hooks';
 import { useSyncState } from '../lib/sync';
 import { addDays, downloadBlob, money, todayISO } from '../lib/utils';
+import { NumInput } from '../components/NumInput';
 
 const STAGE_COLOR: Record<string, string> = { nouveau: '#b7791f', contacte: '#3d5a99', visite: '#6b5b95', soumission: '#2d6e8e', gagne: '#2f7d6d', perdu: '#a3a7ae' };
 
@@ -203,7 +204,7 @@ function LeadModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
             {STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
         </label>
-        <label className="field">Valeur estimée ($)<input id="lead-value" type="number" inputMode="decimal" value={l.value || ''} onChange={(e) => up({ value: Number(e.target.value) })} /></label>
+        <label className="field">Valeur estimée ($)<NumInput id="lead-value" value={l.value} onChange={(n) => up({ value: n })} /></label>
         <label className="field">Responsable
           <select id="lead-assigned" value={l.assignedTo ?? ''} onChange={(e) => up({ assignedTo: e.target.value ? Number(e.target.value) : undefined })}>
             <option value="">Moi</option>
