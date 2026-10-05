@@ -3,9 +3,12 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Client, Doc, Settings, Trip, Expense } from './db';
 import { companyAddressLines, docTotals, lineAmount, lineHitsMinimum, formatDate, km, kmAllowance, money } from './utils';
+import { accentPalette, DEFAULT_ACCENT, hexToRgb, onColor } from './accent';
 
 const NAVY: [number, number, number] = [35, 38, 43]; // graphite Murco
-const ORANGE: [number, number, number] = [224, 144, 31]; // ambre Murco
+// Couleur de l'entreprise (ambre Murco par défaut) et texte lisible dessus
+const accentOf = (s: Settings) => hexToRgb(s.brandColor || DEFAULT_ACCENT);
+const onAccent = (s: Settings) => (onColor(s.brandColor || DEFAULT_ACCENT) === '#ffffff' ? 255 : 20);
 
 // jsPDF (polices standard) ne gère que le Latin-1: on remplace les caractères hors plage.
 function t(s: string | undefined | null): string {
@@ -57,7 +60,7 @@ function header(pdf: jsPDF, s: Settings, title: string, L: DocLang = 'fr') {
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(20);
   pdf.text(t(title), W - 15, 20, { align: 'right' });
-  pdf.setDrawColor(...ORANGE);
+  pdf.setDrawColor(...accentOf(s));
   pdf.setLineWidth(1);
   pdf.line(15, 42, W - 15, 42);
   pdf.setFont('helvetica', 'normal');
@@ -283,7 +286,7 @@ export function buildDocPdf(doc: Doc, client: Client | undefined, s: Settings, p
       pdf.addImage(ph.data, 'JPEG', 15 + (boxW - w) / 2, top + 6, w, h);
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(9);
-      pdf.setTextColor(...ORANGE);
+      pdf.setTextColor(...hexToRgb(accentPalette(s.brandColor || DEFAULT_ACCENT).inkLight));
       pdf.text(t(ph.label.toUpperCase()), 15, top + 3);
     });
   }
@@ -320,7 +323,7 @@ export function buildLogbookPdf(trips: Trip[], s: Settings, period: string): Blo
     foot: [['', '', '', 'TOTAL', '', t(km(total))]],
     theme: 'striped',
     headStyles: { fillColor: NAVY },
-    footStyles: { fillColor: ORANGE, textColor: 20 },
+    footStyles: { fillColor: accentOf(s), textColor: onAccent(s) },
     styles: { fontSize: 8, cellPadding: 2 },
     columnStyles: { 0: { cellWidth: 22 }, 4: { cellWidth: 12 }, 5: { halign: 'right', cellWidth: 22 } },
     margin: { left: 15, right: 15, bottom: 20 },
@@ -408,7 +411,7 @@ export function buildSummaryPdf(d: SummaryData, s: Settings): Blob {
       ['TVQ nette (perçue - RTI)', m(sums.tvq - ex.tvq)],
     ],
     theme: 'grid',
-    headStyles: { fillColor: ORANGE, textColor: 20 },
+    headStyles: { fillColor: accentOf(s), textColor: onAccent(s) },
     columnStyles: { 1: { halign: 'right' } },
     margin: { left: 15, right: 15 },
   });
@@ -475,7 +478,7 @@ export function buildTaxReportPdf(p: { label: string; sales: number; tpsCollecte
   autoTable(pdf, {
     body: [['TOTAL À REMETTRE (TPS + TVQ)', m(p.tpsNet + p.tvqNet)]],
     theme: 'grid',
-    bodyStyles: { fillColor: ORANGE, textColor: 20, fontStyle: 'bold' },
+    bodyStyles: { fillColor: accentOf(s), textColor: onAccent(s), fontStyle: 'bold' },
     columnStyles: { 1: { halign: 'right', cellWidth: 40 } },
     margin: { left: 15, right: 15 },
   });

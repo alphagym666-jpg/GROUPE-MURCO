@@ -23,6 +23,7 @@ import { MediaGallery, ProofPhoto } from '../components/MediaGallery';
 import { Banknote, Copy, Download, Eye, Link2, Plus, Save, Send, Share2, Star, Trash2, Navigation, RefreshCw, TrendingUp } from 'lucide-react';
 import { deleteDocCascade, syncTripForDoc } from '../lib/trips';
 import { addDays, METHOD_LABEL, docTotals, downloadBlob, formatDate, km, money, round2, STATUS_LABELS, statusClass, statusLabel, todayISO } from '../lib/utils';
+import { celebrate } from '../lib/feel';
 
 function newDoc(type: DocType, clientId: number, s: Awaited<ReturnType<typeof getSettings>>): Doc {
   const date = todayISO();
@@ -535,6 +536,7 @@ export default function DocEditor() {
         const payments = [...doc.payments, p];
         const tt = docTotals({ ...doc, payments }, s);
         save({ payments, status: tt.balance <= 0.004 ? 'paid' : 'partial' });
+        if (tt.balance <= 0.004) celebrate();
         setShowPay(false);
       }} />}
 

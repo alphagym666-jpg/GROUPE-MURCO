@@ -25,6 +25,7 @@ export interface PortalData {
     phone: string;
     email: string;
     logo?: string;
+    color?: string; // couleur de l'entreprise
     paymentInstructions: string;
     conditions: string;
     tpsRate: number;
@@ -82,6 +83,7 @@ export async function buildPortalData(d: Doc, token: string, owner: string): Pro
       phone: s.phone,
       email: s.email,
       logo: s.logo && s.logo.length < 300_000 ? s.logo : undefined,
+      color: s.brandColor,
       paymentInstructions: companyTexts(s, docLangOf(d, c)).paymentInstructions,
       conditions: companyTexts(s, docLangOf(d, c)).invoiceConditions,
       tpsRate: s.tpsRate,

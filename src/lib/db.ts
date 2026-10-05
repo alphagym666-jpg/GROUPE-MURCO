@@ -65,6 +65,9 @@ export interface Settings extends Synced {
   trade?: string; // métier choisi au démarrage (modèle de codes et prix)
   setupComplete?: boolean; // assistant de démarrage terminé
   agenda?: Partial<AgendaPrefs>; // personnalisation de l'agenda
+  brandColor?: string; // couleur de l'entreprise (#rrggbb)
+  monthlyGoal?: number; // objectif de revenus du mois
+  dashTiles?: string[]; // tuiles cachées du tableau de bord
   wantedPlan?: string; // forfait choisi sur la page de vente
   accountCreatedAt?: string; // création du compte du propriétaire (début de l'essai; employés compris)
   invoiceNotesEn?: string; // textes en anglais (clients anglophones)

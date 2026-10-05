@@ -1,17 +1,30 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { CountUp } from '../components/CountUp';
+import { Modal } from '../components/Modal';
+import { PageHero, Ring } from '../components/PageHero';
 import { Onboarding } from '../components/Onboarding';
 import { RelanceModal } from '../components/RelanceModal';
 import {
-  AlertTriangle, Bell, CalendarDays, CalendarPlus, Camera, Car, CircleCheck, ClipboardList, Clock, Eye, FileText, Inbox, MapPin, Phone, Plus, Search, Star, Zap,
+  AlertTriangle, Bell, CalendarDays, CalendarPlus, Camera, Car, CircleCheck, ClipboardList, Clock, Eye, FileText, Inbox, LayoutGrid, MapPin, Phone, Plus, Search, Star, Target, TrendingDown, TrendingUp, Zap,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { SyncBadge } from '../components/SyncBadge';
-import { db, type Client, type Doc } from '../lib/db';
+import { db, saveSettings, type Client, type Doc } from '../lib/db';
 import { useSettings } from '../lib/hooks';
 import { OPEN_STAGES } from '../lib/crm';
 import { addDays, docTotals, km, kmAllowance, lineAmount, money, statusClass, statusLabel, todayISO } from '../lib/utils';
+
+export const DASH_TILES: { key: string; label: string }[] = [
+  { key: 'kpi', label: 'Chiffres clés (ventes, à recevoir, km, taxes)' },
+  { key: 'today', label: 'Jobs d’aujourd’hui' },
+  { key: 'unpaid', label: 'À encaisser' },
+  { key: 'revenue', label: 'Revenus des 12 derniers mois' },
+  { key: 'codes', label: 'Ventes par code de job' },
+  { key: 'leads', label: 'Demandes à relancer' },
+  { key: 'reviews', label: 'Avis clients' },
+  { key: 'field', label: 'Sur le terrain' },
+  { key: 'quotes', label: 'Soumissions en cours' },
+];
 
 const MONTHS = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
 
@@ -21,6 +34,10 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
   const today = todayISO();
   const year = today.slice(0, 4);
   const [relance, setRelance] = useState<{ doc: Doc; client?: Client; pdf?: Blob; mode: 'choose' | 'mail' } | null>(null);
+  const [goalOpen, setGoalOpen] = useState(false);
+  const [tilesOpen, setTilesOpen] = useState(false);
+  const hidden = new Set(s.dashTiles ?? []);
+  const show = (k: string) => !hidden.has(k);
 
   const data = useLiveQuery(async () => {
     const [docs, expenses, trips, clients, jobsToday, leads, punches] = await Promise.all([
@@ -76,22 +93,54 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
 
   const hour = new Date().getHours();
   const hello = hour < 12 ? 'Bon matin' : hour < 18 ? 'Bonjour' : 'Bonsoir';
+  // Ce mois-ci vs le mois passé à la même date
+  const monthNow = sum(mInv, 'subtotal');
+  const prev = new Date(today + 'T12:00:00');
+  prev.setDate(1);
+  prev.setMonth(prev.getMonth() - 1);
+  const prevKey = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+  const prevSame = invoices.filter((d) => d.date.startsWith(prevKey) && d.date.slice(8) <= today.slice(8)).reduce((a, d) => a + tt(d).subtotal, 0);
+  const delta = prevSame > 0 ? Math.round(((monthNow - prevSame) / prevSame) * 100) : null;
+  const goal = s.monthlyGoal ?? 0;
+  const daysIn = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0).getDate();
+  const expected = goal ? (goal * Number(today.slice(8))) / daysIn : 0;
+  const plannedToday = jobsToday.filter((j) => j.status === 'planifie').length;
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <div className="eyebrow">{new Date().toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-          <h1>{hello}{s.ownerName ? ` ${s.ownerName.split(' ')[0]}` : ''}</h1>
-          <div className="hide-desktop" style={{ marginTop: 8 }}><SyncBadge top /></div>
+      <PageHero
+        eyebrow={new Date().toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' })}
+        title={<>{hello}{s.ownerName ? ` ${s.ownerName.split(' ')[0]}` : ''}</>}
+        sub={plannedToday ? `${plannedToday} job${plannedToday > 1 ? 's' : ''} au programme aujourd’hui${overdue.length ? ` · ${overdue.length} facture${overdue.length > 1 ? 's' : ''} en retard` : ''}` : overdue.length ? `${overdue.length} facture${overdue.length > 1 ? 's' : ''} en retard à relancer` : 'Journée libre — bon moment pour relancer tes soumissions.'}
+        actions={
+          <>
+            <button className="agh-btn hide-mobile" onClick={onSearch}><Search size={16} /> Rechercher</button>
+            <button className="agh-btn hide-mobile" onClick={() => nav('/doc/new?type=quote')}><ClipboardList size={16} /> Soumission</button>
+            <button className="agh-btn hide-mobile" onClick={() => nav('/depenses/new')}><Camera size={16} /> Reçu</button>
+            <button className="agh-btn icon corner" onClick={() => setTilesOpen(true)} aria-label="Choisir les tuiles" title="Choisir ce qui s’affiche"><LayoutGrid size={17} /></button>
+            <button className="agh-btn solid hide-mobile" onClick={() => nav('/express')}><Zap size={16} /> Facture express</button>
+          </>
+        }
+      >
+        <div className="agh-row">
+          {goal > 0 ? (
+            <Ring big value={monthNow / goal} onClick={() => setGoalOpen(true)} label={`Objectif du mois: ${Math.round((monthNow / goal) * 100)} %`}>
+              <b>{Math.round((monthNow / goal) * 100)} %</b>objectif
+            </Ring>
+          ) : (
+            <button className="agh-btn" onClick={() => setGoalOpen(true)}><Target size={16} /> Fixer un objectif du mois</button>
+          )}
+          <div className="agh-stats">
+            <div>
+              <b><CountUp value={monthNow} format={money} /></b>
+              <span>ce mois-ci</span>
+              {delta !== null && <span className={delta >= 0 ? 'up' : 'down'}>{delta >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />} {delta >= 0 ? '+' : ''}{delta} % vs mois passé</span>}
+            </div>
+            {goal > 0 && <div><b>{money(Math.max(0, goal - monthNow))}</b><span>{monthNow >= goal ? 'objectif atteint 🎉' : monthNow >= expected ? 'à faire · en avance' : 'à faire · en retard'}</span></div>}
+            <Link to="/factures"><div><b>{money(sum(unpaid, 'balance'))}</b><span>à recevoir</span></div></Link>
+          </div>
         </div>
-        <div className="actions">
-          <button className="btn hide-mobile" onClick={onSearch}><Search size={17} /> Rechercher <span className="small muted">Ctrl K</span></button>
-          <button className="btn accent hide-mobile" onClick={() => nav('/express')}><Zap size={17} /> Facture express</button>
-          <button className="btn primary hide-mobile" onClick={() => nav('/doc/new?type=quote')}><ClipboardList size={17} /> Soumission</button>
-          <button className="btn hide-mobile" onClick={() => nav('/depenses/new')}><Camera size={17} /> Reçu</button>
-        </div>
-      </div>
+      </PageHero>
 
       <div className="quick-tiles">
         <button onClick={() => nav('/express')}><Zap size={22} /> Facture express</button>
@@ -103,7 +152,7 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
       <Onboarding s={s} />
       {s.setupHidden && missing.length > 0 && <div className="notice">À compléter: <strong>{missing.join(', ')}</strong>. <Link to="/parametres">Paramètres →</Link></div>}
 
-      <div className="grid kpi">
+      {show('kpi') && <div className="grid kpi">
         <div className="card hot"><div className="label">Ventes {year}</div><div className="value"><CountUp value={sum(yInv, 'subtotal')} format={money} /></div><div className="sub">ce mois-ci: {money(sum(mInv, 'subtotal'))}</div></div>
         <div className="card"><div className="label">À recevoir</div><div className="value"><CountUp value={sum(unpaid, 'balance')} format={money} /></div><div className="sub">{unpaid.length} facture(s){overdue.length ? ` · ${overdue.length} en retard` : ''}</div></div>
         <div className="card"><div className="label">Km {year}</div><div className="value"><CountUp value={yKm} format={(n) => km(Math.round(n))} /></div><div className="sub">≈ {money(kmAllowance(yKm, s))} déductibles</div></div>
@@ -112,10 +161,10 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
           <div className="value"><CountUp value={s.chargeTaxes ? tpsNet + tvqNet : yExp.reduce((a, e) => a + e.subtotal, 0)} format={money} /></div>
           <div className="sub">{s.chargeTaxes ? `TPS ${money(tpsNet)} · TVQ ${money(tvqNet)}` : `${yExp.length} reçu(s)`}</div>
         </div>
-      </div>
+      </div>}
 
-      <div className="grid two">
-        <div className="card">
+      <div className="grid two auto">
+        {show('today') && <div className="card">
           <div className="card-head"><CalendarDays size={18} /><h2>Aujourd’hui</h2><span className="spacer" /><Link className="btn small" to="/agenda">Agenda</Link></div>
           {jobsToday.length === 0 ? (
             <div className="empty" style={{ padding: 18 }}>
@@ -137,9 +186,9 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
               );
             })
           )}
-        </div>
+        </div>}
 
-        <div className="card">
+        {show('unpaid') && <div className="card">
           <div className="card-head">{overdue.length ? <AlertTriangle size={18} color="var(--red)" /> : <FileText size={18} />}<h2>À encaisser</h2></div>
           {unpaid.length === 0 ? (
             <div className="empty" style={{ padding: 18 }}><CircleCheck size={30} /> Tout est payé.</div>
@@ -163,11 +212,11 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
               </tbody>
             </table>
           )}
-        </div>
+        </div>}
       </div>
 
-      <div className="grid two">
-        <div className="card">
+      <div className="grid two auto">
+        {show('revenue') && <div className="card">
           <div className="card-head"><h2>Revenus — 12 derniers mois</h2></div>
           <div className="bars" role="img" aria-label="Revenus par mois">
             {months.map((m) => (
@@ -178,8 +227,8 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
               </div>
             ))}
           </div>
-        </div>
-        <div className="card">
+        </div>}
+        {show('codes') && <div className="card">
           <div className="card-head"><h2>Par code de job — {year}</h2></div>
           {codes.length === 0 ? (
             <div className="empty" style={{ padding: 18 }}>Les ventes par code apparaîtront ici.</div>
@@ -192,11 +241,11 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
               </div>
             ))
           )}
-        </div>
+        </div>}
       </div>
 
-      <div className="grid three">
-        <div className="card">
+      <div className="grid three auto">
+        {show('leads') && <div className="card">
           <div className="card-head"><Inbox size={18} /><h2>Demandes à relancer</h2><span className="spacer" /><Link className="btn small" to="/demandes">CRM</Link></div>
           {(() => {
             const due = data.leads.filter((l) => OPEN_STAGES.includes(l.stage) && l.nextAction && l.nextAction <= today);
@@ -214,8 +263,8 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
               </>
             );
           })()}
-        </div>
-        <div className="card">
+        </div>}
+        {show('reviews') && <div className="card">
           <div className="card-head"><Star size={18} /><h2>Avis clients</h2></div>
           {(() => {
             const rv = data.docs.filter((d) => d.review).sort((a, b) => b.review!.at.localeCompare(a.review!.at));
@@ -229,8 +278,8 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
               </>
             );
           })()}
-        </div>
-        <div className="card">
+        </div>}
+        {show('field') && <div className="card">
           <div className="card-head"><Clock size={18} /><h2>Sur le terrain</h2><span className="spacer" /><Link className="btn small" to="/temps">Heures</Link></div>
           {data.onSite.length === 0 ? <div className="small muted">Personne n’est pointé en ce moment.</div> : data.onSite.map((p) => (
             <div key={p.id} className="row small" style={{ padding: '4px 0' }}>
@@ -239,10 +288,10 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
               {(p.startDistM ?? 0) > 300 && <span className="badge red">loin du chantier</span>}
             </div>
           ))}
-        </div>
+        </div>}
       </div>
 
-      {quotes.length > 0 && (
+      {show('quotes') && quotes.length > 0 && (
         <div className="card">
           <div className="card-head"><ClipboardList size={18} /><h2>Soumissions en cours</h2></div>
           <table className="list">
@@ -267,7 +316,51 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
         <Link className="btn" to="/depenses/new"><Camera size={16} /> Reçu</Link>
       </div>
 
+      {goalOpen && <GoalModal value={goal} last={prevSame} onClose={() => setGoalOpen(false)} />}
+      {tilesOpen && <TilesModal hidden={[...hidden]} onClose={() => setTilesOpen(false)} />}
       {relance && <RelanceModal doc={relance.doc} client={relance.client} onClose={() => setRelance(null)} />}
     </>
+  );
+}
+
+/** Objectif de revenus du mois (avant taxes). */
+function GoalModal({ value, last, onClose }: { value: number; last: number; onClose: () => void }) {
+  const [v, setV] = useState(value ? String(value) : '');
+  const ideas = [5000, 10000, 15000, 25000];
+  return (
+    <Modal title="Objectif du mois" onClose={onClose}>
+      <p className="small muted" style={{ marginTop: 0 }}>Combien veux-tu facturer ce mois-ci (avant taxes)? L’anneau de l’accueil se remplit à mesure que tu factures.</p>
+      <div className="fix-chips" style={{ marginBottom: 10 }}>
+        {ideas.map((n) => <button key={n} className={Number(v) === n ? 'on' : ''} onClick={() => setV(String(n))}>{money(n)}</button>)}
+      </div>
+      <label className="field">Objectif ($)<input id="goal-input" type="number" inputMode="numeric" min={0} step={500} value={v} onChange={(e) => setV(e.target.value)} placeholder="ex.: 12000" /></label>
+      {last > 0 && <div className="small muted" style={{ marginTop: 6 }}>Le mois passé à la même date : {money(last)}</div>}
+      <div className="row" style={{ justifyContent: 'space-between', marginTop: 16 }}>
+        {value > 0 ? <button className="btn small" onClick={async () => { await saveSettings({ monthlyGoal: 0 }); onClose(); }}>Retirer l’objectif</button> : <span />}
+        <button className="btn accent" onClick={async () => { await saveSettings({ monthlyGoal: Math.max(0, Number(v) || 0) }); onClose(); }}>Enregistrer</button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Choisir les cartes de l'accueil (gardé dans les réglages). */
+function TilesModal({ hidden, onClose }: { hidden: string[]; onClose: () => void }) {
+  const [h, setH] = useState(new Set(hidden));
+  const toggle = (k: string, on: boolean) => {
+    const next = new Set(h);
+    if (on) next.delete(k);
+    else next.add(k);
+    setH(next);
+    void saveSettings({ dashTiles: [...next] });
+  };
+  return (
+    <Modal title="Ce qui s’affiche sur l’accueil" onClose={onClose}>
+      <div className="agc-toggles">
+        {DASH_TILES.map((t) => (
+          <label key={t.key} className="check"><input type="checkbox" checked={!h.has(t.key)} onChange={(e) => toggle(t.key, e.target.checked)} /> {t.label}</label>
+        ))}
+      </div>
+      <div className="row" style={{ justifyContent: 'flex-end', marginTop: 14 }}><button className="btn accent" onClick={onClose}>Terminé</button></div>
+    </Modal>
   );
 }

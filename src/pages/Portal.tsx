@@ -2,6 +2,7 @@ import { CircleCheck, Copy, CreditCard, Download, ExternalLink, PenLine, Star } 
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { SignaturePad } from '../components/SignaturePad';
+import { applyAccent } from '../lib/accent';
 import { errMsg, useToast } from '../components/Toast';
 import { DEFAULT_SETTINGS, type Doc, type Settings } from '../lib/db';
 import { buildDocPdf } from '../lib/pdf';
@@ -26,6 +27,9 @@ export default function Portal() {
   useEffect(() => {
     loadPortal(token, cfg).then(setP).catch((e) => setErr(errMsg(e)));
   }, [token, cfg]);
+  useEffect(() => {
+    if (p?.company.color) applyAccent(p.company.color);
+  }, [p]);
 
   if (err) return <div className="portal"><div className="notice err">{err}</div></div>;
   if (p === undefined) return <div className="portal"><div className="empty">Chargement… / Loading…</div></div>;
@@ -53,6 +57,7 @@ export default function Portal() {
       phone: p.company.phone,
       email: p.company.email,
       logo: p.company.logo,
+      brandColor: p.company.color,
       paymentInstructions: p.company.paymentInstructions,
       invoiceConditions: p.company.conditions,
       tpsRate: p.company.tpsRate,

@@ -89,6 +89,7 @@ export async function publishLeadForm(enabled: boolean): Promise<void> {
     leadForm: enabled,
     name: s.companyName,
     logo: s.logo && s.logo.length < 300_000 ? s.logo : null,
+    color: s.brandColor ?? null,
     phone: s.phone,
     email: s.email,
     intro: s.leadFormIntro,
@@ -147,6 +148,7 @@ export interface PublicProfile {
   leadForm: boolean;
   name: string;
   logo?: string | null;
+  color?: string | null;
   phone: string;
   email: string;
   intro: string;

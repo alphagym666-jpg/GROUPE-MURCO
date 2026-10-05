@@ -49,6 +49,7 @@ import { useSyncState, type Role } from './lib/sync';
 import { db } from './lib/db';
 import { APK_URL, useAppUpdate } from './lib/update';
 import { isNative } from './lib/native';
+import { applyAccent } from './lib/accent';
 
 interface NavItem {
   to: string;
@@ -157,6 +158,9 @@ function Gate() {
   const raw = useLiveQuery(() => db.settings.get('main').then((x) => x ?? null), []);
   const member = useLiveQuery(() => (st.memberId ? db.members.get(st.memberId) : undefined), [st.memberId]);
   const punchApp = isPunchApp();
+  useEffect(() => {
+    if (raw) applyAccent(raw.brandColor);
+  }, [raw?.brandColor, raw]);
   if (!booted || raw === undefined) return <Splash />;
   const configured = !!(raw && (raw.setupComplete || raw.companyName));
   // App Pointage (pointage.html) ou employé en accès « Pointage seulement »: le gros bouton, rien d'autre

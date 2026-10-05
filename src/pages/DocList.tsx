@@ -1,5 +1,8 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Banknote, Bell, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Banknote, Bell, ChevronRight, CircleCheck, Plus } from 'lucide-react';
+import { CountUp } from '../components/CountUp';
+import { PageHero, Ring } from '../components/PageHero';
+import { celebrate } from '../lib/feel';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RelanceModal } from '../components/RelanceModal';
@@ -56,12 +59,56 @@ export default function DocList({ type }: { type: DocType }) {
   });
   const total = rows.reduce((a, d) => a + docTotals(d, s).total, 0);
 
+  // Bandeau: l'argent qui s'en vient
+  const month = today.slice(0, 7);
+  const live = data.docs.filter((d) => d.status !== 'draft' && d.status !== 'cancelled');
+  const open = live.filter((d) => d.status === 'sent' || d.status === 'partial');
+  const late = open.filter((d) => d.dueDate < today);
+  const bal = (list: Doc[]) => list.reduce((a, d) => a + docTotals(d, s).balance, 0);
+  const tot = (list: Doc[]) => list.reduce((a, d) => a + docTotals(d, s).total, 0);
+  const paidMonth = isInvoice ? live.reduce((a, d) => a + d.payments.filter((p) => p.date.startsWith(month)).reduce((x, p) => x + p.amount, 0), 0) : 0;
+  const billedMonth = tot(live.filter((d) => d.date.startsWith(month)));
+  const decided = live.filter((d) => d.status === 'accepted' || d.status === 'refused' || d.convertedInvoiceId);
+  const won = decided.filter((d) => d.status === 'accepted' || d.convertedInvoiceId);
+  const winRate = decided.length ? won.length / decided.length : 0;
+
   return (
     <>
-      <div className="page-head">
-        <h1>{isInvoice ? 'Factures' : 'Soumissions'}</h1>
-        <button className="btn accent" onClick={() => nav(`/doc/new?type=${type}`)}>+ Nouvelle {isInvoice ? 'facture' : 'soumission'}</button>
-      </div>
+      <PageHero
+        eyebrow={isInvoice ? 'Factures' : 'Soumissions'}
+        title={isInvoice
+          ? (open.length ? <><CountUp value={bal(open)} format={money} /> à recevoir</> : 'Tout est encaissé 🎉')
+          : (open.length ? <><CountUp value={tot(open)} format={money} /> en attente</> : 'Aucune soumission en attente')}
+        sub={isInvoice
+          ? `${open.length} facture${open.length > 1 ? 's' : ''} ouverte${open.length > 1 ? 's' : ''}${late.length ? ` · ${late.length} en retard` : ''}`
+          : `${open.length} soumission${open.length > 1 ? 's' : ''} envoyée${open.length > 1 ? 's' : ''} sans réponse`}
+        actions={<button className="agh-btn solid" onClick={() => nav(`/doc/new?type=${type}`)}><Plus size={16} /> {isInvoice ? 'Facture' : 'Soumission'}</button>}
+      >
+        <div className="agh-row">
+          {isInvoice ? (
+            <Ring big value={billedMonth ? paidMonth / billedMonth : 0} label="Encaissé ce mois-ci">
+              <b>{billedMonth ? Math.min(100, Math.round((paidMonth / billedMonth) * 100)) : 0} %</b>encaissé
+            </Ring>
+          ) : (
+            <Ring big value={winRate} label="Taux d’acceptation"><b>{Math.round(winRate * 100)} %</b>acceptées</Ring>
+          )}
+          <div className="agh-stats">
+            {isInvoice ? (
+              <>
+                <div><b>{money(paidMonth)}</b><span>encaissé ce mois</span></div>
+                <div><b>{money(billedMonth)}</b><span>facturé ce mois</span></div>
+                {late.length > 0 && <button className="agh-stat-btn warn" onClick={() => setFilter('late')}><b><AlertTriangle size={15} /> {money(bal(late))}</b><span>en retard · voir</span></button>}
+              </>
+            ) : (
+              <>
+                <div><b>{won.length}</b><span>acceptée{won.length > 1 ? 's' : ''}</span></div>
+                <div><b>{money(billedMonth)}</b><span>soumis ce mois</span></div>
+                {open.length > 0 && <button className="agh-stat-btn" onClick={() => setFilter('sent')}><b><CircleCheck size={15} /> {open.length}</b><span>à relancer · voir</span></button>}
+              </>
+            )}
+          </div>
+        </div>
+      </PageHero>
       <div className="tabs">
         {FILTERS[type].map((f) => (
           <button key={f.key} className={filter === f.key ? 'on' : ''} onClick={() => setFilter(f.key)}>{f.label}</button>
@@ -150,6 +197,7 @@ export default function DocList({ type }: { type: DocType }) {
           const payments = [...pay.payments, p];
           const tt = docTotals({ ...pay, payments }, s);
           await db.docs.update(pay.id!, { payments, status: tt.balance <= 0.004 ? 'paid' : 'partial' });
+          if (tt.balance <= 0.004) celebrate();
           notify(tt.balance <= 0.004 ? `${pay.number} payée — ${money(p.amount)}` : `Paiement de ${money(p.amount)} — solde ${money(tt.balance)}`);
           setPay(null);
         }} />

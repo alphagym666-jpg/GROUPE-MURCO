@@ -5,6 +5,7 @@ import App from './App';
 import '@fontsource-variable/archivo/wdth.css';
 import '@fontsource-variable/figtree';
 import './styles.css';
+import { applyStoredAccent } from './lib/accent';
 import { applyTheme } from './lib/theme';
 import { isNative } from './lib/native';
 import { onSyncState, startSync } from './lib/sync';
@@ -15,6 +16,7 @@ import './lib/crm';
 import './lib/billing';
 
 applyTheme();
+applyStoredAccent();
 bootstrap().catch(() => undefined);
 startSync();
 // Nouvel appareil d'un compte existant: les réglages arrivent du nuage, puis on complète la liste de prix si elle est vide

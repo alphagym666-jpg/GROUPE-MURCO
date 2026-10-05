@@ -22,6 +22,8 @@
   --amber: #e0901f;
   --amber-ink: #8a5300;
   --amber-soft: #fdf1dd;
+  --brand-deep: #c37e1e;
+  --brand-deeper: #774d21;
   --on-amber: #1d1f22;
   --green: #157f5b;
   --green-soft: #dcf3e9;
@@ -689,7 +691,7 @@ table.list tr.click:hover td { background: var(--surface-2); }
   .ag-hero { padding: 16px; border-radius: 18px; margin: 0 0 12px; }
   .agh-nav { width: 100%; flex-wrap: nowrap; }
   .agh-nav .agh-btn:not(.icon):not(.solid) { flex: 1; justify-content: center; }
-  .agh-nav .agh-btn.solid { display: none; } /* le + de la barre du bas fait la même chose */
+  .agh-nav .agh-btn.solid:not(.keep) { display: none; } /* le + de la barre du bas fait la même chose */
   .agh-next { display: flex; max-width: 100%; }
   .agh-next > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .agh-wx b { font-size: 1.3rem; }
@@ -1119,3 +1121,76 @@ table.list tr.click:hover td { background: var(--surface-2); }
 .type-chip.on { background: color-mix(in srgb, var(--c) 18%, var(--surface)) !important; color: var(--ink) !important; border-color: var(--c) !important; }
 .swatches button.sw { width: 26px; height: 26px; }
 .jb.short .jb-foot { display: none; }
+
+/* Couleur de l'entreprise */
+.brand-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: space-between; }
+.sw-custom { position: relative; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: var(--ink); background: conic-gradient(#ef4444, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444); box-shadow: 0 0 0 1px var(--line-strong); border: 3px solid var(--surface); }
+.sw-custom svg { background: var(--surface); border-radius: 50%; padding: 3px; width: 20px; height: 20px; }
+.sw-custom.on { box-shadow: 0 0 0 2px var(--ink); }
+.sw-custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.brand-preview { display: flex; gap: 12px; align-items: center; margin-top: 14px; padding: 12px; border-radius: 14px; background: var(--surface-2); flex-wrap: wrap; }
+.bp-hero { flex: 1; min-width: 150px; padding: 12px 14px; border-radius: 12px; color: var(--on-amber); background: linear-gradient(135deg, var(--amber), color-mix(in srgb, var(--amber) 55%, #000)); display: grid; }
+.bp-hero span { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; }
+.bp-hero b { font-family: var(--font-display); font-size: 1.05rem; }
+.bp-doc { width: 92px; height: 70px; background: #fff; border-radius: 6px; padding: 8px; box-shadow: var(--shadow); display: grid; gap: 4px; align-content: start; }
+.bp-line { height: 2px; background: var(--amber); }
+.bp-rows { display: grid; gap: 3px; }
+.bp-rows i { height: 4px; background: #e6e3dc; border-radius: 2px; }
+.bp-total { font-size: 0.5rem; font-weight: 800; background: var(--amber); color: var(--on-amber); padding: 1px 4px; border-radius: 3px; justify-self: end; }
+
+/* Bandeau de page aux couleurs de l'entreprise */
+.ag-hero.hero-brand { background: radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--amber) 85%, #fff) 0%, transparent 55%), linear-gradient(135deg, var(--brand-deep), var(--brand-deeper)); }
+.ag-hero .agh-sub { margin-top: 4px; opacity: 0.92; font-size: 0.92rem; }
+.agh-ring.big, .agh-ring.big svg { width: 84px; height: 84px; }
+.agh-ring.big span { font-size: 0.72rem; flex-direction: column; display: flex; align-items: center; line-height: 1.1; }
+.agh-ring.big span b { font-size: 1.05rem; }
+button.agh-ring { border: 0; background: none; color: inherit; padding: 0; cursor: pointer; font: inherit; }
+.agh-stats .up { color: #b9ffd9; }
+.agh-stats .down { color: #ffd0c9; }
+.agh-stats a { color: inherit; text-decoration: none; }
+.agh-avatars { display: flex; gap: 10px; flex-wrap: wrap; }
+.agh-person { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); text-decoration: none; color: inherit; }
+.agh-person i { position: relative; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-weight: 800; font-size: 0.75rem; color: #fff; }
+.agh-person i::after { content: ''; position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; background: #3ddc97; border: 2px solid #fff; animation: now-pulse-g 2s ease-out infinite; }
+.agh-person small { display: block; opacity: 0.85; font-size: 0.72rem; }
+.agh-person.far i::after { background: #ffb020; }
+@keyframes now-pulse-g { 0% { box-shadow: 0 0 0 0 rgba(61, 220, 151, 0.7); } 100% { box-shadow: 0 0 0 9px rgba(61, 220, 151, 0); } }
+@media (max-width: 860px) {
+  .agh-ring.big, .agh-ring.big svg { width: 70px; height: 70px; }
+}
+.confetti { position: fixed; left: 50%; bottom: 30%; width: 0; height: 0; z-index: 200; pointer-events: none; }
+.confetti i { position: absolute; width: 9px; height: 14px; border-radius: 2px; animation: confetti 1.5s cubic-bezier(0.15, 0.7, 0.3, 1) forwards; }
+@keyframes confetti {
+  0% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  60% { opacity: 1; }
+  100% { transform: translate(var(--x), calc(var(--y) + 260px)) rotate(var(--r)); opacity: 0; }
+}
+.agh-stat-btn { display: flex; align-items: baseline; gap: 6px; padding: 8px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.22); color: inherit; font: inherit; cursor: pointer; }
+.agh-stat-btn b { font-family: var(--font-display); font-size: 1.1rem; display: inline-flex; gap: 4px; align-items: center; }
+.agh-stat-btn span { font-size: 0.8rem; opacity: 0.85; text-decoration: underline; text-underline-offset: 2px; }
+.agh-stat-btn.warn { background: rgba(255, 70, 70, 0.32); border-color: rgba(255, 200, 200, 0.55); }
+.agh-stat-btn:hover { background: rgba(255, 255, 255, 0.26); }
+@media (max-width: 860px) { .agh-stat-btn { padding: 5px 8px; border-radius: 10px; grid-column: span 2; } .agh-stat-btn b { font-size: 0.95rem; } }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #3ddc97; display: inline-block; animation: now-pulse-g 2s ease-out infinite; }
+button.agh-person { font: inherit; cursor: pointer; }
+/* Demandes: colonnes en couleur */
+.board-col { border-top: 4px solid var(--c, var(--line)); background: linear-gradient(180deg, color-mix(in srgb, var(--c, transparent) 9%, var(--surface-2)), var(--surface-2) 140px); }
+.board-count { min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px; display: inline-grid; place-items: center; background: var(--c); color: #fff; font-size: 0.78rem; font-weight: 800; }
+.board-col .lead-card { border-left: 3px solid var(--c); animation: jb-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.board-col .lead-card.late { border-left-color: var(--red); }
+.funnel { display: flex; gap: 3px; margin-top: 14px; border-radius: 10px; overflow: hidden; height: 26px; }
+.funnel span { min-width: 0; display: flex; align-items: center; padding: 0 8px; color: #fff; font-size: 0.72rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25); }
+.hero-brand .agh-title h1 { text-transform: none; }
+.agh-stats > a { display: contents; }
+.agh-stats > a > div { display: flex; align-items: baseline; gap: 6px; padding: 8px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.22); }
+.agh-stats > a > div:hover { background: rgba(255, 255, 255, 0.26); }
+@media (max-width: 860px) { .agh-stats > a > div { padding: 5px 8px; border-radius: 10px; gap: 4px; min-width: 0; white-space: nowrap; overflow: hidden; } }
+.funnel em { font-style: normal; }
+@media (max-width: 860px) {
+  .ag-hero .agh-btn.corner { position: absolute; top: 14px; right: 14px; }
+  .agh-stats > div, .agh-stats > a > div, .agh-stat-btn { flex-direction: column; align-items: flex-start; gap: 0; white-space: normal; }
+  .agh-stats span { line-height: 1.2; }
+  .agh-stats em { font-style: normal; }
+  .funnel em { display: none; }
+  .funnel span { justify-content: center; }
+}

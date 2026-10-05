@@ -11,7 +11,7 @@ export interface JobType {
 }
 
 export type ColorBy = 'employe' | 'type' | 'statut' | 'client';
-export type AgendaTheme = 'auto' | 'aurore' | 'ocean' | 'foret' | 'braise' | 'graphite';
+export type AgendaTheme = 'auto' | 'marque' | 'aurore' | 'ocean' | 'foret' | 'braise' | 'graphite';
 export type Density = 'compact' | 'normal' | 'aere';
 
 export interface AgendaPrefs {
@@ -50,6 +50,7 @@ export const DEFAULT_AGENDA: AgendaPrefs = {
 
 export const THEMES: { key: AgendaTheme; label: string; css: string }[] = [
   { key: 'auto', label: 'Selon la météo', css: 'linear-gradient(135deg, #f7b733, #fc4a1a 45%, #4a6cf7)' },
+  { key: 'marque', label: 'Ma couleur', css: 'linear-gradient(135deg, color-mix(in srgb, var(--amber) 70%, #fff), var(--amber) 45%, color-mix(in srgb, var(--amber) 50%, #000))' },
   { key: 'aurore', label: 'Aurore', css: 'linear-gradient(135deg, #ff9a5a, #ff5e8a 50%, #8b5cf6)' },
   { key: 'ocean', label: 'Océan', css: 'linear-gradient(135deg, #12c2e9, #2b6ef2 55%, #3d2ea8)' },
   { key: 'foret', label: 'Forêt', css: 'linear-gradient(135deg, #a8e063, #1f9d6c 50%, #0d5546)' },

@@ -8,6 +8,7 @@ import { mapsLink } from '../lib/geo';
 import { useSettings } from '../lib/hooks';
 import { costOf, hoursOf, localDay, punchFlags, weekDays, weekStart } from '../lib/punch';
 import { addDays, downloadBlob, money, toCSV, todayISO } from '../lib/utils';
+import { PageHero } from '../components/PageHero';
 
 const DOW = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const h2 = (h: number) => (h ? h.toFixed(2).replace('.', ',') : '—');
@@ -23,7 +24,7 @@ export default function Timesheets() {
   const data = useLiveQuery(async () => {
     const [punches, members, jobs, clients] = await Promise.all([db.punches.toArray(), db.members.toArray(), db.jobs.toArray(), db.clients.toArray()]);
     const week = punches.filter((p) => localDay(p.start) >= days[0] && localDay(p.start) <= days[6]).sort((a, b) => a.start.localeCompare(b.start));
-    return { week, members, jobs: new Map(jobs.map((j) => [j.id!, j])), clients: new Map(clients.map((c) => [c.id!, c])) };
+    return { week, members, jobs: new Map(jobs.map((j) => [j.id!, j])), clients: new Map(clients.map((c) => [c.id!, c])), onSite: punches.filter((p) => !p.end).sort((a, b) => a.start.localeCompare(b.start)) };
   }, [ws]);
   if (!data) return null;
 
@@ -37,6 +38,9 @@ export default function Timesheets() {
     return { id, name, perDay, total, cost: total * rate, flags: mine.reduce((a, p) => a + punchFlags(p).length, 0) };
   });
 
+  const toCheck = data.week.filter((p) => !p.approved && punchFlags(p).length > 0).length;
+  const hm = (h: number) => `${Math.floor(h)} h ${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`;
+
   const exportCsv = () => {
     const out: unknown[][] = [['Employé', 'Date', 'Début', 'Fin', 'Pause (min)', 'Heures', 'Job', 'Client', 'Distance début (m)', 'Distance fin (m)', 'Approuvé', 'Remarques']];
     data.week.forEach((p) => {
@@ -48,18 +52,45 @@ export default function Timesheets() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <div className="eyebrow"><Timer size={14} /> Semaine du {new Date(ws + 'T12:00:00').toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' })}</div>
-          <h1>Feuilles de temps</h1>
+      <PageHero
+        eyebrow={<><Timer size={14} /> Semaine du {new Date(ws + 'T12:00:00').toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' })}</>}
+        title="Feuilles de temps"
+        actions={
+          <>
+            <button className="agh-btn icon" onClick={() => setWs(addDays(ws, -7))} aria-label="Semaine précédente"><ChevronLeft size={18} /></button>
+            <button className="agh-btn" onClick={() => setWs(weekStart(todayISO()))}>Cette semaine</button>
+            <button className="agh-btn icon" onClick={() => setWs(addDays(ws, 7))} aria-label="Semaine suivante"><ChevronRight size={18} /></button>
+            <button className="agh-btn solid keep" onClick={exportCsv}><Download size={16} /> Excel (paie)</button>
+          </>
+        }
+      >
+        <div className="agh-eyebrow" style={{ marginTop: 16, marginBottom: 8 }}><span className="live-dot" /> En ce moment</div>
+        {data.onSite.length === 0 ? (
+          <div className="agh-sub">Personne n’est pointé en ce moment.</div>
+        ) : (
+          <div className="agh-avatars">
+            {data.onSite.map((p) => {
+              const m = data.members.find((x) => x.id === p.memberId);
+              const j = p.jobId ? data.jobs.get(p.jobId) : undefined;
+              const far = (p.startDistM ?? 0) > 300;
+              return (
+                <button key={p.id} className={`agh-person ${far ? 'far' : ''}`} onClick={() => setEdit(p)} title={far ? 'Punch in loin du chantier' : undefined}>
+                  <i style={{ background: m?.color ?? 'var(--brand-deeper)' }}>{p.name.split(' ').map((x) => x[0]).join('').slice(0, 2).toUpperCase()}</i>
+                  <span style={{ textAlign: 'left' }}>
+                    <strong>{p.name.split(' ')[0]}</strong> · {hm(hoursOf(p))}
+                    <small>{j ? data.clients.get(j.clientId)?.name ?? j.title : 'Sans job précis'} · depuis {new Date(p.start).toLocaleTimeString('fr-CA', { hour: '2-digit', minute: '2-digit' })}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="agh-stats" style={{ marginTop: 14 }}>
+          <div><b>{h2(rows.reduce((a, r) => a + r.total, 0))} h</b><span>cette semaine</span></div>
+          <div><b>{money(rows.reduce((a, r) => a + r.cost, 0))}</b><span>de main-d’œuvre</span></div>
+          {toCheck > 0 && <div className="warn"><b><AlertTriangle size={15} /> {toCheck}</b><span>à vérifier</span></div>}
         </div>
-        <div className="actions">
-          <button className="btn icon-btn" onClick={() => setWs(addDays(ws, -7))} aria-label="Semaine précédente"><ChevronLeft size={18} /></button>
-          <button className="btn" onClick={() => setWs(weekStart(todayISO()))}>Cette semaine</button>
-          <button className="btn icon-btn" onClick={() => setWs(addDays(ws, 7))} aria-label="Semaine suivante"><ChevronRight size={18} /></button>
-          <button className="btn" onClick={exportCsv}><Download size={16} /> Excel (paie)</button>
-        </div>
-      </div>
+      </PageHero>
 
       <div className="card table-wrap">
         {rows.length === 0 ? <div className="empty">Aucun pointage cette semaine.</div> : (

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { AddressInput } from '../components/AddressInput';
 import { errMsg, useToast } from '../components/Toast';
+import { applyAccent } from '../lib/accent';
 import { loadPublicProfile, submitLead, type PublicProfile } from '../lib/crm';
 import { portalFs } from '../lib/portal';
 import { setLang, useLang } from '../lib/i18n';
@@ -31,6 +32,9 @@ export default function LeadForm() {
       setErr(errMsg(e));
     }
   }, [owner, cfg]);
+  useEffect(() => {
+    if (p?.color) applyAccent(p.color);
+  }, [p]);
 
   if (err) return <div className="portal"><div className="notice err">{err}</div></div>;
   if (p === undefined) return <div className="portal"><div className="empty">Chargement… / Loading…</div></div>;

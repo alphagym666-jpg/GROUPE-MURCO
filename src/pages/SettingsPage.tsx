@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { BrandColorCard } from '../components/BrandColorCard';
+import { applyAccent, colorFromLogo } from '../lib/accent';
+import { publishLeadForm } from '../lib/crm';
 import { errMsg, useConfirm, useToast } from '../components/Toast';
 import { getSettings, saveSettings, type Settings } from '../lib/db';
 import { buildBackup, restoreBackup } from '../lib/exportZip';
@@ -50,6 +53,15 @@ export default function SettingsPage() {
   if (!s) return null;
 
   const up = (p: Partial<Settings>) => setS({ ...s, ...p });
+  // Couleur: enregistrée tout de suite (aperçu en direct partout)
+  const setBrand = (c: string, extra: Partial<Settings> = {}) => {
+    setS((x) => (x ? { ...x, ...extra, brandColor: c } : x));
+    setOrig((x) => (x ? { ...x, ...extra, brandColor: c } : x));
+    applyAccent(c);
+    void saveSettings({ ...extra, brandColor: c }).then(async () => {
+      if (s.leadForm) await publishLeadForm(true).catch(() => undefined);
+    });
+  };
   const txt = (k: keyof Settings, label: string, opts: { full?: boolean; type?: string; placeholder?: string } = {}) => (
     <label className={`field ${opts.full ? 'full' : ''}`}>
       {label}
@@ -100,7 +112,16 @@ export default function SettingsPage() {
           {s.logo ? <img src={s.logo} alt="Logo" style={{ maxHeight: 60, maxWidth: 200 }} /> : <span className="muted small">Aucun logo</span>}
           <label className="btn small">
             Choisir le logo
-            <input type="file" accept="image/*" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) up({ logo: await logoToPng(f) }); }} />
+            <input type="file" accept="image/*" hidden onChange={async (e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              const logo = await logoToPng(f);
+              const c = s.brandColor ? null : await colorFromLogo(logo).catch(() => null);
+              if (c) {
+                setBrand(c, { logo });
+                notify('Logo ajouté — l’app prend maintenant la couleur de ton logo');
+              } else up({ logo });
+            }} />
           </label>
           {s.logo && <button className="btn small danger" onClick={() => up({ logo: undefined })}>Retirer</button>}
         </div>
@@ -121,6 +142,8 @@ export default function SettingsPage() {
           {txt('rbqNumber', 'Licence RBQ (si applicable)')}
         </div>
       </div>
+
+      <BrandColorCard value={s.brandColor} logo={s.logo} company={s.companyName} onChange={(c) => setBrand(c)} />
 
       <div className="card" id="domicile">
         <h2>Domicile — point de départ du journal de bord</h2>

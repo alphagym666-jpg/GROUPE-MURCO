@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AddressInput } from '../components/AddressInput';
 import { Modal } from '../components/Modal';
+import { PageHero, Ring } from '../components/PageHero';
 import { errMsg, useConfirm, useToast } from '../components/Toast';
 import { smsLink } from '../lib/agenda';
 import { blankLead, leadFormLink, leadToQuote, note, OPEN_STAGES, publishLeadForm, setStage, SOURCE_LABEL, STAGES, STAGE_LABEL } from '../lib/crm';
@@ -14,6 +15,8 @@ import { db, saveSettings, type Lead, type LeadSource, type LeadStage } from '..
 import { useSettings } from '../lib/hooks';
 import { useSyncState } from '../lib/sync';
 import { addDays, downloadBlob, money, todayISO } from '../lib/utils';
+
+const STAGE_COLOR: Record<string, string> = { nouveau: '#f59e0b', contacte: '#3b82f6', visite: '#8b5cf6', soumission: '#ec4899', gagne: '#16a34a', perdu: '#9ca3af' };
 
 const age = (iso: string) => {
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
@@ -64,23 +67,40 @@ export default function Leads() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <div className="eyebrow"><Inbox size={14} /> CRM</div>
-          <h1>Demandes</h1>
+      <PageHero
+        eyebrow={<><Inbox size={14} /> CRM</>}
+        title="Demandes"
+        sub={(() => {
+          const fresh = leads.filter((l) => l.stage === 'nouveau').length;
+          const waiting = fresh + stats.due;
+          return waiting ? `${waiting} demande${waiting > 1 ? 's' : ''} qui attend${waiting > 1 ? 'ent' : ''} une réponse de ta part` : 'Tout le monde a eu une réponse 👌';
+        })()}
+        actions={
+          <>
+            <button className="agh-btn" onClick={() => setFormOpen(true)}><Globe size={16} /> Mon formulaire en ligne</button>
+            <button className="agh-btn solid" onClick={() => setEdit(blankLead())}><Plus size={16} /> Demande</button>
+          </>
+        }
+      >
+        <div className="agh-row">
+          <Ring big value={(stats.rate ?? 0) / 100} label="Taux de conversion sur 90 jours"><b>{stats.rate === null ? '—' : `${stats.rate} %`}</b>gagnées</Ring>
+          <div className="agh-stats">
+            <div><b>{stats.month}</b><span>nouvelle{stats.month > 1 ? 's' : ''} ce mois<em className="hide-mobile">{stats.bySource.length ? ` · ${stats.bySource.slice(0, 2).map(([k, v]) => `${SOURCE_LABEL[k as LeadSource]} ${v}`).join(', ')}` : ''}</em></span></div>
+            <div className={stats.due ? 'warn' : ''}><b><Bell size={14} /> {stats.due}</b><span>à relancer</span></div>
+            <div><b>{money(stats.pipeline)}</b><span>en jeu</span></div>
+          </div>
         </div>
-        <div className="actions">
-          <button className="btn" onClick={() => setFormOpen(true)}><Globe size={17} /> Mon formulaire en ligne</button>
-          <button className="btn accent" onClick={() => setEdit(blankLead())}><Plus size={17} /> Demande</button>
-        </div>
-      </div>
-
-      <div className="grid kpi">
-        <div className="card"><div className="label">Nouvelles ce mois</div><div className="value">{stats.month}</div><div className="sub">{stats.bySource.slice(0, 3).map(([k, v]) => `${SOURCE_LABEL[k as LeadSource]} ${v}`).join(' · ') || '—'}</div></div>
-        <div className={`card ${stats.due ? 'hot' : ''}`}><div className="label">À relancer</div><div className="value">{stats.due}</div><div className="sub">aujourd’hui ou en retard</div></div>
-        <div className="card"><div className="label">Valeur en cours</div><div className="value">{money(stats.pipeline)}</div><div className="sub">demandes ouvertes</div></div>
-        <div className="card"><div className="label">Taux de conversion</div><div className="value">{stats.rate === null ? '—' : `${stats.rate} %`}</div><div className="sub">90 derniers jours</div></div>
-      </div>
+        {(() => {
+          const open = STAGES.filter((st) => OPEN_STAGES.includes(st.key)).map((st) => ({ ...st, n: leads.filter((l) => l.stage === st.key).length }));
+          const n = open.reduce((a, x) => a + x.n, 0);
+          if (!n) return null;
+          return (
+            <div className="funnel" aria-label="Demandes ouvertes par étape">
+              {open.filter((x) => x.n).map((x) => <span key={x.key} style={{ flex: x.n, background: STAGE_COLOR[x.key] }} title={`${x.label}: ${x.n}`}>{x.n}<em>&nbsp;{x.label.toLowerCase()}</em></span>)}
+            </div>
+          );
+        })()}
+      </PageHero>
 
       <div className="row" style={{ marginBottom: 10 }}>
         <label className="check"><input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} /> Voir les gagnées et perdues</label>
@@ -90,8 +110,8 @@ export default function Leads() {
         {columns.map((col) => {
           const list = leads.filter((l) => l.stage === col.key);
           return (
-            <section key={col.key} className="board-col">
-              <div className="board-head"><span className={`badge ${col.tone}`}>{list.length}</span> {col.label}</div>
+            <section key={col.key} className="board-col" style={{ ['--c' as string]: STAGE_COLOR[col.key] }}>
+              <div className="board-head"><span className="board-count">{list.length}</span> {col.label}</div>
               {list.length === 0 && <div className="small muted" style={{ padding: 8 }}>—</div>}
               {list.map((l) => {
                 const late = l.nextAction && l.nextAction <= today && OPEN_STAGES.includes(l.stage);
