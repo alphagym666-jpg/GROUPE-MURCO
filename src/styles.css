@@ -1348,3 +1348,64 @@ button.agh-ring:hover .fg { stroke: var(--amber-ink); }
 .ex-dict { display: grid; justify-items: center; gap: 10px; text-align: center; }
 .ex-heard { font-size: 1.1rem; }
 .page-head .mic-label { flex: none; }
+
+/* ---------- Agenda sur téléphone: compact, la journée d'abord ---------- */
+.agh-mini { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; color: var(--muted); font-size: 0.9rem; }
+.agh-mini span { display: inline-flex; align-items: center; gap: 4px; }
+.agh-mini b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.agh-mini .ok { color: var(--green); }
+.agh-mini .warn { color: var(--red); font-weight: 700; }
+.ag-strip { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 8px 8px 10px; margin-bottom: 12px; box-shadow: var(--shadow); touch-action: pan-y; user-select: none; }
+.ags-head { display: flex; align-items: center; gap: 6px; padding: 0 2px 6px; }
+.ags-month { flex: 1; font-weight: 700; font-size: 0.95rem; }
+.ags-month::first-letter { text-transform: uppercase; }
+.ags-arrow { width: 36px; height: 36px; border-radius: 10px; border: 0; background: none; color: var(--ink); display: grid; place-items: center; cursor: pointer; }
+.ags-arrow:active { background: var(--surface-2); }
+.ags-today { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 0.85rem; font-weight: 650; cursor: pointer; }
+.ags-today.ghost { border: 0; padding: 0; }
+.ags-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.ags-day { display: grid; justify-items: center; gap: 2px; padding: 7px 0 6px; border: 0; border-radius: 12px; background: none; color: var(--ink); font: inherit; cursor: pointer; min-height: 62px; }
+.ags-day .wd { font-size: 0.72rem; font-weight: 700; color: var(--muted); }
+.ags-day .dn { font-family: var(--font-display); font-size: 1.15rem; font-weight: 750; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.ags-day .dots { display: flex; gap: 3px; height: 6px; align-items: center; }
+.ags-day .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); }
+.ags-day .dots em { font-style: normal; font-size: 0.65rem; font-weight: 800; line-height: 1; color: var(--muted); }
+.ags-day.past { opacity: 0.6; }
+.ags-day.today .wd { color: var(--amber-ink); }
+.ags-day.today { box-shadow: inset 0 0 0 1.5px var(--line); }
+.ags-day.on { background: var(--primary-bg); color: var(--primary-ink); opacity: 1; box-shadow: none; }
+.ags-day.on .wd { color: inherit; opacity: 0.75; }
+.ags-day.on .dots i { background: var(--primary-ink); opacity: .8; }
+.ags-day.on .dots em { color: var(--primary-ink); }
+.ags-day:active { transform: scale(0.96); }
+.ag-remind-mini { width: 100%; display: flex; align-items: center; gap: 8px; padding: 11px 14px; margin-bottom: 12px; border: 1px solid color-mix(in srgb, var(--amber, #d98b0a) 35%, var(--line)); background: color-mix(in srgb, var(--amber, #d98b0a) 8%, var(--surface)); border-radius: 12px; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.ag-remind-mini span { flex: 1; }
+.ag-grid-toggle { width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; border: 0; background: none; color: var(--muted); font: inherit; font-weight: 650; cursor: pointer; }
+.jc-main { display: flex; gap: 8px; margin-top: 10px; }
+.jc-main .btn { flex: 1; justify-content: center; min-height: 44px; }
+.jc-main .btn.icon-btn { flex: 0 0 46px; padding: 0; font-size: 1.2rem; font-weight: 800; }
+.jc-main .btn.icon-btn.on { background: var(--surface-2); }
+@media (max-width: 640px) {
+  .ag-hero { padding: 14px 16px 14px; margin-bottom: 10px; }
+  .agh-top { flex-wrap: nowrap; align-items: center; gap: 8px; }
+  .agh-top .agh-title { flex: 1; min-width: 0; }
+  .agh-eyebrow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .agh-nav .agh-btn.icon { width: 40px; height: 40px; padding: 0; }
+  .ag-day-tools { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 4px 0 12px; }
+  .ag-day-tools::-webkit-scrollbar { display: none; }
+  .ag-day-tools .btn { flex: none; }
+  .agh-title h1 { font-size: 1.3rem; }
+  .agh-nav { flex-wrap: nowrap; gap: 6px; width: auto; flex: none; }
+  .agh-nav .agh-btn.solid { padding-inline: 12px; }
+  .ag-hero .agh-next { margin-top: 10px; }
+  .ag-toolbar { margin-bottom: 8px; }
+  .ag-toolbar .seg { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); }
+  .ag-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-bottom: 10px; }
+  .ag-filters::-webkit-scrollbar { display: none; }
+  .ag-filters .chip-btn { flex: none; }
+  .ag-day.mobile { display: flex; flex-direction: column; gap: 12px; }
+  .ag-day.mobile > .card { width: 100%; }
+  .ag-day.mobile .ag-route-card { padding: 14px 12px; }
+  .ag-day.mobile .job-card { padding: 12px 10px; }
+  .ag-day.mobile .job-card .title { font-size: 1.05rem; }
+}

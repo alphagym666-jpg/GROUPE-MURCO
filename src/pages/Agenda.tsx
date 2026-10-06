@@ -3,7 +3,7 @@ import {
   AlertTriangle, ArrowDown, ArrowUp, Bell, CalendarClock, CalendarDays, Check, ChevronLeft, ChevronRight, Cloud, CloudDrizzle, CloudFog, CloudLightning,
   CloudRain, CloudSnow, CloudSun, FileText, Inbox, MapPin, Mic, Navigation, Palette, Phone, Plus, Repeat, Route, Search, Shuffle, Sun, Timer, Users, type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type TouchEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { JobDoneSheet } from '../components/JobDoneSheet';
 import { Ring } from '../components/PageHero';
@@ -104,6 +104,8 @@ export default function Agenda() {
   const [postpone, setPostpone] = useState<{ jobs: Job[]; label: string } | null>(null);
   const [busy, setBusy] = useState('');
   const [custom, setCustom] = useState(false);
+  const mobile = useMobile();
+  const [remindOpen, setRemindOpen] = useState(false);
   const wx = useWeather(s.homeGeo);
   const weather = prefs.showWeather ? wx : {};
 
@@ -267,15 +269,39 @@ export default function Agenda() {
             <h1>{title}</h1>
           </div>
           <div className="agh-nav">
-            <button className="agh-btn icon" onClick={() => shift(-1)} aria-label="Précédent"><ChevronLeft size={18} /></button>
-            <button className="agh-btn" onClick={() => go(today)}>Aujourd’hui</button>
-            <button className="agh-btn icon" onClick={() => shift(1)} aria-label="Suivant"><ChevronRight size={18} /></button>
+            {!(mobile && (view === 'jour' || view === 'semaine')) && (
+              <>
+                <button className="agh-btn icon" onClick={() => shift(-1)} aria-label="Précédent"><ChevronLeft size={18} /></button>
+                <button className="agh-btn" onClick={() => go(today)}>Aujourd’hui</button>
+                <button className="agh-btn icon" onClick={() => shift(1)} aria-label="Suivant"><ChevronRight size={18} /></button>
+              </>
+            )}
             {canEdit && <button className="agh-btn icon" onClick={() => nav('/dicter')} aria-label="Assistant" title="Assistant"><Mic size={17} /></button>}
             {canEdit && <button className="agh-btn icon" onClick={() => setCustom(true)} aria-label="Personnaliser l’agenda" title="Personnaliser"><Palette size={17} /></button>}
             {canEdit && <button className="agh-btn solid" onClick={() => nav(`/job/new?d=${sel}`)}><Plus size={17} /> Job</button>}
           </div>
         </div>
-        {view !== 'liste' && (
+        {view !== 'liste' && mobile && (
+          <div className="agh-mini">
+            <span><b>{inRange.length}</b> job{inRange.length > 1 ? 's' : ''}</span>
+            <span><b>{hoursTxt(periodMin)}</b></span>
+            {ctx.showMoney && periodTotal > 0 && <span><b>{money(periodTotal).replace(/,00\s/, ' ')}</b></span>}
+            {inRange.length > 0 && <span className="ok"><Check size={13} /> {doneN}/{inRange.length}</span>}
+            {conflictIds.size > 0 && <span className="warn"><AlertTriangle size={13} /> {conflictIds.size}</span>}
+            {heroW && HeroIcon && <span><HeroIcon size={14} /> {heroW.tmax}°</span>}
+          </div>
+        )}
+        {view !== 'liste' && mobile && (current || next) && (
+          <Link to={`/job/${(current ?? next)!.id}`} className="agh-next">
+            <Timer size={15} style={{ flex: 'none' }} />
+            <span>
+              {current
+                ? <>En cours : <b>{data.clients.get(current.clientId)?.name ?? 'Client'}</b> jusqu’à {fmtMin(toMin(current.time) + (current.durationMin || 60))}</>
+                : <>Prochain : <b>{data.clients.get(next!.clientId)?.name ?? 'Client'}</b> à {next!.time}</>}
+            </span>
+          </Link>
+        )}
+        {view !== 'liste' && !mobile && (
           <div className="agh-row">
             <Ring value={inRange.length ? doneN / inRange.length : 0} label={`${doneN} sur ${inRange.length} jobs terminés`}><b>{doneN}/{inRange.length}</b>faits</Ring>
             <div className="agh-stats">
@@ -305,11 +331,13 @@ export default function Agenda() {
         )}
       </section>
 
+      {mobile && (view === 'jour' || view === 'semaine') && <DayStrip sel={sel} today={today} view={view} onPick={(d) => go(d, 'jour')} onShift={(n) => go(addDays(sel, 7 * n))} onToday={() => go(today)} />}
+
       <div className="ag-toolbar">
         <div className="seg ag-views" role="tablist">
           {VIEWS.map((v) => <button key={v.key} role="tab" aria-selected={view === v.key} className={view === v.key ? 'on' : ''} onClick={() => go(sel, v.key)}>{v.label}</button>)}
         </div>
-        <label className="ag-date"><CalendarClock size={16} /><input type="date" value={sel} onChange={(e) => e.target.value && go(e.target.value)} aria-label="Aller à la date" /></label>
+        {!mobile && <label className="ag-date"><CalendarClock size={16} /><input type="date" value={sel} onChange={(e) => e.target.value && go(e.target.value)} aria-label="Aller à la date" /></label>}
       </div>
 
       <div className="chips ag-filters">
@@ -326,7 +354,12 @@ export default function Agenda() {
         {!isEmp && <button className={`chip-btn ${showLeads ? 'on' : ''}`} onClick={() => setShowLeads((x) => !x)}><Inbox size={14} /> Relances</button>}
       </div>
 
-      {data.toRemind.length > 0 && (
+      {data.toRemind.length > 0 && mobile && !remindOpen && (
+        <button className="ag-remind-mini" onClick={() => setRemindOpen(true)}>
+          <Bell size={15} /> <span><b>{data.toRemind.length}</b> client{data.toRemind.length > 1 ? 's' : ''} à rappeler</span> <ChevronRight size={16} />
+        </button>
+      )}
+      {data.toRemind.length > 0 && (!mobile || remindOpen) && (
         <div className="notice row">
           <Bell size={16} />
           <span><strong>{data.toRemind.length}</strong> client{data.toRemind.length > 1 ? 's' : ''} à rappeler pour aujourd’hui ou demain:</span>
@@ -337,7 +370,7 @@ export default function Agenda() {
       )}
 
       {view === 'jour' && (
-        <DayView ctx={ctx} date={sel} jobs={sortDay(byDay.get(sel) ?? [])} trips={data.trips} busy={busy} run={run} s={s}
+        <DayView mobile={mobile} onSwipe={shift} ctx={ctx} date={sel} jobs={sortDay(byDay.get(sel) ?? [])} trips={data.trips} busy={busy} run={run} s={s}
           onRemind={setRemind} onPostpone={(jobs, label) => setPostpone({ jobs, label })} isEmp={isEmp} />
       )}
       {view === 'semaine' && <WeekView ctx={ctx} start={range[0]} byDay={byDay} sortDay={sortDay} today={today} onPick={(d) => go(d, 'jour')} />}
@@ -370,6 +403,75 @@ interface Ctx {
   dropProps: (date: string, time?: string) => object;
   leadsOn: (d: string) => Lead[];
   nav: (to: string) => void;
+}
+
+/** Téléphone (écran étroit): mise en page simplifiée. */
+function useMobile(): boolean {
+  const q = '(max-width: 640px)';
+  const [m, setM] = useState(() => typeof matchMedia !== 'undefined' && matchMedia(q).matches);
+  useEffect(() => {
+    const mq = matchMedia(q);
+    const f = () => setM(mq.matches);
+    mq.addEventListener('change', f);
+    return () => mq.removeEventListener('change', f);
+  }, []);
+  return m;
+}
+
+/** Glisser à gauche / à droite (journée suivante / précédente). */
+function useSwipe(onSwipe: (dir: 1 | -1) => void) {
+  const start = useRef<{ x: number; y: number; t: number } | null>(null);
+  return {
+    onTouchStart: (e: TouchEvent) => {
+      const t = e.touches[0];
+      // Pas depuis le bord de l'écran (geste « retour » du téléphone) ni sur un champ
+      if (t.clientX < 24 || t.clientX > window.innerWidth - 24 || (e.target as HTMLElement).closest('input, textarea, select, .chips')) return void (start.current = null);
+      start.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+    },
+    onTouchEnd: (e: TouchEvent) => {
+      const s0 = start.current;
+      start.current = null;
+      if (!s0) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - s0.x;
+      const dy = t.clientY - s0.y;
+      if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8 && Date.now() - s0.t < 700) onSwipe(dx < 0 ? 1 : -1);
+    },
+  };
+}
+
+const WD = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+/** Bande de la semaine (téléphone): touche un jour, glisse pour changer de semaine. */
+function DayStrip({ sel, today, view, onPick, onShift, onToday }: { sel: string; today: string; view: View; onPick: (d: string) => void; onShift: (n: number) => void; onToday: () => void }) {
+  const start = weekStart(sel);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  const jobs = useLiveQuery(() => db.jobs.where('date').between(days[0], days[6], true, true).toArray(), [days[0]]) ?? [];
+  const count = (d: string) => jobs.filter((j) => j.date === d && j.status !== 'annule').length;
+  const swipe = useSwipe((dir) => onShift(dir));
+  const month = new Date(sel + 'T12:00:00').toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' });
+  return (
+    <div className="ag-strip" {...swipe}>
+      <div className="ags-head">
+        <button className="ags-arrow" onClick={() => onShift(-1)} aria-label="Semaine précédente"><ChevronLeft size={18} /></button>
+        <span className="ags-month">{month}</span>
+        {!days.includes(today) || sel !== today ? <button className="ags-today" onClick={onToday}>Aujourd’hui</button> : <span className="ags-today ghost" />}
+        <button className="ags-arrow" onClick={() => onShift(1)} aria-label="Semaine suivante"><ChevronRight size={18} /></button>
+      </div>
+      <div className="ags-days">
+        {days.map((d) => {
+          const n = count(d);
+          const date = new Date(d + 'T12:00:00');
+          return (
+            <button key={d} className={`ags-day ${view === 'jour' && d === sel ? 'on' : ''} ${d === today ? 'today' : ''} ${d < today ? 'past' : ''}`} onClick={() => onPick(d)} aria-label={date.toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' }) + ` — ${n} job${n > 1 ? 's' : ''}`}>
+              <span className="wd">{WD[date.getDay()]}</span>
+              <span className="dn">{date.getDate()}</span>
+              <span className="dots">{Array.from({ length: Math.min(n, 3) }, (_, i) => <i key={i} />)}{n > 3 && <em>+</em>}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function WeatherChip({ w, full = false }: { w?: DayWeather; full?: boolean }) {
@@ -502,7 +604,8 @@ function TimeGrid({ ctx, days, byDay, onPick, today }: { ctx: Ctx; days: string[
   );
 }
 
-function DayView({ ctx, date, jobs, trips, busy, run, s, onRemind, onPostpone, isEmp }: {
+function DayView({ ctx, date, jobs, trips, busy, run, s, onRemind, onPostpone, isEmp, mobile = false, onSwipe }: {
+  mobile?: boolean; onSwipe?: (n: number) => void;
   ctx: Ctx; date: string; jobs: Job[]; trips: { id?: number; jobId?: number; totalKm: number; durationMin?: number; reason: string }[];
   busy: string; run: (l: string, fn: () => Promise<void>) => Promise<void>; s: { homeAddress: string };
   onRemind: (j: Job) => void; onPostpone: (jobs: Job[], label: string) => void; isEmp: boolean;
@@ -536,12 +639,15 @@ function DayView({ ctx, date, jobs, trips, busy, run, s, onRemind, onPostpone, i
     run('Facture', async () => {
       ctx.nav(`/doc/${await jobToInvoice(j.id!)}`);
     });
+  const [more, setMore] = useState<number | null>(null); // téléphone: actions secondaires ouvertes
+  const swipe = useSwipe((dir) => onSwipe?.(dir));
 
   return (
-    <div className="grid two ag-day" style={{ alignItems: 'start' }}>
+    <div className={`grid two ag-day ${mobile ? 'mobile' : ''}`} style={{ alignItems: 'start' }} {...(mobile ? swipe : {})}>
       {doneJob && <JobDoneSheet job={doneJob.job} client={ctx.data.clients.get(doneJob.job.clientId)} canBill={ctx.showMoney} routeKm={doneJob.km} onClose={() => setDoneJob(null)} />}
-      <div className="card" style={{ padding: 10 }}>
-        {w && (
+      <div className="card ag-grid-card" style={{ padding: 10, order: mobile ? 2 : undefined }}>
+        {mobile && <button className="ag-grid-toggle" onClick={() => setMore((m) => (m === -1 ? null : -1))}><CalendarDays size={15} /> {more === -1 ? 'Cacher la vue horaire' : 'Voir la vue horaire'}</button>}
+        {(!mobile || more === -1) && w && (
           <div className={`wx-banner ${badWeather(w) ? 'bad' : ''}`}>
             <WeatherChip w={w} full />
             {badWeather(w) && planned.length > 0 && ctx.canEdit && (
@@ -549,26 +655,41 @@ function DayView({ ctx, date, jobs, trips, busy, run, s, onRemind, onPostpone, i
             )}
           </div>
         )}
-        <TimeGrid ctx={ctx} days={[date]} byDay={new Map([[date, jobs]])} today={todayISO()} />
+        {(!mobile || more === -1) && <TimeGrid ctx={ctx} days={[date]} byDay={new Map([[date, jobs]])} today={todayISO()} />}
       </div>
 
-      <div className="card">
+      <div className="card ag-route-card" style={{ order: mobile ? 1 : undefined }}>
+        {mobile && w && (
+          <div className={`wx-banner ${badWeather(w) ? 'bad' : ''}`}>
+            <WeatherChip w={w} full />
+            {badWeather(w) && planned.length > 0 && ctx.canEdit && (
+              <button className="btn small" onClick={() => onPostpone(planned, `les ${planned.length} job${planned.length > 1 ? 's' : ''} du ${formatDate(date)}`)}><CalendarClock size={14} /> Reporter la journée</button>
+            )}
+          </div>
+        )}
         <div className="card-head">
           <div>
-            <h2 style={{ marginBottom: 2 }}>Route du jour</h2>
+            <h2 style={{ marginBottom: 2 }}>{mobile ? 'Ma journée' : 'Route du jour'}</h2>
             <div className="small muted">{jobs.length} job{jobs.length > 1 ? 's' : ''}{dayKm ? ` · ${km(dayKm)} de route` : ''}{leads.length ? ` · ${leads.length} relance${leads.length > 1 ? 's' : ''}` : ''}</div>
           </div>
-          {ctx.canEdit && planned.length > 0 && (
+          {!mobile && ctx.canEdit && planned.length > 0 && (
             <button className="btn small" onClick={() => onPostpone(planned, `les ${planned.length} job${planned.length > 1 ? 's' : ''} du ${formatDate(date)}`)}><CalendarClock size={14} /> Reporter</button>
           )}
         </div>
-        {jobs.length > 1 && (
+        {mobile && jobs.length > 0 && (
+          <div className="ag-day-tools">
+            {jobs.length > 1 && <button className="btn small" onClick={() => run('Route', async () => { const l = await dayRouteLink(date); if (l) window.open(l, '_blank'); else notify('Ajoute des adresses aux jobs.', 'err'); })}><Navigation size={15} /> Route</button>}
+            {ctx.canEdit && jobs.length > 1 && <button className="btn small" disabled={!!busy} onClick={() => run('Optimiser', async () => { await optimizeDay(date); notify('Ordre optimisé'); })}><Shuffle size={15} /> Optimiser</button>}
+            {ctx.canEdit && planned.length > 0 && <button className="btn small" onClick={() => onPostpone(planned, `les ${planned.length} job${planned.length > 1 ? 's' : ''} du ${formatDate(date)}`)}><CalendarClock size={15} /> Reporter</button>}
+          </div>
+        )}
+        {!mobile && jobs.length > 1 && (
           <div className="row" style={{ marginBottom: 12 }}>
             {ctx.canEdit && <button className="btn small" disabled={!!busy} onClick={() => run('Optimiser', async () => { await optimizeDay(date); notify(jobs.some((x) => x.time) ? 'Ordre optimisé (les jobs avec une heure gardent leur heure)' : 'Ordre optimisé (trajet le plus court)'); })}><Shuffle size={15} /> Optimiser l’ordre</button>}
             <button className="btn small" onClick={() => run('Route', async () => { const l = await dayRouteLink(date); if (l) window.open(l, '_blank'); else notify('Ajoute des adresses aux jobs.', 'err'); })}><Navigation size={15} /> Route dans Google Maps</button>
           </div>
         )}
-        {leads.map((l) => (
+        {!mobile && leads.map((l) => (
           <div key={l.id} className="job-card lead">
             <div className="stop"><Phone size={15} /></div>
             <div className="body">
@@ -611,9 +732,17 @@ function DayView({ ctx, date, jobs, trips, busy, run, s, onRemind, onPostpone, i
                       <div className="small">{j.title}{ctx.showMoney && jobTotal(j) ? ` · ${money(jobTotal(j))}` : ''}</div>
                       {(j.address || c?.address) && <div className="small muted row" style={{ gap: 4 }}><MapPin size={13} /> {j.address || c?.address}</div>}
                       {who.length > 0 && <div className="small row" style={{ gap: 6, marginTop: 2 }}>{who.map((m) => <span key={m.id} className="who"><span className="dot" style={{ background: ctx.memberColor(m) }} /> {m.name.split(' ')[0]}</span>)}</div>}
-                      <div className="row" style={{ marginTop: 8, gap: 6 }}>
-                        {j.status === 'planifie' && <button className="btn small accent" disabled={!!busy} onClick={() => done(j)}><Check size={15} /> Fait</button>}
-                        {(j.address || c?.address) && <a className="btn small" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(j.address || c?.address || '')}`} target="_blank" rel="noreferrer"><Navigation size={15} /> Y aller</a>}
+                      {mobile && (
+                        <div className="jc-main">
+                          {j.status === 'planifie' && <button className="btn accent" disabled={!!busy} onClick={() => done(j)}><Check size={17} /> Fait</button>}
+                          {(j.address || c?.address) && <a className="btn" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(j.address || c?.address || '')}`} target="_blank" rel="noreferrer"><Navigation size={17} /> Y aller</a>}
+                          {c?.phone && <a className="btn icon-btn" href={`tel:${c.phone}`} aria-label={`Appeler ${c.name}`}><Phone size={17} /></a>}
+                          <button className={`btn icon-btn ${more === j.id ? 'on' : ''}`} onClick={() => setMore((m) => (m === j.id ? null : j.id!))} aria-label="Plus d’actions" aria-expanded={more === j.id}>⋯</button>
+                        </div>
+                      )}
+                      {(!mobile || more === j.id) && <div className="row" style={{ marginTop: 8, gap: 6 }}>
+                        {!mobile && j.status === 'planifie' && <button className="btn small accent" disabled={!!busy} onClick={() => done(j)}><Check size={15} /> Fait</button>}
+                        {!mobile && (j.address || c?.address) && <a className="btn small" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(j.address || c?.address || '')}`} target="_blank" rel="noreferrer"><Navigation size={15} /> Y aller</a>}
                         {!isEmp && (j.docId ? (
                           <Link className="btn small" to={`/doc/${j.docId}`}><FileText size={15} /> Facture</Link>
                         ) : (
@@ -628,12 +757,26 @@ function DayView({ ctx, date, jobs, trips, busy, run, s, onRemind, onPostpone, i
                             <button className="btn small icon-btn" onClick={() => move(i, 1)} disabled={i === routeJobs.length - 1} aria-label="Descendre"><ArrowDown size={15} /></button>
                           </>
                         )}
-                      </div>
+                      </div>}
                     </div>
                   </div>
                 </div>
               );
             })}
+            {mobile && leads.length > 0 && <div style={{ height: 8 }} />}
+            {mobile && leads.map((l) => (
+          <div key={l.id} className="job-card lead">
+            <div className="stop"><Phone size={15} /></div>
+            <div className="body">
+              <div className="title">Relancer {l.name}</div>
+              <div className="small muted">{l.service || 'Demande'}{l.phone ? ` · ${l.phone}` : ''}</div>
+              <div className="row" style={{ marginTop: 8, gap: 6 }}>
+                {l.phone && <a className="btn small" href={`tel:${l.phone}`}><Phone size={14} /> Appeler</a>}
+                <Link className="btn small" to="/demandes">Ouvrir la demande</Link>
+              </div>
+            </div>
+          </div>
+        ))}
             {legs.length > 0 && legs[legs.length - 1].reason.startsWith('Retour') && (
               <div className="leg"><Route size={13} /> Retour au domicile: {km(legs[legs.length - 1].totalKm)}</div>
             )}
