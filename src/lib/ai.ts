@@ -142,12 +142,14 @@ export function aiConfigured(enabled?: boolean): boolean {
 export function aiErrorMessage(e: unknown): string {
   const m = e instanceof Error ? e.message : String(e);
   const code = (e as { code?: string })?.code ?? '';
+  if (/quota|429|RESOURCE_EXHAUSTED/i.test(m)) return 'La limite gratuite de l’IA est atteinte pour aujourd’hui (20 demandes par jour). Elle revient demain. J’utilise l’assistant de base.';
   if (/api-not-enabled|firebasevertexai|generativelanguage|AI Logic|PERMISSION_DENIED|403/i.test(code + m)) return 'L’assistant IA n’est pas encore activé dans Firebase (Paramètres → Assistant IA). J’utilise l’assistant de base.';
   if (/timeout|timed out|abort/i.test(m)) return 'L’IA ne répond pas (délai dépassé): la connexion à Google est bloquée ou trop lente. J’utilise l’assistant de base.';
   if (/fetch|network|Failed to fetch|offline/i.test(m)) return 'Pas d’Internet: j’utilise l’assistant de base.';
   if (/quota|429|RESOURCE_EXHAUSTED/i.test(m)) return 'Limite de l’IA atteinte pour le moment: j’utilise l’assistant de base.';
   return `Assistant IA: ${code ? `[${code}] ` : ''}${m}`;
 }
+const overQuota = (e: unknown) => /quota|429|RESOURCE_EXHAUSTED/i.test(`${(e as { code?: string })?.code ?? ''} ${e instanceof Error ? e.message : e}`);
 const notFound = (e: unknown) => /not found|404|NOT_FOUND|is not supported|no-model/i.test(`${(e as { code?: string })?.code ?? ''} ${e instanceof Error ? e.message : e}`);
 
 const INTENTS: Record<string, IntentKind> = { payee: 'payee', relancer: 'relancer', depense: 'depense', deplacer: 'deplacer', fini: 'fini', combien: 'combien', horaire: 'horaire', afaire: 'afaire', facturer_job: 'facturer' };
@@ -183,7 +185,7 @@ export class AiAssistant {
         } catch (e) {
           last = e;
           this.chat = null;
-          if (!notFound(e)) throw e;
+          if (!notFound(e) && !overQuota(e)) throw e;
         }
       }
       throw last;
@@ -296,7 +298,7 @@ Ce qu’il veut dire: ${opts.intent}
       return r.response.text().trim();
     } catch (e) {
       last = e;
-      if (!notFound(e)) throw e;
+      if (!notFound(e) && !overQuota(e)) throw e;
     }
   }
   throw last;
