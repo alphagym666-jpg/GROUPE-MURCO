@@ -9,6 +9,8 @@
   --bg: #f3f2ef;
   --surface: #ffffff;
   --surface-2: #f8f7f4;
+  --seg-track: #ebe9e4;
+  --seg-on: #ffffff;
   --ink: #1d1f22;
   --muted: #6b6a66;
   --line: #e4e1da;
@@ -50,6 +52,8 @@
     --bg: #141517;
     --surface: #1c1e21;
     --surface-2: #23262a;
+    --seg-track: #121315;
+    --seg-on: #2e3136;
     --ink: #ecebe8;
     --muted: #9a9892;
     --line: #2f3236;
@@ -80,6 +84,8 @@
   --bg: #141517;
   --surface: #1c1e21;
   --surface-2: #23262a;
+  --seg-track: #121315;
+  --seg-on: #2e3136;
   --ink: #ecebe8;
   --muted: #9a9892;
   --line: #2f3236;
@@ -242,10 +248,13 @@ table.list tr.click:hover td { background: var(--surface-2); }
 .tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
 .tabs button { border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); padding: 7px 13px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 0.85rem; font-weight: 600; }
 .tabs button.on { background: var(--primary-bg); color: var(--primary-ink); border-color: var(--primary-bg); }
-.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 10px; overflow: hidden; }
-.seg button { border: 0; background: var(--surface); color: var(--ink); padding: 7px 12px; font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
-.seg button + button { border-left: 1px solid var(--line-strong); }
-.seg button.on { background: var(--primary-bg); color: var(--primary-ink); }
+/* Sélecteur segmenté: une piste, le choix actif en relief (comme iOS / Android) */
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px; background: var(--seg-track); border: 1px solid var(--line); }
+.seg button { flex: 1 1 auto; border: 0; border-radius: 9px; background: transparent; color: var(--muted); padding: 7px 14px; min-height: 34px; font: inherit; font-size: 0.875rem; font-weight: 600; white-space: nowrap; cursor: pointer; transition: background .15s ease, color .15s ease, box-shadow .15s ease; }
+.seg button:hover:not(.on) { color: var(--ink); }
+.seg button.on { background: var(--seg-on); color: var(--ink); font-weight: 700; box-shadow: 0 1px 2px rgba(0, 0, 0, .10), 0 0 0 1px var(--line); }
+.seg button:focus-visible { outline: 2px solid var(--focus, #3b82f6); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) { .seg button { transition: none; } }
 
 /* ---------- Superpositions ---------- */
 .modal-bg { position: fixed; inset: 0; background: var(--overlay); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; animation: fade 0.12s ease-out; }
@@ -628,8 +637,7 @@ table.list tr.click:hover td { background: var(--surface-2); }
 
 /* ---------- Agenda complet ---------- */
 .ag-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
-.ag-views button { padding: 8px 14px; }
-.ag-views button.on { background: var(--primary-bg); color: var(--primary-ink); }
+.ag-views button { padding: 8px 16px; }
 .ag-date { display: flex; align-items: center; gap: 6px; color: var(--muted); }
 .ag-date input { width: auto; padding: 7px 9px; }
 .ag-filters { margin-bottom: 12px; }
@@ -1400,6 +1408,7 @@ button.agh-ring:hover .fg { stroke: var(--amber-ink); }
   .ag-hero .agh-next { margin-top: 10px; }
   .ag-toolbar { margin-bottom: 8px; }
   .ag-toolbar .seg { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); }
+  .ag-toolbar .seg button { min-height: 40px; padding-inline: 4px; font-size: 0.92rem; }
   .ag-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-bottom: 10px; }
   .ag-filters::-webkit-scrollbar { display: none; }
   .ag-filters .chip-btn { flex: none; }
