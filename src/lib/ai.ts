@@ -11,6 +11,9 @@ export { findClients };
 /** Modèles essayés dans l'ordre (le premier qui existe pour le projet). */
 const MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash'];
 
+/** Délai max d'une réponse de l'IA: sans ça, une connexion bloquée (app mobile) attend sans fin. */
+export const AI_TIMEOUT_MS = 20000;
+
 export interface AiClient { id?: number; name: string; address: string; phone: string }
 export interface AiService { code: string; name: string; unit: string; price: number }
 
@@ -140,9 +143,10 @@ export function aiErrorMessage(e: unknown): string {
   const m = e instanceof Error ? e.message : String(e);
   const code = (e as { code?: string })?.code ?? '';
   if (/api-not-enabled|firebasevertexai|generativelanguage|AI Logic|PERMISSION_DENIED|403/i.test(code + m)) return 'L’assistant IA n’est pas encore activé dans Firebase (Paramètres → Assistant IA). J’utilise l’assistant de base.';
+  if (/timeout|timed out|abort/i.test(m)) return 'L’IA ne répond pas (délai dépassé): la connexion à Google est bloquée ou trop lente. J’utilise l’assistant de base.';
   if (/fetch|network|Failed to fetch|offline/i.test(m)) return 'Pas d’Internet: j’utilise l’assistant de base.';
   if (/quota|429|RESOURCE_EXHAUSTED/i.test(m)) return 'Limite de l’IA atteinte pour le moment: j’utilise l’assistant de base.';
-  return `Assistant IA: ${m}`;
+  return `Assistant IA: ${code ? `[${code}] ` : ''}${m}`;
 }
 const notFound = (e: unknown) => /not found|404|NOT_FOUND|is not supported|no-model/i.test(`${(e as { code?: string })?.code ?? ''} ${e instanceof Error ? e.message : e}`);
 
@@ -163,7 +167,7 @@ export class AiAssistant {
       systemInstruction: systemPrompt(this.ctx.company, this.ctx.services, this.ctx.today),
       tools: [{ functionDeclarations: TOOLS }],
       generationConfig: { temperature: 0.2 },
-    });
+    }, { timeout: AI_TIMEOUT_MS });
     this.model = model;
     this.chat = gm.startChat();
   }
@@ -288,7 +292,7 @@ Ce qu’il veut dire: ${opts.intent}
   let last: unknown;
   for (const m of opts.model ? [opts.model, ...MODELS] : MODELS) {
     try {
-      const r = await getGenerativeModel(ai, { model: m, generationConfig: { temperature: 0.5 } }).generateContent(prompt);
+      const r = await getGenerativeModel(ai, { model: m, generationConfig: { temperature: 0.5 } }, { timeout: AI_TIMEOUT_MS }).generateContent(prompt);
       return r.response.text().trim();
     } catch (e) {
       last = e;
