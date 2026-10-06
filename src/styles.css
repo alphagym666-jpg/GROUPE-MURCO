@@ -1568,3 +1568,21 @@ button.agh-ring:hover .fg { stroke: var(--amber-ink); }
 .svc-search input { border: 0; background: none; padding: 10px 0; flex: 1; min-width: 0; box-shadow: none; }
 .svc-search input:focus { outline: none; }
 .svc-search:focus-within { border-color: var(--amber); }
+
+/* ---------- Envoyer (soumission / facture) ---------- */
+.send-warn { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; margin: 10px 0; border-radius: 12px; background: color-mix(in srgb, var(--amber) 14%, var(--surface)); border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--line)); }
+.send-warn > svg { flex: none; color: var(--amber-ink); }
+.send-warn span { flex: 1; min-width: 180px; }
+.send-sum { display: grid; gap: 6px; padding: 12px 14px; margin: 10px 0 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+.send-sum-title { font-weight: 700; margin-bottom: 2px; }
+.send-sum > div:not(.send-sum-title):not(.send-feats) { display: flex; justify-content: space-between; gap: 12px; font-size: 0.92rem; }
+.send-sum > div span { color: var(--muted); }
+.send-sum > div b { text-align: right; font-weight: 600; }
+.send-sum .tot { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 2px; font-size: 1rem !important; }
+.send-sum .tot b { font-family: var(--font-display); font-weight: 800; }
+.send-feats { display: grid; gap: 4px; margin-top: 4px; font-size: 0.85rem; }
+.send-feats span { display: inline-flex; align-items: center; gap: 6px; color: var(--green); }
+.send-feats span.muted { color: var(--muted); }
+.modal-head { flex-wrap: nowrap; align-items: flex-start; gap: 12px; }
+.modal-head h2 { flex: 1; min-width: 0; line-height: 1.25; }
+.modal-head .btn { flex: none; }

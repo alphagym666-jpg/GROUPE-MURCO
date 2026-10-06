@@ -3,12 +3,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AddressInput } from '../components/AddressInput';
 import { ClientPicker } from '../components/ClientPicker';
+import { ClientFormModal } from '../components/ClientForm';
 import { companyTexts, dateFor, docLangOf, moneyFor } from '../lib/docLang';
 import { emptyLine, LineItems } from '../components/LineItems';
 import { Modal } from '../components/Modal';
 import { SendEmailModal } from '../components/SendEmailModal';
 import { errMsg, useConfirm, useToast } from '../components/Toast';
-import { db, getSettings, takeNextNumber, type Doc, type DocStatus, type DocType } from '../lib/db';
+import { db, getSettings, takeNextNumber, type Client, type Doc, type DocStatus, type DocType } from '../lib/db';
 import { directionsLink, embedDirectionsUrl } from '../lib/geo';
 import { useSettings } from '../lib/hooks';
 import { docFileName } from '../lib/pdf';
@@ -20,7 +21,7 @@ import { syncLeadFromDoc } from '../lib/crm';
 import { useSyncState } from '../lib/sync';
 import { smsLink } from '../lib/agenda';
 import { MediaGallery, ProofPhoto } from '../components/MediaGallery';
-import { Banknote, CircleCheck, Copy, Download, Eye, Link2, Mail, MessageSquare, Plus, Save, Send, Share2, Star, Trash2, Navigation, RefreshCw, TrendingUp } from 'lucide-react';
+import { Banknote, Check, CircleCheck, CreditCard, Pencil, TriangleAlert, Copy, Download, Eye, Link2, Mail, MessageSquare, Plus, Save, Send, Share2, Star, Trash2, Navigation, RefreshCw, TrendingUp } from 'lucide-react';
 import { deleteDocCascade, syncTripForDoc } from '../lib/trips';
 import { addDays, METHOD_LABEL, docTotals, downloadBlob, formatDate, km, money, round2, STATUS_LABELS, statusClass, statusLabel, todayISO } from '../lib/utils';
 import { celebrate } from '../lib/feel';
@@ -569,6 +570,8 @@ export default function DocEditor() {
           kind={kind}
           clientName={client?.name ?? ''}
           phone={client?.phone}
+          client={client}
+          cardPay={!!(s.cardPayments && s.paymentsEndpoint)}
           total={docTotals(readyView.doc, s)}
           onClose={() => setReadyView(null)}
           onEmail={() => { setReadyView(null); void openEmail(); }}
@@ -743,8 +746,8 @@ function ReviewRequestButton({ doc }: { doc: Doc }) {
 }
 
 /** Juste après « Enregistrer »: la facture en PDF, prête à envoyer en un geste. */
-function ReadySheet({ doc, blob, saved, kind, clientName, phone, total, onClose, onEmail, onShare, onDownload, onPay, onSent, smsText }: {
-  doc: Doc; blob: Blob; saved: boolean; kind: string; clientName: string; phone?: string; total: { total: number; balance: number };
+function ReadySheet({ doc, blob, saved, kind, clientName, phone, client, cardPay, total, onClose, onEmail, onShare, onDownload, onPay, onSent, smsText }: {
+  doc: Doc; blob: Blob; saved: boolean; kind: string; clientName: string; phone?: string; client?: Client; cardPay: boolean; total: { total: number; balance: number };
   onClose: () => void; onEmail: () => void; onShare: () => void; onDownload: () => void; onPay?: () => void; onSent: () => void; smsText: (link: string) => string;
 }) {
   const notify = useToast();
@@ -762,13 +765,36 @@ function ReadySheet({ doc, blob, saved, kind, clientName, phone, total, onClose,
     setBusy(false);
     window.location.href = smsLink(phone, smsText(link));
   };
+  const [editClient, setEditClient] = useState(false);
+  const isQuote = doc.type === 'quote';
+  const lines = doc.items.filter((it) => it.description.trim() || it.code || it.unitPrice).length;
+  const address = doc.jobAddress || client?.address || '';
+  const missing = [!client?.email && 'courriel', !client?.phone && 'cellulaire'].filter(Boolean) as string[];
   return (
-    <Modal title={`${kind} ${doc.number}`} onClose={onClose}>
+    <Modal title={clientName ? `Envoyer ${isQuote ? 'la soumission' : 'la facture'} à ${clientName}` : `${kind} ${doc.number}`} onClose={onClose}>
       <div className="ready-head">
         {saved && <CircleCheck size={22} />}
         <div>
-          <strong>{saved ? `${kind} enregistrée` : 'Aperçu'}</strong>
-          <small>{clientName}{clientName ? ' · ' : ''}{money(total.balance > 0 && total.balance < total.total ? total.balance : total.total)}{doc.status === 'paid' ? ' · payée' : ''}</small>
+          <strong>{saved ? `${kind} ${doc.number} enregistrée` : `${kind} ${doc.number}`}</strong>
+          <small>{doc.status === 'paid' ? 'Payée' : doc.status === 'draft' ? 'Pas encore envoyée' : doc.sentAt ? `Envoyée le ${new Date(doc.sentAt).toLocaleDateString('fr-CA')}` : ''}</small>
+        </div>
+      </div>
+      {client && missing.length > 0 && (
+        <div className="send-warn">
+          <TriangleAlert size={18} />
+          <span>Ce client n’a pas de {missing.join(' ni de ')}.{!client.email && isQuote ? ' Il pourra quand même signer avec le lien envoyé par texto.' : ''}</span>
+          <button className="btn small" onClick={() => setEditClient(true)}><Pencil size={14} /> Modifier le client</button>
+        </div>
+      )}
+      <div className="send-sum">
+        <div className="send-sum-title">Résumé {isQuote ? 'de la soumission' : 'de la facture'}</div>
+        {address && <div><span>Adresse</span><b>{address}</b></div>}
+        <div><span>Services</span><b>{lines} ligne{lines > 1 ? 's' : ''}</b></div>
+        {doc.deposit ? <div><span>Dépôt reçu</span><b>{money(doc.deposit)}</b></div> : null}
+        <div className="tot"><span>{total.balance > 0 && total.balance < total.total ? 'Solde' : 'Total'}</span><b>{money(total.balance > 0 && total.balance < total.total ? total.balance : total.total)}</b></div>
+        <div className="send-feats">
+          {isQuote && <span><Check size={14} /> Le client peut accepter et signer en ligne</span>}
+          {cardPay ? <span><Check size={14} /> Paiement par carte dans le lien</span> : <span className="muted"><CreditCard size={14} /> Paiement par carte: à activer dans Paramètres</span>}
         </div>
       </div>
       <div className="ready-actions">
@@ -781,6 +807,7 @@ function ReadySheet({ doc, blob, saved, kind, clientName, phone, total, onClose,
       </div>
       <PdfView blob={blob} />
       <button className="btn block" style={{ marginTop: 12 }} onClick={onClose}>Continuer à modifier</button>
+      {editClient && client && <ClientFormModal initial={client} onClose={() => setEditClient(false)} onSaved={() => setEditClient(false)} />}
     </Modal>
   );
 }
