@@ -266,10 +266,10 @@ export default function Agenda() {
         <div className="agh-top">
           <div className="agh-title">
             <div className="agh-eyebrow"><CalendarDays size={14} /> {view === 'jour' && sel === today ? greet : 'Agenda'}</div>
-            <h1>{title}</h1>
+            <h1>{mobile && view === 'mois' ? 'Vue du mois' : mobile && view === 'liste' ? 'Mes prochaines jobs' : title}</h1>
           </div>
           <div className="agh-nav">
-            {!(mobile && (view === 'jour' || view === 'semaine')) && (
+            {!mobile && (
               <>
                 <button className="agh-btn icon" onClick={() => shift(-1)} aria-label="Précédent"><ChevronLeft size={18} /></button>
                 <button className="agh-btn" onClick={() => go(today)}>Aujourd’hui</button>
@@ -331,6 +331,16 @@ export default function Agenda() {
         )}
       </section>
 
+      {mobile && (view === 'mois' || view === 'liste') && (
+        <div className="ag-strip ag-period">
+          <div className="ags-head">
+            <button className="ags-arrow" onClick={() => shift(-1)} aria-label="Précédent"><ChevronLeft size={18} /></button>
+            <span className="ags-month">{view === 'mois' ? new Date(sel.slice(0, 7) + '-01T12:00:00').toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' }) : `${dayLabel(sel, { day: 'numeric', month: 'short' })} → ${dayLabel(addDays(sel, 59), { day: 'numeric', month: 'short' })}`}</span>
+            {(view === 'mois' ? sel.slice(0, 7) !== today.slice(0, 7) : sel !== today) && <button className="ags-today" onClick={() => go(today)}>Aujourd’hui</button>}
+            <button className="ags-arrow" onClick={() => shift(1)} aria-label="Suivant"><ChevronRight size={18} /></button>
+          </div>
+        </div>
+      )}
       {mobile && (view === 'jour' || view === 'semaine') && <DayStrip sel={sel} today={today} view={view} onPick={(d) => go(d, 'jour')} onShift={(n) => go(addDays(sel, 7 * n))} onToday={() => go(today)} />}
 
       <div className="ag-toolbar">
@@ -374,7 +384,7 @@ export default function Agenda() {
           onRemind={setRemind} onPostpone={(jobs, label) => setPostpone({ jobs, label })} isEmp={isEmp} />
       )}
       {view === 'semaine' && <WeekView ctx={ctx} start={range[0]} byDay={byDay} sortDay={sortDay} today={today} onPick={(d) => go(d, 'jour')} />}
-      {view === 'mois' && <MonthView ctx={ctx} month={sel.slice(0, 7)} sel={sel} today={today} byDay={byDay} sortDay={sortDay} onPick={(d) => go(d, 'jour')} />}
+      {view === 'mois' && <MonthView ctx={ctx} month={sel.slice(0, 7)} sel={sel} today={today} byDay={byDay} sortDay={sortDay} onPick={(d) => (mobile ? go(d, 'mois') : go(d, 'jour'))} mobile={mobile} onOpenDay={(d) => go(d, 'jour')} />}
       {view === 'liste' && (
         <ListView ctx={ctx} from={sel} byDay={byDay} sortDay={sortDay} today={today} q={q} setQ={setQ} onPick={(d) => go(d, 'jour')} />
       )}
@@ -828,10 +838,17 @@ function WeekView({ ctx, start, byDay, sortDay, today, onPick }: { ctx: Ctx; sta
   );
 }
 
-function MonthView({ ctx, month, sel, today, byDay, sortDay, onPick }: { ctx: Ctx; month: string; sel: string; today: string; byDay: Map<string, Job[]>; sortDay: (l: Job[]) => Job[]; onPick: (d: string) => void }) {
+function MonthView({ ctx, month, sel, today, byDay, sortDay, onPick, mobile = false, onOpenDay }: { ctx: Ctx; month: string; sel: string; today: string; byDay: Map<string, Job[]>; sortDay: (l: Job[]) => Job[]; onPick: (d: string) => void; mobile?: boolean; onOpenDay?: (d: string) => void }) {
   const days = monthGrid(month);
+  const selJobs = sortDay(byDay.get(sel) ?? []);
+  const swipe = useSwipe((dir) => {
+    const d = new Date(month + '-01T12:00:00');
+    d.setMonth(d.getMonth() + dir);
+    onPick(toISODate(d));
+  });
   return (
-    <div className="card" style={{ padding: 10 }}>
+    <>
+    <div className={`card ag-month ${mobile ? 'mobile' : ''}`} style={{ padding: 10 }} {...(mobile ? swipe : {})}>
       <div className="cal">
         {DOW.map((d) => <div key={d} className="dow">{d}</div>)}
         {days.map((d) => {
@@ -844,7 +861,7 @@ function MonthView({ ctx, month, sel, today, byDay, sortDay, onPick }: { ctx: Ct
               className={`day ${d.slice(0, 7) !== month ? 'out' : ''} ${d === today ? 'today' : ''} ${d === sel ? 'sel' : ''} ${list.length ? 'busy' : ''}`}
               onClick={() => onPick(d)} onKeyDown={(e) => e.key === 'Enter' && onPick(d)}
               aria-label={`${formatDate(d)}: ${list.length} job(s)`} {...ctx.dropProps(d)}>
-              <span className="day-top"><span className="dnum">{Number(d.slice(8))}</span>{w && <span className={`wx-mini ${badWeather(w) ? 'bad' : ''}`}>{(() => { const I = WEATHER_ICON[weatherKind(w.code)]; return <I size={12} />; })()}</span>}</span>
+              <span className="day-top"><span className="dnum">{Number(d.slice(8))}</span>{w && !mobile && <span className={`wx-mini ${badWeather(w) ? 'bad' : ''}`}>{(() => { const I = WEATHER_ICON[weatherKind(w.code)]; return <I size={12} />; })()}</span>}</span>
               <span className="chips-row">
                 {list.slice(0, 3).map((j) => (
                   <span key={j.id} className={`chip ${j.status} ${ctx.conflictIds.has(j.id!) ? 'conflict' : ''}`} style={{ ['--c' as string]: ctx.colorOf(j) }}
@@ -871,6 +888,18 @@ function MonthView({ ctx, month, sel, today, byDay, sortDay, onPick }: { ctx: Ct
         {ctx.canEdit && <span className="hide-mobile">· Glisse un job sur une autre journée pour le déplacer</span>}
       </div>
     </div>
+    {mobile && (
+      <div className="card ag-month-day">
+        <div className="card-head">
+          <div><h2 style={{ marginBottom: 2, textTransform: 'capitalize' }}>{dayLabel(sel)}</h2><div className="small muted">{selJobs.length ? `${selJobs.length} job${selJobs.length > 1 ? 's' : ''}` : 'Rien de prévu'}</div></div>
+          <button className="btn small" onClick={() => onOpenDay?.(sel)}>Ouvrir la journée</button>
+        </div>
+        {selJobs.map((j) => <JobBlock key={j.id} ctx={ctx} j={j} />)}
+        {ctx.leadsOn(sel).map((l) => <LeadItem key={l.id} l={l} />)}
+        {!selJobs.length && ctx.canEdit && <button className="btn accent" onClick={() => ctx.nav(`/job/new?d=${sel}`)}><Plus size={16} /> Planifier un job</button>}
+      </div>
+    )}
+    </>
   );
 }
 

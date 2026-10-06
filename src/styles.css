@@ -1514,3 +1514,25 @@ button.agh-ring:hover .fg { stroke: var(--amber-ink); }
 .order-preview { white-space: pre-wrap; font: inherit; font-size: 0.9rem; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; color: var(--ink); }
 .order-actions { margin: 4px 0 24px; gap: 8px; }
 .btn.disabled { opacity: .55; }
+
+/* ---------- Agenda sur cell: mois et liste ---------- */
+.ag-period { padding-bottom: 8px; }
+.ag-period .ags-head { padding-bottom: 0; }
+@media (max-width: 640px) {
+  .ag-month.mobile { padding: 8px !important; touch-action: pan-y; }
+  .ag-month.mobile .cal { border: 0; background: none; gap: 2px; border-radius: 0; }
+  .ag-month.mobile .cal .dow { background: none; text-align: center; padding: 4px 0 6px; font-size: 0.68rem; }
+  .ag-month.mobile .cal .day { min-height: 52px; padding: 6px 2px 4px; border-radius: 12px; align-items: center; justify-content: flex-start; gap: 4px; background: none; box-shadow: none; }
+  .ag-month.mobile .cal .day.out { background: none; opacity: 0.35; }
+  .ag-month.mobile .cal .day-top { justify-content: center; }
+  .ag-month.mobile .cal .dnum { width: 30px; height: 30px; font-size: 0.95rem; border-radius: 50%; padding: 0; }
+  .ag-month.mobile .cal .day.today .dnum { background: none; color: var(--amber-ink); box-shadow: inset 0 0 0 1.5px var(--amber); padding: 0; }
+  .ag-month.mobile .cal .day.sel { box-shadow: none; }
+  .ag-month.mobile .cal .day.sel .dnum { background: var(--primary-bg); color: var(--primary-ink); box-shadow: none; }
+  .ag-month.mobile .cal .day .chips-row { display: flex; gap: 3px; justify-content: center; flex-wrap: nowrap; min-height: 7px; }
+  .ag-month.mobile .cal .day .chip:nth-child(n+4) { display: none; }
+  .ag-month.mobile .cal .more { display: none; }
+  .ag-month.mobile .cal-legend { justify-content: center; font-size: 0.78rem; }
+  .ag-month-day { margin-top: 12px; }
+  .ag-month-day .card-head { align-items: center; }
+}
