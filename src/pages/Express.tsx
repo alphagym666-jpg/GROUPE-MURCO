@@ -425,7 +425,7 @@ export default function Express() {
             <label className="field full">Lieu des travaux
               <AddressInput value={address} onChange={(v) => { setAddress(v); setAddressGeo(undefined); }} onPick={(label, geo) => { setAddress(label); setAddressGeo(geo); }} />
             </label>
-            <label className="field">Rabais ($)<NumInput value={discount} placeholder="0" onChange={(n) => setDiscount(n)} /></label>
+            <label className="field">Rabais ($)<NumInput value={discount} placeholder="Aucun" onChange={(n) => setDiscount(n)} /></label>
           </div>
           <label className="check" style={{ marginTop: 14 }}>
             <input type="checkbox" checked={paidNow} onChange={(e) => setPaidNow(e.target.checked)} /> <Banknote size={17} /> Le client a payé sur place
@@ -439,7 +439,7 @@ export default function Express() {
         </div>
       )}
 
-      <div className="express-total">
+      <div className={`express-total ${step === 2 ? 'final' : ''}`}>
         {step > 0 && <button className="btn icon-btn" style={{ background: 'transparent', color: 'inherit', borderColor: 'var(--brand-2)' }} onClick={() => setStep(step - 1)} aria-label="Retour"><ArrowLeft size={18} /></button>}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="small" style={{ opacity: 0.7 }}>{lines.length} ligne{lines.length > 1 ? 's' : ''}{tot.discount ? ` · rabais ${money(tot.discount)}` : ''}</div>
@@ -448,10 +448,10 @@ export default function Express() {
         {step === 0 && <button className="btn accent" disabled={!clientId} onClick={() => setStep(1)}>Codes <ArrowRight size={17} /></button>}
         {step === 1 && <button className="btn accent" disabled={!lines.length} onClick={() => setStep(2)}>Finaliser <ArrowRight size={17} /></button>}
         {step === 2 && (
-          <>
+          <div className="ext-actions">
             <button className="btn" disabled={busy} onClick={() => create('none')} style={{ background: 'transparent', color: 'inherit', borderColor: 'var(--brand-2)' }}>Créer</button>
             <button className="btn accent" disabled={busy} onClick={() => create('share')}><Share2 size={17} /> {busy ? '…' : 'Créer et partager'}</button>
-          </>
+          </div>
         )}
       </div>
       {step === 2 && <div className="small muted" style={{ textAlign: 'center', marginTop: 8 }}><button className="btn ghost small" onClick={() => create('mail')}>ou créer et envoyer par Gmail</button> · <button className="btn ghost small" onClick={() => nav('/doc/new?type=invoice')}>formulaire complet</button></div>}
