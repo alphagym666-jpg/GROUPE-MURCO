@@ -7,6 +7,7 @@ export interface DayWeather {
   tmax: number;
   tmin: number;
   pop: number; // probabilité de précipitations (%)
+  snow?: number; // neige prévue (cm)
 }
 
 export type WeatherKind = 'soleil' | 'nuageux' | 'couvert' | 'brouillard' | 'bruine' | 'pluie' | 'neige' | 'orage';
@@ -31,7 +32,7 @@ export const WEATHER_LABEL: Record<WeatherKind, string> = {
 /** Journée à risque pour du travail extérieur (pluie, neige, orage, ou forte probabilité). */
 export const badWeather = (w?: DayWeather) => !!w && (['pluie', 'neige', 'orage'].includes(weatherKind(w.code)) || w.pop >= 70);
 
-const CACHE_KEY = 'murco.weather';
+const CACHE_KEY = 'murco.weather2';
 const TTL = 3 * 3600_000;
 
 async function fetchWeather(geo: GeoPoint): Promise<Record<string, DayWeather>> {
@@ -44,10 +45,10 @@ async function fetchWeather(geo: GeoPoint): Promise<Record<string, DayWeather>> 
   }
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}` +
-    '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=America%2FToronto&forecast_days=16';
+    '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,snowfall_sum&timezone=America%2FToronto&forecast_days=16';
   const r = await fetch(url);
   if (!r.ok) throw new Error('météo indisponible');
-  const j = (await r.json()) as { daily: { time: string[]; weather_code: number[]; temperature_2m_max: number[]; temperature_2m_min: number[]; precipitation_probability_max: (number | null)[] } };
+  const j = (await r.json()) as { daily: { time: string[]; weather_code: number[]; temperature_2m_max: number[]; temperature_2m_min: number[]; precipitation_probability_max: (number | null)[]; snowfall_sum?: (number | null)[] } };
   const days: Record<string, DayWeather> = {};
   j.daily.time.forEach((d, i) => {
     days[d] = {
@@ -55,6 +56,7 @@ async function fetchWeather(geo: GeoPoint): Promise<Record<string, DayWeather>> 
       tmax: Math.round(j.daily.temperature_2m_max[i]),
       tmin: Math.round(j.daily.temperature_2m_min[i]),
       pop: j.daily.precipitation_probability_max[i] ?? 0,
+      snow: Math.round((j.daily.snowfall_sum?.[i] ?? 0) * 10) / 10,
     };
   });
   try {

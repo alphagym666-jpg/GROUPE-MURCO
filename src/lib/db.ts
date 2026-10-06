@@ -62,6 +62,8 @@ export interface Settings extends Synced {
   leadForm: boolean;
   setupDone?: string[]; // étapes de démarrage cochées à la main (ex.: codes vérifiés)
   setupHidden?: boolean; // liste « Démarrage » masquée
+  trades?: string[]; // métiers actifs (outils affichés); par défaut [trade]
+  snowThresholdCm?: number; // déneigement: tournée à partir de X cm prévus
   trade?: string; // métier choisi au démarrage (modèle de codes et prix)
   setupComplete?: boolean; // assistant de démarrage terminé
   agenda?: Partial<AgendaPrefs>; // personnalisation de l'agenda
@@ -102,6 +104,7 @@ export interface Client extends Synced {
   geo?: GeoPoint;
   notes: string;
   lang?: 'fr' | 'en'; // langue des documents envoyés à ce client
+  snowContract?: boolean; // déneigement: client sous contrat de saison (dans la tournée)
   createdAt: string;
 }
 
@@ -422,6 +425,42 @@ export interface Project extends Synced {
   createdAt: string;
 }
 
+/** Commande au fournisseur (bon de commande). */
+export interface OrderItem {
+  description: string;
+  qty: number;
+  unit: string;
+}
+export type OrderStatus = 'brouillon' | 'envoyee' | 'recue';
+export interface PurchaseOrder extends Synced {
+  id?: number;
+  number: string; // BC-1001
+  supplier: string;
+  supplierEmail: string;
+  supplierPhone: string;
+  items: OrderItem[];
+  clientId?: number;
+  jobId?: number;
+  neededBy?: string; // date voulue
+  pickup: boolean; // je passe chercher (sinon livraison)
+  notes: string;
+  status: OrderStatus;
+  createdAt: string;
+  sentAt?: string;
+  receivedAt?: string;
+}
+
+/** Matériaux en main (restes de peinture, boîtes de céramique…). */
+export interface StockItem extends Synced {
+  id?: number;
+  kind: string; // peinture, ceramique, gypse, autre
+  name: string; // ex.: « Benjamin Moore OC-17 Blanc Dove, velours »
+  qty: number;
+  unit: string; // gallon, boîte…
+  notes: string;
+  updatedAt: string;
+}
+
 class MurcoDB extends Dexie {
   settings!: Table<Settings, string>;
   clients!: Table<Client, number>;
@@ -436,6 +475,8 @@ class MurcoDB extends Dexie {
   members!: Table<Member, number>;
   punches!: Table<Punch, number>;
   projects!: Table<Project, number>;
+  orders!: Table<PurchaseOrder, number>;
+  stock!: Table<StockItem, number>;
 
   constructor() {
     // Identifiants uniques globaux (pas d'auto-incrément) pour synchroniser plusieurs appareils.
@@ -471,12 +512,17 @@ class MurcoDB extends Dexie {
       const cur = (await t.get('main')) as Partial<Settings> | undefined;
       await t.put({ ...MURCO_SETTINGS, _u: 0, ...(cur ?? {}), id: 'main', trade: cur?.trade ?? 'exterieur', setupComplete: true });
     });
+    // Outils par métier: commandes au fournisseur et matériaux en main
+    this.version(5).stores({
+      orders: 'id, status, supplier, clientId, jobId, createdAt',
+      stock: 'id, kind, name',
+    });
   }
 }
 
 export const db = new MurcoDB();
 
-export const SYNC_TABLES = ['settings', 'clients', 'docs', 'trips', 'expenses', 'emails', 'services', 'jobs', 'media', 'leads', 'members', 'punches', 'projects'] as const;
+export const SYNC_TABLES = ['settings', 'clients', 'docs', 'trips', 'expenses', 'emails', 'services', 'jobs', 'media', 'leads', 'members', 'punches', 'projects', 'orders', 'stock'] as const;
 export type SyncTable = (typeof SYNC_TABLES)[number];
 
 let lastId = 0;

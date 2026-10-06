@@ -1,5 +1,5 @@
 import { Mic,
-  CalendarDays, Camera, ChevronLeft, Crown, Download, Lock, FolderOpen, TrendingUp, Inbox, Clock, Briefcase, UsersRound, Car, ClipboardList, FileText, Home, LayoutGrid, Mail, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Timer, Users, X, Zap, ImagePlus, type LucideIcon,
+  CalendarDays, Camera, ChevronLeft, Crown, Download, Lock, FolderOpen, TrendingUp, Inbox, Clock, Briefcase, UsersRound, Car, ClipboardList, FileText, Home, LayoutGrid, Mail, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Timer, Users, X, Zap, ImagePlus, Truck, Wrench, type LucideIcon,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -20,6 +20,8 @@ import ExpenseEditor from './pages/ExpenseEditor';
 import Expenses from './pages/Expenses';
 import Express from './pages/Express';
 import VoiceJob from './pages/VoiceJob';
+import Trade from './pages/Trade';
+import Orders from './pages/Orders';
 import GmailPage from './pages/GmailPage';
 import JobEditor from './pages/JobEditor';
 import Logbook from './pages/Logbook';
@@ -73,6 +75,8 @@ const NAV: NavItem[] = [
   { to: '/projets', label: 'Projets', short: 'Projets', icon: Briefcase },
   { to: '/equipe', label: 'Équipe', short: 'Équipe', icon: UsersRound },
   { to: '/rapports', label: 'Rapports', short: 'Rapports', icon: TrendingUp },
+  { to: '/metier', label: 'Mon métier', short: 'Métier', icon: Wrench },
+  { to: '/achats', label: 'Commandes fournisseur', short: 'Achats', icon: Truck },
   { to: '/codes', label: 'Codes et prix', short: 'Codes', icon: Tag, sep: true },
   { to: '/km', label: 'Journal de bord', short: 'Km', icon: Car },
   { to: '/depenses', label: 'Reçus et dépenses', short: 'Reçus', icon: Camera },
@@ -97,19 +101,19 @@ const EXTRA: NavItem[] = [{ to: '/temps', label: 'Feuilles de temps', short: 'He
 
 const MENU_GROUPS: { title: string; items: string[] }[] = [
   { title: 'Ventes', items: ['/demandes', '/soumissions', '/factures', '/clients', '/projets'] },
-  { title: 'Terrain', items: ['/agenda', '/pointage', '/equipe', '/temps'] },
+  { title: 'Terrain', items: ['/agenda', '/pointage', '/metier', '/achats', '/equipe', '/temps'] },
   { title: 'Argent et papiers', items: ['/depenses', '/km', '/classeur', '/rapports', '/comptable'] },
   { title: 'Outils', items: ['/', '/codes', '/gmail', '/abonnement', '/parametres'] },
 ];
 
 const PAGE_TITLE: [RegExp, string][] = [
   [/^\/doc\//, 'Facture / soumission'], [/^\/job\//, 'Job'], [/^\/depenses\/.+/, 'Reçu'], [/^\/clients\/.+/, 'Client'],
-  [/^\/projets\/.+/, 'Projet'], [/^\/express/, 'Facture express'], [/^\/dicter/, 'Assistant'], [/^\/temps/, 'Feuilles de temps'],
+  [/^\/projets\/.+/, 'Projet'], [/^\/express/, 'Facture express'], [/^\/dicter/, 'Assistant'], [/^\/achats\/.+/, 'Commande'], [/^\/temps/, 'Feuilles de temps'],
 ];
 /** Où mène « Retour » quand on arrive directement sur une page (lien, notification). */
 const PARENT: [RegExp, string][] = [
   [/^\/doc\//, '/factures'], [/^\/job\//, '/agenda'], [/^\/depenses\/.+/, '/depenses'], [/^\/clients\/.+/, '/clients'],
-  [/^\/projets\/.+/, '/projets'], [/^\/temps/, '/equipe'],
+  [/^\/projets\/.+/, '/projets'], [/^\/temps/, '/equipe'], [/^\/achats\/.+/, '/achats'],
 ];
 
 /** Routes d'édition: sur cellulaire, la barre du bas laisse place aux boutons de la page. */
@@ -303,7 +307,10 @@ function Shell() {
         <main className={`main ${editor ? 'is-editor' : ''}`}>
           <header className="topbar">
             {isRoot ? (
-              <div className="tb-title"><CompanyMark s={s} /><span>{s.companyName}</span></div>
+              <>
+                <div className={`tb-title ${full ? 'with-ask' : ''}`}><CompanyMark s={s} /><span>{s.companyName}</span></div>
+                {full && <Link to="/dicter" className="tb-ask" aria-label="Demander à l’assistant"><Mic size={16} /><span>Demande à ton assistant…</span></Link>}
+              </>
             ) : (
               <>
                 <button className="tb-btn tb-back" onClick={goBack} aria-label="Retour"><ChevronLeft size={26} /> Retour</button>
@@ -336,6 +343,9 @@ function Shell() {
             <Route path="/job/:id" element={<JobEditor />} />
             <Route path="/express" element={<Express />} />
             <Route path="/dicter" element={<VoiceJob />} />
+            <Route path="/metier" element={<Trade />} />
+            <Route path="/achats" element={<Orders />} />
+            <Route path="/achats/:id" element={<Orders />} />
             <Route path="/factures" element={<DocList type="invoice" />} />
             <Route path="/soumissions" element={<DocList type="quote" />} />
             <Route path="/doc/:id" element={<DocEditor />} />

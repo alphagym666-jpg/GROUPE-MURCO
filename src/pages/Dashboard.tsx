@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ConfirmList } from '../components/ConfirmList';
+import { SnowAlert } from '../components/SnowAlert';
 import { CountUp } from '../components/CountUp';
 import { Modal } from '../components/Modal';
 import { PageHero, Ring } from '../components/PageHero';
@@ -152,6 +153,7 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
         <button onClick={() => nav('/dicter')}><Mic size={22} /> Assistant</button>
       </div>
 
+      <SnowAlert s={s} />
       {show('todo') && <ConfirmList />}
       <Onboarding s={s} />
       {s.setupHidden && missing.length > 0 && <div className="notice">À compléter: <strong>{missing.join(', ')}</strong>. <Link to="/parametres">Paramètres →</Link></div>}
