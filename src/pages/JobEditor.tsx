@@ -16,6 +16,7 @@ import { db, type Job, type JobStatus, type Recurrence } from '../lib/db';
 import { directionsLink } from '../lib/geo';
 import { useSettings } from '../lib/hooks';
 import { useSyncState } from '../lib/sync';
+import { AdminNote } from '../components/AdminNote';
 import { addDays, formatDate, lineAmount, money, todayISO } from '../lib/utils';
 import { NumInput } from '../components/NumInput';
 
@@ -221,7 +222,8 @@ export default function JobEditor() {
               </div>
             </div>
           )}
-          <label className="field full">Notes (pour toi)<textarea value={j.notes} placeholder="Code de porte, chien, échelle de 32 pi…" onChange={(e) => up({ notes: e.target.value })} /></label>
+          <label className="field full">Notes internes <span className="small muted">— visibles par l’équipe</span><textarea value={j.notes} placeholder="Code de porte, chien, échelle de 32 pi…" onChange={(e) => up({ notes: e.target.value })} /></label>
+          {j.id ? <AdminNote refKey={`job:${j.id}`} /> : null}
         </div>
         <details className="more-inline" open={moreOpen} onToggle={(e) => setMoreOpen((e.target as HTMLDetailsElement).open)}>
           <summary><strong>Plus d’options</strong> <small>{JOB_STATUS_LABEL[j.status]}{j.recurrence !== 'none' ? ` · ${RECURRENCE_LABEL[j.recurrence]}` : ''}{j.projectId ? ' · projet' : ''}</small></summary>

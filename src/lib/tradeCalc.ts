@@ -205,3 +205,71 @@ export function cleanCalc(i: CleanInput) {
   const round = (h: number) => Math.ceil(h * 4) / 4; // au quart d'heure
   return { hours: round(hours), duration: round(perWorker) };
 }
+
+// ---------------------------------------------------------------- Temps et matériel (plomberie, électricité…)
+
+export interface HourlyInput { hours: number; workers: number; rate: number; materials: number; markup: number; travel: number }
+export function hourlyCalc(i: HourlyInput) {
+  const labor = Math.max(0, i.hours) * Math.max(1, i.workers) * Math.max(0, i.rate);
+  const mat = Math.max(0, i.materials) * (1 + Math.max(0, i.markup) / 100);
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return { labor: r2(labor), materials: r2(mat), travel: r2(Math.max(0, i.travel)), total: r2(labor + mat + Math.max(0, i.travel)), profitOnMaterials: r2(mat - Math.max(0, i.materials)) };
+}
+
+// ---------------------------------------------------------------- Toiture (bardeaux)
+
+export const PITCH_FACTOR: Record<number, number> = { 3: 1.031, 4: 1.054, 5: 1.083, 6: 1.118, 7: 1.158, 8: 1.202, 9: 1.25, 10: 1.302, 12: 1.414 };
+export interface RoofInput { length: number; width: number; overhang: number; pitch: number; waste: number }
+export function roofCalc(i: RoofInput) {
+  const l = Math.max(0, i.length) + 2 * Math.max(0, i.overhang);
+  const w = Math.max(0, i.width) + 2 * Math.max(0, i.overhang);
+  const area = Math.round(l * w * (PITCH_FACTOR[i.pitch] ?? 1.118));
+  const squares = r1((area * (1 + Math.max(0, i.waste) / 100)) / 100);
+  const bundles = ceil(squares * 3);
+  const underlay = ceil(area / 1000); // rouleau de membrane synthétique ≈ 10 carrés
+  const dripEdge = ceil((2 * (l + w) * 1.05) / 10); // larmiers de 10 pi
+  const ridge = Math.max(1, ceil(l / 20)); // paquet de faîtières ≈ 20 pi lin
+  const nails = Math.max(1, ceil(squares / 16)); // boîte de clous en rouleau ≈ 16 carrés
+  const materials: Material[] = [
+    { description: 'Bardeaux d’asphalte', qty: bundles, unit: 'paquet' },
+    { description: 'Membrane synthétique (rouleau 10 carrés)', qty: underlay, unit: 'rouleau' },
+    { description: 'Larmiers 10 pi', qty: dripEdge, unit: 'unité' },
+    { description: 'Bardeaux de faîtière', qty: ridge, unit: 'paquet' },
+    { description: 'Clous à toiture (rouleaux)', qty: nails, unit: 'boîte' },
+  ];
+  return { area, squares, bundles, materials };
+}
+
+// ---------------------------------------------------------------- Piscine
+
+export interface PoolInput { shape: 'rect' | 'rond'; length: number; width: number; depth: number }
+export function poolCalc(i: PoolInput) {
+  const cuFt = i.shape === 'rond' ? Math.PI * (Math.max(0, i.length) / 2) ** 2 * Math.max(0, i.depth) : Math.max(0, i.length) * Math.max(0, i.width) * Math.max(0, i.depth);
+  const litres = Math.round((cuFt * 28.317) / 100) * 100;
+  const shockKg = r1((litres * 10) / 1e6 / 0.65); // choc à 10 ppm, hypochlorite de calcium 65 %
+  const saltBags = ceil((litres * 3.2) / 1000 / 20); // 3200 ppm, sacs de 20 kg
+  const stabKg = r1((litres * 40) / 1e6); // stabilisant à 40 ppm
+  const materials: Material[] = [
+    { description: 'Chlore choc (hypochlorite 65 %)', qty: shockKg, unit: 'kg' },
+    { description: 'Stabilisant', qty: stabKg, unit: 'kg' },
+  ];
+  return { litres, shockKg, saltBags, stabKg, materials };
+}
+
+// ---------------------------------------------------------------- Déménagement
+
+export interface MoveInput { rooms: number; workers: number; distanceKm: number }
+export function moveCalc(i: MoveInput) {
+  const volume = Math.round(222 * Math.max(1, i.rooms)); // pi³: un 4½ ≈ 1000 pi³
+  const truck = volume <= 800 ? 'Camion 16 pi' : volume <= 1200 ? 'Camion 20 pi' : volume <= 1700 ? 'Camion 26 pi' : '2 voyages en 26 pi';
+  const perHour = 150 * Math.max(1, i.workers); // pi³ chargés et déchargés par heure
+  const drive = Math.max(0, i.distanceKm) / 50; // ≈ 50 km/h en ville
+  const hours = Math.ceil((volume / perHour + drive + 0.5) * 2) / 2; // à la demi-heure, + 30 min de préparation
+  const boxes = ceil(15 * Math.max(1, i.rooms));
+  const materials: Material[] = [
+    { description: 'Boîtes de déménagement', qty: boxes, unit: 'boîte' },
+    { description: 'Ruban adhésif', qty: Math.max(2, ceil(boxes / 20)), unit: 'rouleau' },
+    { description: 'Pellicule plastique', qty: Math.max(1, ceil(i.rooms / 3)), unit: 'rouleau' },
+  ];
+  return { volume, truck, hours, boxes, materials };
+}

@@ -24,8 +24,15 @@ export interface AiDoc {
   time?: string; // HH:MM
   lines: { code?: string; description?: string; quantity: number; unitPrice?: number }[];
 }
+export interface AiOrder {
+  supplier?: string;
+  items: { description: string; qty: number; unit: string }[];
+  clientId?: number;
+  neededBy?: string;
+}
 export type AiResult =
   | { kind: 'say'; text: string }
+  | { kind: 'order'; order: AiOrder; text: string }
   | { kind: 'doc'; doc: AiDoc; text: string }
   | { kind: 'intent'; intent: Intent; text: string };
 
@@ -63,6 +70,27 @@ const TOOLS: FunctionDeclaration[] = [
     }),
   },
   {
+    name: 'commander_fournisseur',
+    description: 'Prépare une commande de matériaux au fournisseur (ex.: « commande 3 gallons de blanc chez Rona pour jeudi »). L’app l’affiche pour qu’il l’envoie par texto ou courriel.',
+    parameters: Schema.object({
+      properties: {
+        fournisseur: Schema.string({ description: 'Nom du magasin ou fournisseur' }),
+        articles: Schema.array({
+          items: Schema.object({
+            properties: {
+              description: Schema.string({ description: 'Article (produit, couleur, format)' }),
+              quantite: Schema.number(),
+              unite: Schema.string({ description: 'gallon, boîte, sac, feuille, unité…' }),
+            },
+          }),
+        }),
+        client_id: Schema.number({ description: 'Client de la job, si dit' }),
+        date: Schema.string({ description: 'Pour quand, YYYY-MM-DD' }),
+      },
+      optionalProperties: ['fournisseur', 'client_id', 'date'],
+    }),
+  },
+  {
     name: 'commande_rapide',
     description: 'Autres demandes: facture payée, relance, dépense, déplacer une job, job terminée, combien j’ai fait, mon horaire, ma liste à faire, facturer une job déjà planifiée.',
     parameters: Schema.object({
@@ -95,6 +123,7 @@ Ta job: comprendre ce qu’il veut et le préparer avec les fonctions. Il confir
 - Pose UNE seule question courte à la fois pour ce qui manque. Pas besoin de l’heure ni du téléphone s’il ne les dit pas.
 - Travaux: utilise les codes de la liste de prix. Quantités en nombres (pieds, fenêtres, heures…). N’invente jamais de prix.
 - Dates: convertis « demain », « mardi », « le 14 » en YYYY-MM-DD (dans le futur).
+- Des matériaux à acheter (« commande », « faut que j’achète », « appelle le fournisseur »): appelle commander_fournisseur.
 - Dès que tu as l’essentiel, appelle preparer_document (ou commande_rapide pour le reste) sans redemander de confirmation.
 - Réponds en français du Québec, très court (une phrase), sans liste ni markdown: tes réponses sont lues à voix haute.
 
@@ -200,6 +229,19 @@ export class AiAssistant {
             },
           };
           answers.push({ functionResponse: { name: c.name, response: { resultat: 'Résumé affiché; l’utilisateur va le vérifier et confirmer.' } } });
+        } else if (c.name === 'commander_fournisseur') {
+          const arts = Array.isArray(a.articles) ? (a.articles as Record<string, unknown>[]) : [];
+          action = {
+            kind: 'order',
+            text: say,
+            order: {
+              supplier: a.fournisseur ? String(a.fournisseur) : undefined,
+              items: arts.map((x) => ({ description: String(x.description ?? '').trim(), qty: Number(x.quantite) > 0 ? Number(x.quantite) : 1, unit: String(x.unite ?? 'unité') })).filter((x) => x.description),
+              clientId: typeof a.client_id === 'number' ? a.client_id : undefined,
+              neededBy: /^\d{4}-\d{2}-\d{2}$/.test(String(a.date ?? '')) ? String(a.date) : undefined,
+            },
+          };
+          answers.push({ functionResponse: { name: c.name, response: { resultat: 'Commande préparée; il va l’envoyer au fournisseur.' } } });
         } else if (c.name === 'commande_rapide') {
           const kind = INTENTS[String(a.action)] ?? 'afaire';
           action = {
@@ -230,4 +272,28 @@ export class AiAssistant {
     }
     return { kind: 'say', text: 'Je me suis mêlée. Peux-tu reformuler?' };
   }
+}
+
+/** Rédige un court message au client (texto ou courriel) à partir d'une intention. */
+export async function aiWrite(opts: { company: string; owner: string; client: string; channel: 'texto' | 'courriel'; intent: string; history: string[]; model?: string }): Promise<string> {
+  const app = firebaseApp();
+  if (!app) throw new Error('Firebase n’est pas configuré');
+  const ai = getAI(app, { backend: new GoogleAIBackend() });
+  const prompt = `Tu rédiges un ${opts.channel === 'texto' ? 'texto (2 ou 3 phrases maximum)' : 'courriel court (sans objet)'} de ${opts.owner || 'le patron'} de ${opts.company || 'l’entreprise'} à son client ${opts.client}.
+Ton: professionnel, chaleureux, français du Québec, vouvoiement. Pas de markdown, pas de placeholder entre crochets, signe avec le prénom${opts.channel === 'courriel' ? ' et le nom de l’entreprise' : ''}.
+Derniers échanges (du plus ancien au plus récent):
+${opts.history.slice(-6).join('\n') || '(aucun)'}
+Ce qu’il veut dire: ${opts.intent}
+Écris seulement le message.`;
+  let last: unknown;
+  for (const m of opts.model ? [opts.model, ...MODELS] : MODELS) {
+    try {
+      const r = await getGenerativeModel(ai, { model: m, generationConfig: { temperature: 0.5 } }).generateContent(prompt);
+      return r.response.text().trim();
+    } catch (e) {
+      last = e;
+      if (!notFound(e)) throw e;
+    }
+  }
+  throw last;
 }

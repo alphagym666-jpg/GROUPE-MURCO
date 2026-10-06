@@ -3,6 +3,8 @@ import { completeJob, jobToInvoice, syncDayRoute } from './agenda';
 import { db, getSettings, takeNextNumber, type Client, type Doc } from './db';
 import { splitTaxes } from './receipt';
 import { buildTodos } from './todo';
+import { createOrder } from './orders';
+import { plural } from './tradeCalc';
 import { addDays, docTotals, money, todayISO } from './utils';
 
 // L'assistant prépare l'action, tu confirmes. Rien n'est modifié avant « Confirmer ».
@@ -193,6 +195,22 @@ export async function propose(intent: Intent): Promise<Proposal> {
     case 'afaire': {
       const n = (await buildTodos(today)).length;
       return { title: 'À confirmer', say: n ? `Tu as ${n} chose${n > 1 ? 's' : ''} à confirmer.` : 'Tout est à jour, rien à confirmer.', todo: n > 0 };
+    }
+
+    case 'commander': {
+      const items = intent.items?.length ? intent.items : [{ description: '', qty: 1, unit: 'unité' }];
+      const what = intent.items?.length ? intent.items.map((i) => `${String(i.qty).replace('.', ',')} ${plural(i.unit, i.qty)} de ${i.description.toLowerCase()}`).join(', ') : 'ta liste';
+      return {
+        title: 'Commande au fournisseur',
+        say: `Je prépare la commande${intent.vendor ? ` chez ${intent.vendor}` : ''}: ${what}?`,
+        confirm: {
+          label: 'Préparer la commande',
+          run: async () => {
+            const id = await createOrder(items, { ...(intent.vendor ? { supplier: intent.vendor } : {}), clientId: intent.clientId, neededBy: intent.date });
+            return { done: true, title: 'Commande prête', say: 'La commande est prête. Ajoute le téléphone ou le courriel du fournisseur et envoie-la.', links: [{ label: 'Ouvrir et envoyer', to: `/achats/${id}` }] };
+          },
+        },
+      };
     }
 
     default:

@@ -57,3 +57,17 @@ assert.equal(plural('pi lin', 60), 'pi lin');
 assert.equal(plural('verge³', 3), 'verge³');
 assert.equal(plural('boîte', 1), 'boîte');
 console.log('calculs par métier: 32 cas OK');
+import { hourlyCalc, roofCalc, poolCalc, moveCalc } from '../src/lib/tradeCalc.ts';
+assert.deepEqual(hourlyCalc({ hours: 2, workers: 1, rate: 95, materials: 100, markup: 20, travel: 50 }), { labor: 190, materials: 120, travel: 50, total: 360, profitOnMaterials: 20 });
+const rf = roofCalc({ length: 40, width: 30, overhang: 0, pitch: 6, waste: 10 });
+assert.equal(rf.area, 1342); // 1200 × 1,118
+assert.equal(rf.squares, 14.8);
+assert.equal(rf.bundles, 45);
+const pl = poolCalc({ shape: 'rond', length: 24, width: 24, depth: 4 });
+assert.equal(pl.litres, 51200); // ≈ 1810 pi³
+assert.equal(pl.saltBags, 9);
+const mv = moveCalc({ rooms: 4.5, workers: 2, distanceKm: 10 });
+assert.equal(mv.volume, 999);
+assert.equal(mv.truck, 'Camion 20 pi');
+assert.equal(mv.hours, 4.5); // 3,33 + 0,2 + 0,5 = 4,03 → 4,5
+console.log('calculs (nouveaux métiers): 9 cas OK');

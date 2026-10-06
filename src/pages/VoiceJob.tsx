@@ -22,6 +22,7 @@ import { RelanceModal } from '../components/RelanceModal';
 import { MicButton } from '../components/MicButton';
 import { Link } from 'react-router-dom';
 import { AiAssistant, aiConfigured, aiErrorMessage, type AiDoc } from '../lib/ai';
+import { createOrder } from '../lib/orders';
 
 const EXAMPLE = '« Véronique Girard, 12 rue des Pins à Laval, entretien de gouttières 60 pieds linéaires mardi à 9 h »';
 const IDEAS = ['Facture la job de Girard', 'Roy a payé comptant', '45 $ d’essence chez Petro-Canada', 'Déplace Roy à vendredi 9 h', 'J’ai fini la job chez Gagnon', 'Mon horaire demain', 'Combien j’ai fait ce mois-ci?', 'Qu’est-ce que j’ai à faire?', 'Relance les factures en retard'];
@@ -207,6 +208,11 @@ export default function VoiceJob() {
         const d = fromAi(r.doc);
         proceed(d);
         if (r.doc.address) autoAddress(r.doc.address);
+      } else if (r.kind === 'order') {
+        setDraft(null);
+        const supplier = r.order.supplier;
+        const id = await createOrder(r.order.items.length ? r.order.items : [{ description: '', qty: 1, unit: 'unité' }], { ...(supplier ? { supplier } : {}), clientId: r.order.clientId, neededBy: r.order.neededBy });
+        show({ title: 'Commande prête', say: r.text || `Commande prête${supplier ? ` pour ${supplier}` : ''}. Vérifie et envoie-la.`, links: [{ label: 'Ouvrir et envoyer', to: `/achats/${id}` }] });
       } else {
         setDraft(null);
         void propose(r.intent).then(show).catch((e) => notify(errMsg(e), 'err'));

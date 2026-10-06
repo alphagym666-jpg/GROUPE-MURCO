@@ -23,4 +23,11 @@ assert.equal(d('Véronique Girard 12 rue des Pins à Laval entretien de gouttiè
 assert.equal(d('Planifie une visite chez Sylvie Roy 88 chemin du Lac jeudi à 10 h').kind, 'planifier');
 assert.equal(d('J’ai une soumission à faire pour un nettoyage de gouttière au 16 rue des Colibris').kind, 'planifier');
 assert.equal(d('relance la soumission de Gagnon').kind, 'relancer');
-console.log('assistant: 17 cas OK');
+import { parseOrderItems } from '../src/lib/assistant.ts';
+const o = d('Commande 3 gallons de blanc et 2 rouleaux de ruban chez Rona');
+assert.equal(o.kind, 'commander');
+assert.equal(o.vendor, 'Rona');
+assert.deepEqual(o.items, [{ description: 'Blanc', qty: 3, unit: 'gallon' }, { description: 'Ruban', qty: 2, unit: 'rouleau' }]);
+assert.deepEqual(parseOrderItems('faut que je commande cinq sacs de coulis gris'), [{ description: 'Coulis gris', qty: 5, unit: 'sac' }]);
+assert.equal(d('commande chez Sherwin pour Gagnon').vendor, 'Sherwin-Williams');
+console.log('assistant: 22 cas OK');

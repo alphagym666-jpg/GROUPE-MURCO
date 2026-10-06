@@ -9,6 +9,7 @@ export interface JobType {
   icon?: string; // clé de JOB_ICONS
   emoji?: string; // ancien format (ignoré)
   color: string;
+  match?: string; // mots du titre qui donnent ce type (expression régulière), types propres à un métier
 }
 
 export type ColorBy = 'employe' | 'type' | 'statut' | 'client';
@@ -61,6 +62,9 @@ export const STATUS_COLOR: Record<string, string> = { planifie: '#3d5a99', fait:
 export function guessType(j: Pick<Job, 'title' | 'type'>, types: JobType[]): JobType | undefined {
   if (j.type) return types.find((t) => t.key === j.type);
   const t = j.title.toLowerCase();
+  // Types propres au métier d'abord (« Ouverture de piscine », « Débouchage »…)
+  const own = types.find((x) => x.match && new RegExp(x.match, 'i').test(t));
+  if (own) return own;
   const rules: [RegExp, string][] = [
     [/estim|soumis|évalu|evalu|visite/, 'estimation'],
     [/urgen|dégât|degat|fuite|bris/, 'urgence'],

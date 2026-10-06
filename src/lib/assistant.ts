@@ -3,7 +3,7 @@
 import { wordsToNumbers } from './voice.ts';
 import { findWhen } from './voiceJob.ts';
 
-export type IntentKind = 'planifier' | 'facturer' | 'payee' | 'relancer' | 'depense' | 'deplacer' | 'fini' | 'combien' | 'horaire' | 'afaire';
+export type IntentKind = 'planifier' | 'facturer' | 'payee' | 'relancer' | 'depense' | 'deplacer' | 'fini' | 'combien' | 'horaire' | 'afaire' | 'commander';
 
 export interface Intent {
   kind: IntentKind;
@@ -15,6 +15,7 @@ export interface Intent {
   category?: string; // catégorie de dépense
   vendor?: string;
   period?: 'jour' | 'semaine' | 'mois' | 'annee';
+  items?: { description: string; qty: number; unit: string }[]; // commande au fournisseur
 }
 
 export const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[’']/g, ' ');
@@ -42,6 +43,8 @@ const VENDORS: [RegExp, string, string][] = [
   [/couche[-\s]?tard/, 'Couche-Tard', 'Essence'], [/irving/, 'Irving', 'Essence'], [/crevier/, 'Crevier', 'Essence'], [/sonic/, 'Sonic', 'Essence'],
   [/home depot/, 'Home Depot', 'Matériaux'], [/rona/, 'Rona', 'Matériaux'], [/reno[-\s]?depot/, 'Réno-Dépôt', 'Matériaux'], [/canac/, 'Canac', 'Matériaux'],
   [/\bbmr\b/, 'BMR', 'Matériaux'], [/patrick morin/, 'Patrick Morin', 'Matériaux'],
+  [/sherwin/, 'Sherwin-Williams', 'Matériaux'], [/benjamin moore|\bbm\b/, 'Benjamin Moore', 'Matériaux'], [/\bsico\b/, 'Sico', 'Matériaux'], [/dulux/, 'Dulux', 'Matériaux'],
+  [/lowe/, 'Lowe’s', 'Matériaux'], [/kent\b/, 'Kent', 'Matériaux'], [/deschenes|deschênes/, 'Deschênes', 'Matériaux'], [/emco/, 'Emco', 'Matériaux'], [/lumen/, 'Lumen', 'Matériaux'],
   [/canadian tire/, 'Canadian Tire', 'Outils et équipement'], [/princess auto/, 'Princess Auto', 'Outils et équipement'],
   [/tim horton/, 'Tim Hortons', 'Repas'], [/mcdo|mcdonald/, 'McDonald’s', 'Repas'], [/subway/, 'Subway', 'Repas'],
 ];
@@ -58,6 +61,30 @@ const CATEGORY: [RegExp, string][] = [
   [/pub|publicite|facebook|google ads/, 'Publicité'],
 ];
 
+
+const UNITS: [RegExp, string][] = [
+  [/^(gallons?|gal)$/, 'gallon'], [/^pintes?$/, 'pinte'], [/^(chaudieres?|seaux?|chaudiere)$/, 'chaudière'], [/^boites?$/, 'boîte'], [/^sacs?$/, 'sac'],
+  [/^feuilles?$/, 'feuille'], [/^rouleaux?$/, 'rouleau'], [/^tubes?$/, 'tube'], [/^(pieds?|pi)$/, 'pi'], [/^(paquets?|ballots?)$/, 'paquet'], [/^(litres?|l)$/, 'litre'],
+];
+/** « commande 3 gallons de blanc et 2 rouleaux de ruban chez Rona » → articles. */
+export function parseOrderItems(input: string): { description: string; qty: number; unit: string }[] {
+  let t = wordsToNumbers(norm(input));
+  t = t.replace(/^.*?\b(commande[rz]?|commandes|acheter|achete|j ai besoin d|besoin d|il me faut|ca me prend)\b\s*(moi\s+)?/, '');
+  t = t.replace(/\s+(chez|au|a la|pour)\s+.*$/, '');
+  return t.split(/\s*(?:,|\bet\b|\bpuis\b|\bplus\b)\s*/).map((piece) => {
+    const m = piece.trim().match(/^(\d+(?:[.,]\d+)?)?\s*([a-z]+)?\s*(?:de |d )?(.*)$/);
+    if (!m) return null;
+    let qty = m[1] ? Number(m[1].replace(',', '.')) : 1;
+    let unit = 'unité';
+    let desc = m[3] ?? '';
+    const u = UNITS.find(([re]) => m[2] && re.test(m[2]));
+    if (u) unit = u[1];
+    else desc = `${m[2] ?? ''} ${desc}`;
+    desc = desc.replace(/^(de |d |du |des )/, '').trim();
+    if (!m[1] && !u) qty = 1;
+    return desc ? { description: desc.charAt(0).toUpperCase() + desc.slice(1), qty, unit } : null;
+  }).filter((x): x is { description: string; qty: number; unit: string } => !!x);
+}
 
 export function detectIntent<T extends { id?: number; name: string }>(input: string, clients: T[], today: string): Intent {
   const t = norm(input);
@@ -81,6 +108,14 @@ export function detectIntent<T extends { id?: number; name: string }>(input: str
   }
 
   if (/\brelanc/.test(t)) return { kind: 'relancer', clientId };
+
+  // « Commande 3 gallons de blanc chez Rona », « faut que j'achète 2 sacs de coulis »
+  if (/\b(commande[rz]?|commandes|fournisseur|faut que j achete|il me faut acheter)\b/.test(t) && !/\bfactur/.test(t)) {
+    const v = VENDORS.find(([re]) => re.test(t));
+    const m = input.match(/\b(?:chez|au)\s+([A-ZÀ-Ý][\p{L}'’-]*(?:\s+[A-ZÀ-Ý][\p{L}'’-]*)*)/u);
+    const w = /\bpour\b/.test(t) ? findWhen(tn, today) : null;
+    return { kind: 'commander', clientId, vendor: v?.[1] ?? m?.[1], items: parseOrderItems(input), date: w && w.rest !== tn ? w.date : undefined };
+  }
 
   // « Girard a payé », « reçu le paiement de Roy en comptant »
   if (/\b(a paye|ont paye|paye|payee|recu (le |son |mon )?paiement|recu l argent|encaisse)\b/.test(t) && !/\bfactur(e|er|es)\s+(la|le|les)?\s*job/.test(t)) {

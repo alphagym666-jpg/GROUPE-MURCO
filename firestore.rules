@@ -26,7 +26,7 @@ service cloud.firestore {
         && (coll in ['jobs', 'media', 'punches'] || (coll == 'files' && docId.matches('media-.*')));
 
       // Vendeur: en plus, les demandes (CRM), les soumissions/factures et les clients
-      allow read, write: if isMember(uid) && memberRole() == 'vendeur' && coll in ['leads', 'docs', 'clients'];
+      allow read, write: if isMember(uid) && memberRole() == 'vendeur' && coll in ['leads', 'docs', 'clients', 'messages'];
 
       // Invitation: lisible par la personne invitée (elle a le code secret)
       allow get: if signedIn() && coll == 'invites';

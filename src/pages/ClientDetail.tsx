@@ -8,6 +8,8 @@ import { errMsg, useConfirm, useToast } from '../components/Toast';
 import { db } from '../lib/db';
 import { JOB_STATUS_LABEL } from '../lib/agenda';
 import { MediaGallery } from '../components/MediaGallery';
+import { ClientThread } from '../components/ClientThread';
+import { AdminNote } from '../components/AdminNote';
 import { mapsLink } from '../lib/geo';
 import { gmailThreadLink, isGmailConnected, searchMail, type MailSummary } from '../lib/gmail';
 import { useSettings } from '../lib/hooks';
@@ -87,6 +89,8 @@ export default function ClientDetail() {
         <div className="card"><div className="label">Dépenses liées</div><div className="value">{money(data.expenses.reduce((a, e) => a + e.total, 0))}</div></div>
       </div>
 
+      <ClientThread client={c} />
+
       <div className="grid two">
         <div className="card">
           <h2>Coordonnées</h2>
@@ -94,7 +98,10 @@ export default function ClientDetail() {
           {c.phone && <div><a href={`tel:${c.phone}`}>{c.phone}</a></div>}
           {c.email && <div><a href={`mailto:${c.email}`}>{c.email}</a></div>}
           {c.address && <div><a href={mapsLink(c.geo, c.address)} target="_blank" rel="noreferrer">{c.address}</a></div>}
-          {c.notes && <p className="small muted" style={{ whiteSpace: 'pre-wrap' }}>{c.notes}</p>}
+          <label className="field full" style={{ marginTop: 10 }}>Notes internes <span className="small muted">— visibles par l’équipe</span>
+            <textarea rows={2} defaultValue={c.notes} placeholder="Code de porte, chien, préférences…" onBlur={(e) => e.target.value !== c.notes && void db.clients.update(cid, { notes: e.target.value })} />
+          </label>
+          <AdminNote refKey={`client:${cid}`} />
           <div className="row" style={{ marginTop: 10 }}>
             <button className="btn small" onClick={async () => downloadBlob(await exportClientData(cid), `client_${c.name.replace(/[^\w-]+/g, '_')}_${todayISO()}.json`)} title="Demande d’accès d’un client (Loi 25)">Exporter ses données</button>
             {data.docs.length ? (

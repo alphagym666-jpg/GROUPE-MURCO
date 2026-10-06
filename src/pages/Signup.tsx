@@ -8,7 +8,9 @@ import { DEFAULT_SETTINGS, saveSettings, type GeoPoint } from '../lib/db';
 import { geocode } from '../lib/geo';
 import { tr, useLang } from '../lib/i18n';
 import { getFirebaseConfig, signInEmail, useSyncState } from '../lib/sync';
-import { applyTrade, TRADES } from '../lib/templates';
+import { applyTrade, TRADE_GROUPS, TRADES, tradeServices, tradeTypes } from '../lib/templates';
+import { TRADE_ICON } from '../lib/tradeIcons';
+import { DEFAULT_AGENDA } from '../lib/agendaPrefs';
 
 /** Assistant de démarrage d'une nouvelle entreprise: infos, métier, taxes, compte. */
 export default function Signup() {
@@ -25,7 +27,8 @@ export default function Signup() {
   const [busy, setBusy] = useState(false);
   const [f, setF] = useState({ companyName: '', ownerName: '', phone: '', email: st.email ?? '', address: '', city: '', postalCode: '' });
   const [geo, setGeo] = useState<GeoPoint | undefined>();
-  const [trade, setTrade] = useState('');
+  const [trades, setTrades] = useState<string[]>([]);
+  const toggleTrade = (k: string) => setTrades((l) => (l.includes(k) ? l.filter((x) => x !== k) : [...l, k]));
   const [taxes, setTaxes] = useState<boolean | null>(null);
   const [tps, setTps] = useState('');
   const [tvq, setTvq] = useState('');
@@ -34,7 +37,7 @@ export default function Signup() {
   const up = (p: Partial<typeof f>) => setF((x) => ({ ...x, ...p }));
 
   const ok1 = f.companyName.trim().length > 1 && f.ownerName.trim().length > 1;
-  const ok2 = !!trade;
+  const ok2 = trades.length > 0;
   const ok3 = taxes !== null;
   const ok4 = /\S+@\S+\.\S+/.test(f.email) && pw.length >= 6 && consent;
 
@@ -55,7 +58,9 @@ export default function Signup() {
         postalCode: f.postalCode.trim().toUpperCase(),
         homeAddress: home,
         homeGeo,
-        trade,
+        trade: trades[0],
+        trades,
+        agenda: { ...DEFAULT_AGENDA, types: tradeTypes(trades) },
         chargeTaxes: !!taxes,
         tpsNumber: tps.trim(),
         tvqNumber: tvq.trim(),
@@ -65,7 +70,7 @@ export default function Signup() {
         wantedPlan: params.get('forfait') ?? undefined,
         termsAcceptedAt: consent ? new Date().toISOString() : undefined,
       });
-      await applyTrade(trade);
+      await applyTrade(trades);
       if (canAccount) await signInEmail(f.email, pw, true);
       notify(t(`Bienvenue dans ${PRODUCT.name}, ${f.ownerName.split(' ')[0]}!`, `Welcome to ${PRODUCT.name}, ${f.ownerName.split(' ')[0]}!`));
       nav('/', { replace: true });
@@ -106,20 +111,29 @@ export default function Signup() {
         {step === 2 && (
           <>
             <h1>{t('C’est quoi ton métier?', 'What’s your trade?')}</h1>
-            <p className="muted">{t('On prépare tes codes de prix. Tu les ajustes en 1 minute dans « Codes et prix ».', 'We set up your price codes. Adjust them in a minute under “Codes & prices”.')}</p>
-            <div className="su-trades">
-              {TRADES.map((x) => (
-                <button key={x.key} type="button" className={trade === x.key ? 'on' : ''} onClick={() => setTrade(x.key)}>
-                  <span className="su-emoji">{x.emoji}</span>
-                  <strong>{x.label}</strong>
-                  <small>{x.desc}</small>
-                  {trade === x.key && <Check size={18} className="su-check" />}
-                </button>
-              ))}
-            </div>
-            {trade && (
+            <p className="muted">{t('Choisis tout ce que tu fais. L’app s’ajuste: codes de prix, types de jobs dans l’agenda et outils de ton métier. Tout se change plus tard.', 'Pick everything you do. The app adapts: price codes, job types and trade tools. You can change it later.')}</p>
+            {TRADE_GROUPS.map((g) => (
+              <div key={g.key} className="su-group">
+                <div className="su-group-title">{g.label}</div>
+                <div className="su-trades">
+                  {TRADES.filter((x) => x.group === g.key).map((x) => {
+                    const Icon = TRADE_ICON[x.key];
+                    const on = trades.includes(x.key);
+                    return (
+                      <button key={x.key} type="button" className={on ? 'on' : ''} onClick={() => toggleTrade(x.key)} aria-pressed={on}>
+                        <span className="su-ic">{Icon ? <Icon size={20} /> : x.emoji}</span>
+                        <strong>{x.label}</strong>
+                        <small>{x.desc}</small>
+                        {on && <Check size={18} className="su-check" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {trades.length > 0 && (
               <div className="su-preview">
-                {TRADES.find((x) => x.key === trade)!.services.slice(0, 6).map((sv) => (
+                {tradeServices(trades).slice(0, 8).map((sv) => (
                   <span key={sv.code}><b>{sv.code}</b> {sv.name}{sv.price ? ` · ${sv.price.toLocaleString('fr-CA')} $/${sv.unit}` : ''}</span>
                 ))}
               </div>

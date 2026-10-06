@@ -193,13 +193,13 @@ let role: Role = 'owner';
 const READ: Record<Role, readonly SyncTable[]> = {
   owner: SYNC_TABLES,
   admin: SYNC_TABLES,
-  vendeur: ['settings', 'clients', 'services', 'jobs', 'media', 'punches', 'members', 'projects', 'leads', 'docs'],
+  vendeur: ['settings', 'clients', 'services', 'jobs', 'media', 'punches', 'members', 'projects', 'leads', 'docs', 'messages'],
   employe: ['settings', 'clients', 'services', 'jobs', 'media', 'punches', 'members', 'projects'],
 };
 const WRITE: Record<Role, readonly SyncTable[]> = {
   owner: SYNC_TABLES,
   admin: SYNC_TABLES,
-  vendeur: ['clients', 'jobs', 'media', 'punches', 'leads', 'docs'],
+  vendeur: ['clients', 'jobs', 'media', 'punches', 'leads', 'docs', 'messages'],
   employe: ['jobs', 'media', 'punches'],
 };
 const canWrite = (t: SyncTable) => WRITE[role].includes(t);

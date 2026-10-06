@@ -1536,3 +1536,30 @@ button.agh-ring:hover .fg { stroke: var(--amber-ink); }
   .ag-month-day { margin-top: 12px; }
   .ag-month-day .card-head { align-items: center; }
 }
+
+/* ---------- Conversation avec le client ---------- */
+.thread { display: grid; gap: 10px; margin-bottom: 16px; }
+.th-list { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; padding: 4px 2px; }
+.th-empty { text-align: center; padding: 16px 8px; }
+.th-msg { display: grid; gap: 3px; max-width: 84%; align-self: flex-start; }
+.th-msg.out { align-self: flex-end; justify-items: end; }
+.th-msg.note { align-self: center; max-width: 92%; justify-items: center; }
+.th-meta { display: flex; align-items: center; gap: 4px; font-size: 0.72rem; color: var(--muted); }
+.th-bubble { padding: 10px 14px; border-radius: 16px 16px 16px 4px; background: var(--surface-2); border: 1px solid var(--line); white-space: pre-wrap; line-height: 1.4; }
+.th-msg.out .th-bubble { border-radius: 16px 16px 4px 16px; background: var(--primary-bg); color: var(--primary-ink); border-color: transparent; }
+.th-msg.note .th-bubble { border-radius: 12px; background: color-mix(in srgb, var(--amber) 12%, var(--surface)); border-color: color-mix(in srgb, var(--amber) 35%, var(--line)); font-size: 0.92rem; }
+.th-del { border: 0; background: none; color: var(--muted); padding: 2px; cursor: pointer; opacity: 0; }
+.th-msg:hover .th-del, .th-msg:focus-within .th-del { opacity: 1; }
+@media (hover: none) { .th-del { opacity: .6; } }
+.th-tpl { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.th-tpl .chip-btn { flex: none; }
+.th-input { width: 100%; }
+.th-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.admin-note textarea { border-style: dashed; }
+.admin-note > span svg { color: var(--amber-ink); }
+
+/* ---------- Inscription: métiers par catégorie ---------- */
+.su-group { margin-top: 16px; }
+.su-group-title { font-size: 0.75rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.su-ic { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px; background: var(--surface-2); border: 1px solid var(--line); color: var(--amber-ink); margin-bottom: 4px; }
+.su-trades button.on .su-ic { background: var(--surface); }

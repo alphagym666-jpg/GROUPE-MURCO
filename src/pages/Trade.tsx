@@ -1,7 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  Calculator, Check, ChevronDown, Copy, Droplets, Grid3x3, Hammer, House, Layers, Leaf, Package, PaintRoller, Plus, Rows3, Shovel,
-  Snowflake, SprayCan, Trash2, Truck, Wrench, X, type LucideIcon,
+  Calculator, Check, ChevronDown, Copy, Droplets, Grid3x3, Layers, Package, PaintRoller, Plus, Rows3, Shovel, Snowflake, SprayCan, Trash2, Truck, Wrench, X, Waves, HardHat, Clock, type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -13,19 +12,20 @@ import { blankJob, optimizeDay } from '../lib/agenda';
 import { db, saveSettings, type Settings, type StockItem } from '../lib/db';
 import { useSettings } from '../lib/hooks';
 import { activeTrades, createOrder, TOOL_LABEL, TRADE_TOOLS, type ToolKey } from '../lib/orders';
-import { TRADES } from '../lib/templates';
+import { addTradeServices, TRADES, tradeTypes } from '../lib/templates';
+import { TRADE_ICON } from '../lib/tradeIcons';
+import { saveAgendaPrefs } from '../lib/agendaPrefs';
 import {
-  buyLabel, cleanCalc, drywallCalc, floorCalc, gutterCalc, L_PER_GAL, mulchCalc, paintCalc, tileCalc,
+  buyLabel, cleanCalc, drywallCalc, floorCalc, gutterCalc, hourlyCalc, L_PER_GAL, moveCalc, mulchCalc, paintCalc, poolCalc, roofCalc, tileCalc,
   plural, type CleanInput, type Material, type Room,
 } from '../lib/tradeCalc';
 import { addDays, todayISO } from '../lib/utils';
 import { useWeather } from '../lib/weather';
 
-const TRADE_ICON: Record<string, LucideIcon> = {
-  exterieur: House, paysagement: Leaf, peinture: PaintRoller, menage: SprayCan, deneigement: Snowflake, renovation: Hammer, general: Wrench,
-};
+
 const TOOL_ICON: Record<ToolKey, LucideIcon> = {
   paint: PaintRoller, tile: Grid3x3, drywall: Layers, floor: Rows3, mulch: Shovel, gutter: Droplets, clean: SprayCan, snow: Snowflake,
+  hourly: Clock, roof: HardHat, pool: Waves, move: Truck,
 };
 const num = (n: number, d = 1) => (Math.round(n * 10 ** d) / 10 ** d).toLocaleString('fr-CA');
 
@@ -74,6 +74,10 @@ export default function Trade() {
             {k === 'gutter' && <GutterTool />}
             {k === 'clean' && <CleanTool />}
             {k === 'snow' && <SnowTool s={s} />}
+            {k === 'hourly' && <HourlyTool />}
+            {k === 'roof' && <RoofTool />}
+            {k === 'pool' && <PoolTool />}
+            {k === 'move' && <MoveTool />}
           </ToolCard>
         ))}
         <Link to="/achats" className="tool-card link">
@@ -107,6 +111,7 @@ function ToolCard({ icon: Icon, title, desc, open, onToggle, children }: { icon:
 }
 
 function TradesModal({ s, onClose }: { s: Settings; onClose: () => void }) {
+  const notify = useToast();
   const [sel, setSel] = useState<string[]>(activeTrades(s));
   const toggle = (k: string) => setSel((l) => (l.includes(k) ? l.filter((x) => x !== k) : [...l, k]));
   return (
@@ -123,7 +128,15 @@ function TradesModal({ s, onClose }: { s: Settings; onClose: () => void }) {
         })}
       </div>
       <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
-        <button className="btn accent" disabled={!sel.length} onClick={async () => { await saveSettings({ trades: sel }); onClose(); }}>Enregistrer</button>
+        <button className="btn accent" disabled={!sel.length} onClick={async () => {
+          const added = sel.filter((k) => !activeTrades(s).includes(k));
+          await saveSettings({ trades: sel, trade: sel[0] });
+          const n = added.length ? await addTradeServices(added) : 0;
+          // Types de jobs de l'agenda: ceux des métiers choisis (si l'utilisateur ne les a pas déjà personnalisés)
+          if (!s.agenda?.types?.length) await saveAgendaPrefs(s, { types: tradeTypes(sel) });
+          if (n) notify(`${n} code${n > 1 ? 's' : ''} de prix ajouté${n > 1 ? 's' : ''} (Codes et prix)`);
+          onClose();
+        }}>Enregistrer</button>
       </div>
     </Modal>
   );
@@ -375,6 +388,113 @@ function CleanTool() {
         <div className="big-num"><span>Heures à facturer</span><b>{num(r.hours, 2)} h</b><small>main-d’œuvre totale</small></div>
         <div className="big-num"><span>Durée sur place</span><b>{num(r.duration, 2)} h</b><small>avec {workers} personne{workers > 1 ? 's' : ''}</small></div>
       </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ Temps et matériel, toiture, piscine, déménagement
+
+const money2 = (n: number) => n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' });
+
+function HourlyTool() {
+  const [hours, setHours] = useState(2);
+  const [workers, setWorkers] = useState(1);
+  const [rate, setRate] = useState(95);
+  const [mat, setMat] = useState(0);
+  const [markup, setMarkup] = useState(20);
+  const [travel, setTravel] = useState(0);
+  const r = hourlyCalc({ hours, workers, rate, materials: mat, markup, travel });
+  return (
+    <div className="calc">
+      <div className="form-grid calc-grid">
+        <F label="Heures"><NumInput value={hours} onChange={setHours} /></F>
+        <F label="Personnes"><NumInput value={workers} onChange={(n) => setWorkers(Math.max(1, Math.round(n)))} /></F>
+        <F label="Taux horaire ($)"><NumInput value={rate} onChange={setRate} /></F>
+        <F label="Pièces / matériaux (coût $)"><NumInput value={mat} onChange={setMat} /></F>
+        <F label="Ta marge (%)"><NumInput value={markup} onChange={setMarkup} /></F>
+        <F label="Déplacement ($)"><NumInput value={travel} onChange={setTravel} /></F>
+      </div>
+      <div className="calc-out">
+        <div className="big-num"><span>Prix au client</span><b>{money2(r.total)}</b><small>avant taxes</small></div>
+        <div className="big-num"><span>Main-d’œuvre</span><b>{money2(r.labor)}</b><small>{num(hours, 2)} h × {workers} × {money2(rate)}</small></div>
+        <div className="big-num"><span>Matériaux facturés</span><b>{money2(r.materials)}</b><small>dont {money2(r.profitOnMaterials)} de marge</small></div>
+      </div>
+    </div>
+  );
+}
+
+function RoofTool() {
+  const [l, setL] = useState(40);
+  const [w, setW] = useState(30);
+  const [over, setOver] = useState(1);
+  const [pitch, setPitch] = useState(6);
+  const [waste, setWaste] = useState(10);
+  const r = roofCalc({ length: l, width: w, overhang: over, pitch, waste });
+  return (
+    <div className="calc">
+      <div className="form-grid calc-grid">
+        <F label="Longueur de la maison (pi)"><NumInput value={l} onChange={setL} /></F>
+        <F label="Profondeur (pi)"><NumInput value={w} onChange={setW} /></F>
+        <F label="Débord du toit (pi)"><NumInput value={over} onChange={setOver} /></F>
+        <F label="Pente">
+          <select value={pitch} onChange={(e) => setPitch(Number(e.target.value))}>{[3, 4, 5, 6, 7, 8, 9, 10, 12].map((p) => <option key={p} value={p}>{p}/12</option>)}</select>
+        </F>
+        <F label="Perte">
+          <div className="seg">{[10, 15].map((x) => <button key={x} className={waste === x ? 'on' : ''} onClick={() => setWaste(x)}>{x} %{x === 15 ? ' (complexe)' : ''}</button>)}</div>
+        </F>
+      </div>
+      <div className="calc-out">
+        <div className="big-num"><span>Surface du toit</span><b>{num(r.area, 0)} pi²</b><small>avec la pente {pitch}/12</small></div>
+        <div className="big-num"><span>Carrés</span><b>{num(r.squares)}</b><small>avec {waste} % de perte</small><em>{r.bundles} paquets</em></div>
+      </div>
+      <Materials items={r.materials} />
+    </div>
+  );
+}
+
+function PoolTool() {
+  const [shape, setShape] = useState<'rond' | 'rect'>('rond');
+  const [l, setL] = useState(24);
+  const [w, setW] = useState(12);
+  const [depth, setDepth] = useState(4);
+  const r = poolCalc({ shape, length: l, width: w, depth });
+  return (
+    <div className="calc">
+      <div className="form-grid calc-grid">
+        <F label="Forme">
+          <div className="seg"><button className={shape === 'rond' ? 'on' : ''} onClick={() => setShape('rond')}>Ronde</button><button className={shape === 'rect' ? 'on' : ''} onClick={() => setShape('rect')}>Rectangulaire</button></div>
+        </F>
+        <F label={shape === 'rond' ? 'Diamètre (pi)' : 'Longueur (pi)'}><NumInput value={l} onChange={setL} /></F>
+        {shape === 'rect' && <F label="Largeur (pi)"><NumInput value={w} onChange={setW} /></F>}
+        <F label="Profondeur moyenne (pi)"><NumInput value={depth} onChange={setDepth} /></F>
+      </div>
+      <div className="calc-out">
+        <div className="big-num"><span>Volume</span><b>{r.litres.toLocaleString('fr-CA')} L</b><small>{num(r.litres / 3.785 / 1000, 1)} k gallons US</small></div>
+        <div className="big-num"><span>Chlore choc</span><b>{num(r.shockKg)} kg</b><small>pour 10 ppm (hypochlorite 65 %)</small></div>
+        <div className="big-num"><span>Sel (au départ)</span><b>{r.saltBags} sacs</b><small>de 20 kg pour 3200 ppm</small></div>
+      </div>
+      <Materials items={[...r.materials, { description: 'Sel pour piscine 20 kg', qty: r.saltBags, unit: 'sac' }]} note="Valeurs de départ: ajuste toujours selon l’analyse de l’eau." />
+    </div>
+  );
+}
+
+function MoveTool() {
+  const [rooms, setRooms] = useState(4.5);
+  const [workers, setWorkers] = useState(2);
+  const [dist, setDist] = useState(10);
+  const r = moveCalc({ rooms, workers, distanceKm: dist });
+  return (
+    <div className="calc">
+      <div className="form-grid calc-grid">
+        <F label="Logement (ex.: 4½ → 4,5)"><NumInput value={rooms} onChange={setRooms} /></F>
+        <F label="Déménageurs"><NumInput value={workers} onChange={(n) => setWorkers(Math.max(1, Math.round(n)))} /></F>
+        <F label="Distance (km)"><NumInput value={dist} onChange={setDist} /></F>
+      </div>
+      <div className="calc-out">
+        <div className="big-num"><span>Volume</span><b>{r.volume.toLocaleString('fr-CA')} pi³</b><em>{r.truck}</em></div>
+        <div className="big-num"><span>Durée estimée</span><b>{num(r.hours)} h</b><small>avec {workers} déménageurs</small></div>
+      </div>
+      <Materials items={r.materials} />
     </div>
   );
 }

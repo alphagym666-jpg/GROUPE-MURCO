@@ -450,6 +450,27 @@ export interface PurchaseOrder extends Synced {
   receivedAt?: string;
 }
 
+/** Fil de messages avec un client (textos, courriels, appels, notes). */
+export type MessageChannel = 'texto' | 'courriel' | 'appel' | 'note';
+export interface ClientMessage extends Synced {
+  id?: number;
+  clientId: number;
+  jobId?: number;
+  dir: 'out' | 'in' | 'note'; // envoyé, reçu du client, note interne
+  channel: MessageChannel;
+  text: string;
+  at: string;
+  author?: string;
+}
+
+/** Notes réservées au patron et aux administrateurs (jamais envoyées aux téléphones des employés). */
+export interface AdminNote extends Synced {
+  id?: number;
+  ref: string; // « job:123 », « client:45 »
+  text: string;
+  updatedAt: string;
+}
+
 /** Matériaux en main (restes de peinture, boîtes de céramique…). */
 export interface StockItem extends Synced {
   id?: number;
@@ -477,6 +498,8 @@ class MurcoDB extends Dexie {
   projects!: Table<Project, number>;
   orders!: Table<PurchaseOrder, number>;
   stock!: Table<StockItem, number>;
+  messages!: Table<ClientMessage, number>;
+  adminNotes!: Table<AdminNote, number>;
 
   constructor() {
     // Identifiants uniques globaux (pas d'auto-incrément) pour synchroniser plusieurs appareils.
@@ -517,12 +540,17 @@ class MurcoDB extends Dexie {
       orders: 'id, status, supplier, clientId, jobId, createdAt',
       stock: 'id, kind, name',
     });
+    // Fil de messages client et notes administrateur
+    this.version(6).stores({
+      messages: 'id, clientId, jobId, at',
+      adminNotes: 'id, ref',
+    });
   }
 }
 
 export const db = new MurcoDB();
 
-export const SYNC_TABLES = ['settings', 'clients', 'docs', 'trips', 'expenses', 'emails', 'services', 'jobs', 'media', 'leads', 'members', 'punches', 'projects', 'orders', 'stock'] as const;
+export const SYNC_TABLES = ['settings', 'clients', 'docs', 'trips', 'expenses', 'emails', 'services', 'jobs', 'media', 'leads', 'members', 'punches', 'projects', 'orders', 'stock', 'messages', 'adminNotes'] as const;
 export type SyncTable = (typeof SYNC_TABLES)[number];
 
 let lastId = 0;
