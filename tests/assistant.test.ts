@@ -21,4 +21,6 @@ assert.deepEqual(d('c’est quoi mon horaire demain'), { kind: 'horaire', date: 
 assert.equal(d('qu’est-ce que j’ai à faire').kind, 'afaire');
 assert.equal(d('Véronique Girard 12 rue des Pins à Laval entretien de gouttières 60 pieds linéaires mardi à 9 h').kind, 'planifier');
 assert.equal(d('Planifie une visite chez Sylvie Roy 88 chemin du Lac jeudi à 10 h').kind, 'planifier');
-console.log('assistant: 15 cas OK');
+assert.equal(d('J’ai une soumission à faire pour un nettoyage de gouttière au 16 rue des Colibris').kind, 'planifier');
+assert.equal(d('relance la soumission de Gagnon').kind, 'relancer');
+console.log('assistant: 17 cas OK');

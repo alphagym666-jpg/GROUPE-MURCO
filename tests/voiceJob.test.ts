@@ -71,4 +71,11 @@ assert.equal(i.address, '1562 Edmond, Laval');
 assert.equal(i.docType, 'quote');
 assert.deepEqual(i.lines, [{ code: 'NDG', quantity: 60 }]);
 assert.equal(a.dateSaid, true);
-console.log('commande vocale: 9 cas OK');
+// La phrase de Samuel: le nom dit à la fin, « j'ai une » n'est pas un nom
+const j = parseJobCommand('J’ai une soumission à faire pour un nettoyage de gouttière et puis des matériaux de gouttière aussi au 16 rue des Colibris le nom de la personne c’est Jean Bédard', S, C, today);
+assert.equal(j.clientName, 'Jean Bédard');
+assert.equal(j.address, '16 rue des Colibris');
+assert.deepEqual(j.lines.map((l) => l.code), ['NDG', 'PGM']);
+const k = parseJobCommand('Faudrait faire une soumission pour un lavage de gouttière au 16 rue des Colibris le nom de la personne c’est', S, C, today);
+assert.equal(k.clientName, ''); // l'app demandera le nom
+console.log('commande vocale: 11 cas OK');

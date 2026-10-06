@@ -20,6 +20,8 @@ export interface JobCommand {
   addressIncomplete: boolean; // adresse coupée (« 1835 rue des »): à redemander
 }
 
+// Mots de phrase (« j'ai une soumission… », « faudrait faire… »): jamais un nom de client
+const NAME_FILLER = ['je', 'j', 'jai', 'ai', 'veux', 'voudrais', 'aimerais', 'aurais', 'faut', 'faudrait', 'faire', 'fasse', 'une', 'un', 'il', 'elle', 'on', 'besoin', 'que', 'peux', 'tu', 'svp', 'mets', 'met', 'ok', 'bon', 'alors', 'euh', 'faque', 'donc', 'nom', 'client', 'cliente'];
 const NAME_STOP = ['au', 'aux', 'a', 'sur', 'dans', 'de', 'du', 'des', 'rue', 'chemin', 'boulevard', 'avenue', 'qui', 'reste', 'demeure', 'habite', 'adresse'];
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -138,6 +140,28 @@ export function parseJobCommand(input: string, services: VoiceService[], clients
     }
   }
 
+  // « le nom de la personne c'est Jean Roy », « le client c'est… », « elle s'appelle… » (n'importe où dans la phrase)
+  let saidName: string | undefined;
+  {
+    const nm = norm(orig).match(/\s(?:(?:le|son)\s+nom(?:\s+(?:de\s+la\s+personne|du\s+client|de\s+la\s+cliente|du\s+monsieur|de\s+la\s+madame))?|(?:le|la)\s+client(?:e)?|(?:il|elle)\s+s['’]?\s*appelle|(?:qui\s+)?s['’]?\s*appelle)\s*(?:c['’]?\s*est|c\s+est|est|:)?\s*/);
+    if (nm && nm.index !== undefined) {
+      const start = nm.index;
+      const after = orig.slice(start + nm[0].length);
+      const words = after.split(/[\s,]+/).filter(Boolean);
+      const out: string[] = [];
+      for (const w of words) {
+        const n = norm(w).replace(/[^a-z]/g, '');
+        if (!n || JOB_WORDS.includes(n) || NAME_STOP.includes(n) || NAME_FILLER.includes(n) || /\d/.test(w) || ['et', 'puis', 'pis', 'pi', 'avec', 'son', 'sa', 'tel', 'telephone', 'numero', 'cest', 'est'].includes(n)) break;
+        out.push(w.replace(/[,.]/g, ''));
+        if (out.length >= 4) break;
+      }
+      saidName = cap(out.join(' '));
+      const raw = orig.slice(start, start + nm[0].length) + (out.length ? after.slice(0, after.indexOf(out[out.length - 1]) + out[out.length - 1].length) : '');
+      orig = orig.slice(0, start) + ' ' + orig.slice(start + raw.length);
+      if (nameEnd > start) nameEnd = Math.max(0, nameEnd - raw.length + 1);
+    }
+  }
+
   // Nom du nouveau client: ce qui précède l'adresse (ou le début de la phrase jusqu'au premier mot de job)
   let clientName = '';
   // « Planifie une visite chez … », « mets une job pour … »: la commande du début n'est pas le nom
@@ -150,18 +174,20 @@ export function parseJobCommand(input: string, services: VoiceService[], clients
     const out: string[] = [];
     for (const w of words) {
       const n = norm(w).replace(/[^a-z]/g, '');
-      if (!n || JOB_WORDS.includes(n) || NAME_STOP.includes(n) || /\d/.test(w)) break;
+      if (!n || JOB_WORDS.includes(n) || NAME_STOP.includes(n) || NAME_FILLER.includes(n) || /\d/.test(w)) break;
       out.push(w.replace(/[,.]/g, ''));
       if (out.length >= 4) break;
     }
-    clientName = cap(out.join(' '));
+    if (saidName !== undefined) out.length = 0; // le nom a été dit clairement ailleurs
+    clientName = saidName || cap(out.join(' '));
+    if (saidName && !existing) existing = clients.find((c) => norm(c.name) === norm(saidName!));
     // « Sylvie Roy » n'est pas « Mme Roy »: un prénom de plus = un autre client
     if (existing && clientName) {
       const have = new Set(norm(existing.name).split(/[^a-z]+/));
       if (!norm(clientName).split(/[^a-z]+/).filter((w) => w.length >= 2 && !['mme', 'madame', 'monsieur', 'chez'].includes(w)).every((w) => have.has(w))) existing = undefined;
     }
     if (existing) clientName = existing.name;
-    if (clientName) orig = orig.replace(new RegExp(out.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\s,]+')), ' ');
+    if (out.length) orig = orig.replace(new RegExp(out.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\s,]+')), ' ');
   }
 
   // Date, heure, puis les services sur ce qui reste

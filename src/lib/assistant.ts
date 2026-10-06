@@ -65,7 +65,10 @@ export function detectIntent<T extends { id?: number; name: string }>(input: str
   const client = matchClient(input, clients);
   const clientId = client?.id;
 
-  if (/\b(a faire|quoi faire|a confirmer|mes taches|qu est[-\s]ce que j ai a faire|mes affaires a faire)\b/.test(t)) return { kind: 'afaire' };
+  // « une soumission à faire pour… », « planifie… »: c'est une job à créer, pas « ma liste à faire »
+  if (/\b(soumission|estimation|planifi\w*)\b/.test(t) && !/\b(relanc|factur)/.test(t)) return { kind: 'planifier', clientId };
+
+  if (/\b(quoi faire|a confirmer|mes taches|liste a faire|qu est[-\s]ce que j ai a faire|j ai quoi a faire|mes affaires a faire|mes choses a faire)\b/.test(t)) return { kind: 'afaire' };
 
   if (/\b(combien|chiffre d affaires|mes ventes|mes revenus|j ai fait combien|ca donne combien|mon mois|mon annee)\b/.test(t)) {
     const period = /\bsemaine\b/.test(t) ? 'semaine' : /\b(annee|an)\b/.test(t) ? 'annee' : /\b(aujourd hui|journee)\b/.test(t) ? 'jour' : 'mois';

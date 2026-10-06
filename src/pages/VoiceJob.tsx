@@ -117,6 +117,11 @@ export default function VoiceJob() {
   useEffect(() => () => rec.current?.stop(), []);
   const [prop, setProp] = useState<Proposal | null>(null);
   const [relanceDoc, setRelanceDoc] = useState<Proposal['relance'] | null>(null);
+  // Après « Analyser »: on amène la réponse à l'écran (sur cell elle était cachée en haut)
+  const topRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (prop || draft || done) topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [prop, done, !!draft, slot]);
 
   const show = (p: Outcome) => {
     setProp(p);
@@ -141,7 +146,9 @@ export default function VoiceJob() {
     // Le nom dit ne correspond à aucun client (« Nathalie Bouchard » ≠ « Clinique Bouchard »): nouveau client
     const pj = parseJobCommand(text, services, clients.map((c) => ({ id: c.id, name: c.name })), todayISO());
     const spokenNew = pj.isNew && pj.clientName.split(' ').length >= 2;
-    const create = intent.kind === 'planifier' || (intent.kind === 'facturer' && ((!intent.clientId && /\b(pour|chez|a|à)\s+\p{L}/iu.test(text)) || spokenNew));
+    // Une adresse ou des travaux dits = une job à créer, même si un mot ressemble à une autre commande
+    const looksLikeJob = (!!pj.address || pj.lines.length > 0) && ['afaire', 'horaire', 'combien', 'fini', 'deplacer'].includes(intent.kind);
+    const create = intent.kind === 'planifier' || looksLikeJob || (intent.kind === 'facturer' && ((!intent.clientId && /\b(pour|chez|a|à)\s+\p{L}/iu.test(text)) || spokenNew));
     if (!create) {
       setDraft(null);
       setDone(null);
@@ -377,6 +384,7 @@ export default function VoiceJob() {
         </div>
       </div>
 
+      <div ref={topRef} style={{ scrollMarginTop: 72 }} />
       {prop && (
         <div className="card vj-prop">
           <div className="vj-bubble">{prop.say}</div>

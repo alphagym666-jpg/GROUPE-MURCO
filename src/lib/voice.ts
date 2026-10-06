@@ -148,7 +148,9 @@ export function parseDictation(input: string, services: VoiceService[], clients:
       // « protège-gouttières »: ne pas confondre avec le nettoyage
       if (/protege/.test(clean) && /protege/i.test(norm(s.name))) score += 1;
       if (/install/.test(clean) && /install/.test(norm(s.name))) score += 1;
-      if (/(materiel|grillage)/.test(clean) && /materiel/.test(norm(s.name))) score += 1;
+      if (/(materiel|materiau|grillage)/.test(clean) && /materiel/.test(norm(s.name))) score += 1;
+      if (/deplac/.test(clean) && /deplac/.test(norm(s.name))) score += 1;
+      if (/(hauteur|etage)/.test(clean) && /hauteur/.test(norm(s.name))) score += 1;
       if (score > bestScore) {
         best = s;
         bestScore = score;
