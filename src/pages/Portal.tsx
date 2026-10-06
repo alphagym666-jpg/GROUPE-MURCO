@@ -170,7 +170,7 @@ export default function Portal() {
               <h2><PenLine size={18} style={{ verticalAlign: '-3px' }} /> {L('Accepter la soumission', 'Accept the quote')}</h2>
               <div className="grid" style={{ gap: 12 }}>
                 <label className="field">{L('Ton nom complet', 'Your full name')}<input value={name} autoComplete="name" onChange={(e) => setName(e.target.value)} /></label>
-                <SignaturePad onChange={setSig} lang={lang} />
+                <SignaturePad onChange={setSig} lang={lang} typedName={name} />
                 <label className="check"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /> {L('J’accepte les travaux et le prix de', 'I accept the work and the price of')} {money(t.total)}.</label>
                 <button className="btn accent big" disabled={busy} onClick={accept}>{busy ? L('Envoi…', 'Sending…') : L('Accepter et signer', 'Accept and sign')}</button>
               </div>

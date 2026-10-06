@@ -1,4 +1,4 @@
-import { Calculator } from 'lucide-react';
+import { Calculator, Search } from 'lucide-react';
 import { useState } from 'react';
 import type { CalcRow, LineItem, Service } from '../lib/db';
 import { UNITS } from '../lib/db';
@@ -28,6 +28,9 @@ export function LineItems({ items, services, onChange, lang = 'fr' }: { items: L
     else upd(i, { code });
   };
 
+  const [q, setQ] = useState('');
+  const nq = q.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const shown = nq ? services.filter((x) => `${x.code} ${x.name}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(nq)) : services;
   const addService = (sv: Service) => {
     const last = items[items.length - 1];
     const line = lineFromService(sv, 1, lang);
@@ -90,8 +93,15 @@ export function LineItems({ items, services, onChange, lang = 'fr' }: { items: L
         <button className="btn" onClick={() => onChange([...items, emptyLine()])}>+ Ligne</button>
         <span className="small muted">Tape un code ou clique un service:</span>
       </div>
+      {services.length > 8 && (
+        <label className="svc-search">
+          <Search size={16} />
+          <input value={q} placeholder="Chercher un service (code ou nom)…" onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && shown[0]) { e.preventDefault(); addService(shown[0]); setQ(''); } }} aria-label="Chercher un service" />
+        </label>
+      )}
       <div className="svc-grid">
-        {services.map((s) => (
+        {shown.map((s) => (
           <button key={s.id} onClick={() => addService(s)} title={`${money(s.price)} / ${s.unit}${s.minimum ? ` · min. ${money(s.minimum)}` : ''}`}>
             <b>{s.code}</b>{s.name}
             <div className="small muted">{money(s.price)} / {s.unit}</div>
