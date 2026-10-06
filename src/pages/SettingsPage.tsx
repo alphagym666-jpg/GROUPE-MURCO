@@ -299,7 +299,9 @@ function AiSection({ s, up }: { s: Settings; up: (p: Partial<Settings>) => void 
       setResult(`Ça marche (${a.modelName}) — « ${r.text} »`);
     } catch (e) {
       const { aiErrorMessage } = await import('../lib/ai');
-      setResult(aiErrorMessage(e).replace(' J’utilise l’assistant de base.', ''));
+      const raw = e instanceof Error ? e.message : String(e);
+      const code = (e as { code?: string })?.code ?? '';
+      setResult(`${aiErrorMessage(e).replace(' J’utilise l’assistant de base.', '')} — DÉTAIL: ${code} ${raw}`.slice(0, 600));
     } finally {
       setBusy(false);
     }
