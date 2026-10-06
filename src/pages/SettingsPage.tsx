@@ -292,7 +292,10 @@ function AiSection({ s, up }: { s: Settings; up: (p: Partial<Settings>) => void 
     try {
       const { AiAssistant } = await import('../lib/ai');
       const a = new AiAssistant({ company: s.companyName, services: [], clients: () => [], today: new Date().toISOString().slice(0, 10), model: s.aiModel || undefined });
-      const r = await a.send('Test de connexion: réponds seulement « Prête! »');
+      const r = await Promise.race([
+        a.send('Test de connexion: réponds seulement « Prête! »'),
+        new Promise<never>((_, no) => setTimeout(() => no(new Error('timeout: aucune réponse de Google après 30 s')), 30000)),
+      ]);
       setResult(`Ça marche (${a.modelName}) — « ${r.text} »`);
     } catch (e) {
       const { aiErrorMessage } = await import('../lib/ai');
