@@ -209,6 +209,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      <AiSection s={s} up={up} />
       <MapsSection s={s} up={up} />
 
       <SyncSection />
@@ -277,6 +278,57 @@ export default function SettingsPage() {
       </div>
       <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn accent" onClick={save}>Enregistrer</button></div>
     </>
+  );
+}
+
+function AiSection({ s, up }: { s: Settings; up: (p: Partial<Settings>) => void }) {
+  const st = useSyncState();
+  const [result, setResult] = useState('');
+  const [busy, setBusy] = useState(false);
+  const on = s.aiAssistant !== false;
+  const test = async () => {
+    setBusy(true);
+    setResult('Test…');
+    try {
+      const { AiAssistant } = await import('../lib/ai');
+      const a = new AiAssistant({ company: s.companyName, services: [], clients: () => [], today: new Date().toISOString().slice(0, 10), model: s.aiModel || undefined });
+      const r = await a.send('Test de connexion: réponds seulement « Prête! »');
+      setResult(`Ça marche (${a.modelName}) — « ${r.text} »`);
+    } catch (e) {
+      const { aiErrorMessage } = await import('../lib/ai');
+      setResult(aiErrorMessage(e).replace(' J’utilise l’assistant de base.', ''));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="card" id="ia">
+      <h2>Assistant IA</h2>
+      <p className="small muted">Tu parles normalement (« facture pour Denise, 60 pieds de gouttières »): l’assistant trouve le client, te demande ce qui manque et prépare tout. Tu confirmes toujours avant que ce soit créé. Il utilise Gemini (Google) à travers ton Firebase: pas de clé à gérer, et c’est gratuit ou presque pour ton volume.</p>
+      {!st.configured ? (
+        <div className="notice">Connecte d’abord la synchronisation Firebase (plus bas). Sans ça, l’assistant de base (sans IA) est utilisé.</div>
+      ) : (
+        <>
+          <label className="check"><input type="checkbox" checked={on} onChange={(e) => up({ aiAssistant: e.target.checked })} /> Utiliser l’assistant IA (sinon l’assistant de base, sans Internet)</label>
+          <div className="row" style={{ marginTop: 10 }}>
+            <button className="btn primary" disabled={busy || !on} onClick={test}>Tester</button>
+            <span className="small">{result}</span>
+          </div>
+          <details style={{ marginTop: 12 }}>
+            <summary><strong>L’activer dans Firebase (une seule fois, ~2 min)</strong></summary>
+            <ol className="small" style={{ lineHeight: 1.6 }}>
+              <li>Va sur <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer">console.firebase.google.com</a> et ouvre ton projet.</li>
+              <li>Dans le menu de gauche: <em>Créer (Build) → AI Logic</em> → « Commencer ».</li>
+              <li>Choisis <strong>Gemini Developer API</strong> (celle avec le volume gratuit) et confirme. Firebase active tout seul ce qu’il faut.</li>
+              <li>Reviens ici et clique « Tester ». C’est tout: ça marche sur ton téléphone aussi.</li>
+            </ol>
+            <label className="field" style={{ marginTop: 8 }}>Modèle (avancé — laisse vide)
+              <input value={s.aiModel ?? ''} placeholder="automatique (Gemini Flash)" onChange={(e) => up({ aiModel: e.target.value.trim() })} />
+            </label>
+          </details>
+        </>
+      )}
+    </div>
   );
 }
 

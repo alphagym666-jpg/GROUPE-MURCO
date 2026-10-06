@@ -566,3 +566,9 @@ function attach() {
     unsubs.push(u);
   }
 }
+
+/** L'app Firebase (pour l'assistant IA). null si la synchro n'est pas configurée. */
+export function firebaseApp(): FirebaseApp | null {
+  if (!app) startSync();
+  return app;
+}

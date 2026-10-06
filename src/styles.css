@@ -1291,6 +1291,18 @@ button.agh-ring:hover .fg { stroke: var(--amber-ink); }
   .vj-actions .btn.big { flex: 1; justify-content: center; }
 }
 .vj-ask { display: grid; justify-items: center; gap: 12px; text-align: center; padding: 24px 18px; }
+.vj-ai-tag { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .78rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); }
+.vj-ai-tag > span { display: inline-flex; align-items: center; gap: 6px; }
+.vj-ai-tag .btn { text-transform: none; letter-spacing: 0; }
+.vj-convo { width: 100%; display: flex; flex-direction: column; gap: 8px; text-align: left; max-height: 46vh; overflow-y: auto; padding: 2px; }
+.vj-msg { max-width: 86%; padding: 10px 14px; border-radius: 16px 16px 16px 4px; background: var(--surface-2); border: 1px solid var(--line); font-size: 1rem; line-height: 1.4; align-self: flex-start; }
+.vj-msg.me { align-self: flex-end; border-radius: 16px 16px 4px 16px; background: var(--brand); color: var(--brand-ink); border-color: transparent; }
+.vj-msg.typing { display: inline-flex; gap: 4px; padding: 14px 16px; }
+.vj-msg.typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: vjdot 1s infinite ease-in-out; }
+.vj-msg.typing i:nth-child(2) { animation-delay: .15s; }
+.vj-msg.typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes vjdot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .vj-msg.typing i { animation: none; } }
 .vj-bubble { position: relative; padding: 12px 16px; border-radius: 16px 16px 16px 4px; background: var(--surface-2); border: 1px solid var(--line); font-weight: 600; font-size: 1.05rem; }
 .vj-btn.small { width: 72px; height: 72px; }
 @media (max-width: 860px) {

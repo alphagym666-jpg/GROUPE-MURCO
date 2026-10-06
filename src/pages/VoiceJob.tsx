@@ -21,6 +21,7 @@ import { ConfirmList } from '../components/ConfirmList';
 import { RelanceModal } from '../components/RelanceModal';
 import { MicButton } from '../components/MicButton';
 import { Link } from 'react-router-dom';
+import { AiAssistant, aiConfigured, aiErrorMessage, type AiDoc } from '../lib/ai';
 
 const EXAMPLE = '« Véronique Girard, 12 rue des Pins à Laval, entretien de gouttières 60 pieds linéaires mardi à 9 h »';
 const IDEAS = ['Facture la job de Girard', 'Roy a payé comptant', '45 $ d’essence chez Petro-Canada', 'Déplace Roy à vendredi 9 h', 'J’ai fini la job chez Gagnon', 'Mon horaire demain', 'Combien j’ai fait ce mois-ci?', 'Qu’est-ce que j’ai à faire?', 'Relance les factures en retard'];
@@ -138,7 +139,102 @@ export default function VoiceJob() {
     }
   };
 
+  // ── Assistant IA (Gemini via Firebase): comprend la phrase, pose les questions, propose ──
+  const aiRef = useRef<AiAssistant | null>(null);
+  const aiOff = useRef(false); // l'IA a échoué dans cette session: assistant de base
+  const clientsRef = useRef(clients);
+  clientsRef.current = clients;
+  const [convo, setConvo] = useState<{ me: boolean; text: string }[]>([]);
+  const [thinking, setThinking] = useState(false);
+  const aiOn = !!s && aiConfigured(s.aiAssistant) && !aiOff.current;
+  const resetAi = () => {
+    aiRef.current = null;
+    setConvo([]);
+  };
+
+  const fromAi = (a: AiDoc): Draft => {
+    const c = a.clientId ? clients.find((x) => x.id === a.clientId) : undefined;
+    const items: LineItem[] = a.lines.map((l) => {
+      const sv = l.code ? services.find((x) => x.code.toUpperCase() === l.code) : undefined;
+      if (sv) {
+        const it = lineFromService(sv, l.quantity, c?.lang ?? 'fr');
+        return l.unitPrice != null ? { ...it, unitPrice: l.unitPrice } : it;
+      }
+      return { code: '', description: l.description || l.code || 'Travaux', quantity: l.quantity, unitPrice: l.unitPrice ?? 0 };
+    });
+    const invoice = a.type === 'facture';
+    return {
+      clientId: c?.id,
+      name: c?.name ?? a.name ?? '',
+      phone: a.phone ?? c?.phone ?? '',
+      address: a.address ?? c?.address ?? '',
+      geo: a.address ? undefined : c?.geo,
+      date: a.date ?? todayISO(),
+      time: a.time ?? '',
+      durationMin: 120,
+      items,
+      quote: a.type !== 'visite' && !invoice,
+      kind: a.type === 'visite' ? 'visite' : 'job',
+      docType: invoice ? 'invoice' : 'quote',
+      dateSaid: !!a.date || invoice || a.type === 'soumission',
+      noJob: invoice || (a.type === 'soumission' && !a.date),
+      addrIncomplete: false,
+    };
+  };
+
+  const aiTurn = async (text: string) => {
+    setProp(null);
+    setDone(null);
+    setHeard('');
+    setConvo((c) => [...c, { me: true, text }]);
+    setThinking(true);
+    try {
+      if (!aiRef.current) {
+        aiRef.current = new AiAssistant({
+          company: s?.companyName ?? '',
+          services: services.map((x) => ({ code: x.code, name: x.name, unit: x.unit, price: x.price })),
+          clients: () => clientsRef.current.map((c) => ({ id: c.id, name: c.name, address: c.address, phone: c.phone })),
+          today: todayISO(),
+          model: s?.aiModel || undefined,
+        });
+      }
+      const r = await aiRef.current.send(text);
+      if (r.text) setConvo((c) => [...c, { me: false, text: r.text }]);
+      if (r.kind === 'say') {
+        say(r.text, () => { if (voiceMode.current && speechSupported()) latest.current.mic('cmd', true); });
+      } else if (r.kind === 'doc') {
+        setFound(null);
+        const d = fromAi(r.doc);
+        proceed(d);
+        if (r.doc.address) autoAddress(r.doc.address);
+      } else {
+        setDraft(null);
+        void propose(r.intent).then(show).catch((e) => notify(errMsg(e), 'err'));
+      }
+    } catch (e) {
+      // IA pas activée / pas d'Internet: l'assistant de base prend le relais (sans perdre la phrase)
+      aiOff.current = true;
+      aiRef.current = null;
+      setConvo([]);
+      notify(aiErrorMessage(e), 'err');
+      basicAnalyse(text);
+    } finally {
+      setThinking(false);
+    }
+  };
+
+  // Document créé: la prochaine demande repart d'une conversation neuve
+  useEffect(() => {
+    if (done) resetAi();
+  }, [done]);
+
   const analyse = (text: string) => {
+    if (!text.trim()) return;
+    if (aiOn) return void aiTurn(text.trim());
+    basicAnalyse(text);
+  };
+
+  const basicAnalyse = (text: string) => {
     if (!text.trim()) return;
     setProp(null);
     const intent = detectIntent(text, clients, todayISO());
@@ -148,11 +244,19 @@ export default function VoiceJob() {
     const spokenNew = pj.isNew && pj.clientName.split(' ').length >= 2;
     // Une adresse ou des travaux dits = une job à créer, même si un mot ressemble à une autre commande
     const looksLikeJob = (!!pj.address || pj.lines.length > 0) && ['afaire', 'horaire', 'combien', 'fini', 'deplacer'].includes(intent.kind);
-    const create = intent.kind === 'planifier' || looksLikeJob || (intent.kind === 'facturer' && ((!intent.clientId && /\b(pour|chez|a|à)\s+\p{L}/iu.test(text)) || spokenNew));
+    // « Facture pour Denise, 60 pieds de gouttières »: les travaux sont dits → nouvelle facture directement
+    const create = intent.kind === 'planifier' || looksLikeJob || (intent.kind === 'facturer' && ((!intent.clientId && /\b(pour|chez|a|à)\s+\p{L}/iu.test(text)) || spokenNew || (!!intent.clientId && pj.lines.length > 0)));
     if (!create) {
       setDraft(null);
       setDone(null);
-      void propose(intent).then(show).catch((e) => notify(errMsg(e), 'err'));
+      void propose(intent).then((p) => {
+        // « Facture pour Denise » sans job à facturer: on part une nouvelle facture et on demande la job
+        const c = intent.kind === 'facturer' && intent.clientId ? clients.find((x) => x.id === intent.clientId) : undefined;
+        if (c && !p.confirm) {
+          return proceed({ clientId: c.id, name: c.name, phone: c.phone ?? '', address: c.address ?? '', geo: c.geo, date: todayISO(), time: '', durationMin: 120, items: [], quote: false, kind: 'job', docType: 'invoice', dateSaid: true, noJob: true, addrIncomplete: false });
+        }
+        show(p);
+      }).catch((e) => notify(errMsg(e), 'err'));
       return;
     }
     setProp(null);
@@ -281,8 +385,8 @@ export default function VoiceJob() {
   };
 
   // Dernières versions des fonctions (le micro les appelle à la fin, après plusieurs rendus)
-  const latest = useRef({ analyse, applyAnswer });
-  latest.current = { analyse, applyAnswer };
+  const latest = useRef({ analyse, applyAnswer, mic });
+  latest.current = { analyse, applyAnswer, mic };
 
   const create = async () => {
     if (!draft) return;
@@ -396,7 +500,7 @@ export default function VoiceJob() {
               {prop.links?.map((l) => <Link key={l.to} className="btn" to={l.to}>{l.label}</Link>)}
             </div>
           )}
-          <button className="btn small" style={{ marginTop: 10 }} onClick={() => { setProp(null); setHeard(''); }}>{prop.confirm ? 'Annuler' : 'Autre chose'}</button>
+          <button className="btn small" style={{ marginTop: 10 }} onClick={() => { setProp(null); setHeard(''); resetAi(); }}>{prop.confirm ? 'Annuler' : 'Autre chose'}</button>
         </div>
       )}
       {prop?.todo && <ConfirmList limit={8} />}
@@ -404,16 +508,29 @@ export default function VoiceJob() {
 
       {!draft && !done && (
         <div className="card vj-mic">
+          {aiOn && (
+            <div className="vj-ai-tag">
+              <span><Sparkles size={13} /> Assistant IA</span>
+              {convo.length > 0 && <button className="btn ghost small" onClick={resetAi}><RotateCcw size={13} /> Nouvelle demande</button>}
+            </div>
+          )}
+          {convo.length > 0 && (
+            <div className="vj-convo" aria-live="polite">
+              {convo.slice(-8).map((m, i) => <div key={i} className={`vj-msg ${m.me ? 'me' : ''}`}>{m.text}</div>)}
+              {thinking && <div className="vj-msg typing" aria-label="Je réfléchis"><i /><i /><i /></div>}
+            </div>
+          )}
           {speechSupported() && (
             <MicButton listening={listening} onClick={() => mic('cmd')} />
           )}
           <div className="vj-hint">{listening ? 'J’écoute… prends ton temps, appuie sur « Arrêter » quand t’as fini.' : speechSupported() ? 'Dis tout d’un coup, ou écris-le :' : 'Écris la phrase :'}</div>
-          {!prop && <div className="small muted">Une job: {EXAMPLE}</div>}
-          <div className={`vj-ideas ${prop ? 'hide' : ''}`}>
+          {!prop && !convo.length && <div className="small muted">Une job: {EXAMPLE}</div>}
+          <div className={`vj-ideas ${prop || convo.length ? 'hide' : ''}`}>
             {IDEAS.map((t) => <button key={t} onClick={() => { setHeard(t); analyse(t); }}>{t}</button>)}
           </div>
-          <textarea className="vj-text" value={heard} placeholder="Dis ou écris ce que tu veux: planifier, facturer, relancer, une dépense…" onChange={(e) => setHeard(e.target.value)} rows={3} />
-          {!listening && heard.trim() && <button className="btn accent big" onClick={() => analyse(heard)}><Check size={18} /> Analyser</button>}
+          <textarea className="vj-text" value={heard} placeholder={convo.length ? 'Ta réponse…' : 'Dis ou écris ce que tu veux: planifier, facturer, relancer, une dépense…'} onChange={(e) => setHeard(e.target.value)} rows={convo.length ? 2 : 3}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && heard.trim() && !thinking) { e.preventDefault(); analyse(heard); } }} />
+          {!listening && heard.trim() && <button className="btn accent big" disabled={thinking} onClick={() => analyse(heard)}><Check size={18} /> {convo.length ? 'Envoyer' : 'Analyser'}</button>}
         </div>
       )}
 
@@ -442,7 +559,7 @@ export default function VoiceJob() {
       {draft && !slot && (
         <>
           <div className="card">
-            <div className="vj-said small muted">« {heard} »</div>
+            {heard.trim() && <div className="vj-said small muted">« {heard} »</div>}
             <h2 style={{ marginTop: 8 }}>Ce que j’ai compris {draft.kind === 'visite' && <span className="badge blue">visite d’estimation</span>}</h2>
             <div className="form-grid">
               <div className="field full">
@@ -460,13 +577,17 @@ export default function VoiceJob() {
                   <MapPin size={16} /> <span>Adresse trouvée : <strong>{found.label}</strong></span> <span className="vj-use">Utiliser</span>
                 </button>
               )}
-              <label className="field">Journée<input type="date" value={draft.date} onChange={(e) => e.target.value && up({ date: e.target.value })} /></label>
-              <label className="field">Heure<input type="time" value={draft.time} onChange={(e) => up({ time: e.target.value })} /></label>
-              <label className="field">Durée
-                <select value={draft.durationMin} onChange={(e) => up({ durationMin: Number(e.target.value) })}>
-                  {[30, 60, 90, 120, 180, 240, 360, 480].map((m) => <option key={m} value={m}>{m < 60 ? `${m} min` : `${m / 60} h`}</option>)}
-                </select>
-              </label>
+              {!draft.noJob && (
+                <>
+                  <label className="field">Journée<input type="date" value={draft.date} onChange={(e) => e.target.value && up({ date: e.target.value })} /></label>
+                  <label className="field">Heure<input type="time" value={draft.time} onChange={(e) => up({ time: e.target.value })} /></label>
+                  <label className="field">Durée
+                    <select value={draft.durationMin} onChange={(e) => up({ durationMin: Number(e.target.value) })}>
+                      {[30, 60, 90, 120, 180, 240, 360, 480].map((m) => <option key={m} value={m}>{m < 60 ? `${m} min` : `${m / 60} h`}</option>)}
+                    </select>
+                  </label>
+                </>
+              )}
             </div>
           </div>
           <div className="card">
@@ -476,7 +597,7 @@ export default function VoiceJob() {
           </div>
           {draft.docType !== 'invoice' && !draft.noJob && <label className="check" style={{ margin: '0 4px 12px' }}><input type="checkbox" checked={draft.quote} onChange={(e) => up({ quote: e.target.checked })} /> Préparer la soumission en même temps</label>}
           <div className="vj-actions">
-            <button className="btn" onClick={() => { setDraft(null); }}><RotateCcw size={16} /> Recommencer</button>
+            <button className="btn" onClick={() => { setDraft(null); resetAi(); }}><RotateCcw size={16} /> Recommencer</button>
             <button className="btn accent big" disabled={busy} onClick={() => void create()}><CalendarCheck size={18} /> {busy ? '…' : draft.docType === 'invoice' ? 'Créer la facture' : draft.noJob ? 'Créer la soumission' : draft.quote ? 'Planifier + soumission' : 'Planifier la job'}</button>
           </div>
         </>
@@ -496,7 +617,7 @@ export default function VoiceJob() {
             {done.quoteId && <button className="btn accent" onClick={() => nav(`/doc/${done.quoteId}`)}><ClipboardList size={17} /> Voir et envoyer la soumission</button>}
             {!done.invoiceId && <button className="btn" onClick={() => void invoice()}><FileText size={17} /> Faire la facture</button>}
             {done.jobId && <button className="btn" onClick={() => nav(`/agenda?d=${done.date}&v=jour`)}><CalendarDays size={17} /> Voir l’agenda</button>}
-            <button className="btn" onClick={() => setDone(null)}><Mic size={17} /> Autre chose</button>
+            <button className="btn" onClick={() => { setDone(null); resetAi(); }}><Mic size={17} /> Autre chose</button>
           </div>
           {!s.homeAddress && <p className="small muted" style={{ marginTop: 10 }}>Ajoute ton adresse dans Paramètres pour que les km se calculent tout seuls.</p>}
         </div>
