@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import {
   ArrowLeft, ArrowRight, Banknote, CreditCard, Calculator, Check, CircleCheck, FileText, Mail, Mic, Minus, Plus, Search, Share2, UserPlus, Zap,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AddressInput } from '../components/AddressInput';
 import { CalcModal, lineFromService } from '../components/LineItems';
@@ -95,8 +95,9 @@ export default function Express() {
 
   // « jobOnly »: réponse à « C'est quoi la job? » (on n'ajoute que des lignes)
   const micFor = useRef<'all' | 'job'>('all');
+  const listeningRef = useRef(false);
   const startMic = (forWhat: 'all' | 'job' = 'all') => {
-    if (listening) {
+    if (listeningRef.current) {
       rec.current?.stop();
       return;
     }
@@ -105,13 +106,20 @@ export default function Express() {
     window.speechSynthesis?.cancel();
     const r = listen(
       (text) => setHeard(text),
-      (err) => {
+      (err, text) => {
+        listeningRef.current = false;
         setListening(false);
-        if (err) notify(err, 'err');
+        const t = (text ?? '').trim();
+        if (t) {
+          setHeard(t);
+          latestApply.current(t);
+        } else if (err) notify(err, 'err');
+        else notify('Je n’ai rien entendu. Appuie sur « Dicter », parle, puis « Arrêter ».', 'err');
       },
     );
     if (!r) return notify('La dictée n’est pas disponible sur ce navigateur.', 'err');
     rec.current = r;
+    listeningRef.current = true;
     setListening(true);
   };
 
@@ -176,13 +184,8 @@ export default function Express() {
     else speak('Parfait. Vérifie et finalise.');
   };
 
-  // Fin de la dictée → on l'utilise tout de suite
-  const wasListening = useRef(false);
-  useEffect(() => {
-    if (wasListening.current && !listening && heard.trim()) applyDictation(heard);
-    wasListening.current = listening;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listening]);
+  const latestApply = useRef(applyDictation);
+  latestApply.current = applyDictation;
 
   const create = async (then: 'share' | 'mail' | 'none') => {
     if (!lines.length) return notify('Ajoute au moins un code.', 'err');

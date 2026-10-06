@@ -214,10 +214,21 @@ export default function VoiceJob() {
     window.speechSynthesis?.cancel();
     const r = listen(
       (text) => (to === 'cmd' ? setHeard(text) : setAnswer(text)),
-      (err) => {
+      (err, text) => {
         listeningRef.current = false;
         setListening(false);
-        if (err && !(auto && /rien entendu/.test(err))) notify(err, 'err');
+        const t = (text ?? '').trim();
+        if (t) {
+          // Le texte complet (même la fin dite juste avant « Arrêter »)
+          if (to === 'cmd') {
+            setHeard(t);
+            latest.current.analyse(t);
+          } else {
+            setAnswer(t);
+            latest.current.applyAnswer(t);
+          }
+        } else if (err && !(auto && /rien entendu/.test(err))) notify(err, 'err');
+        else if (!auto) notify('Je n’ai rien entendu. Appuie sur « Commencer à parler », parle, puis « Arrêter ». Tu peux aussi l’écrire.', 'err');
       },
     );
     if (!r) return notify('La dictée n’est pas disponible sur ce navigateur — écris la phrase dans la case.', 'err');
@@ -225,17 +236,6 @@ export default function VoiceJob() {
     listeningRef.current = true;
     setListening(true);
   };
-
-  // Fin de la dictée → on analyse tout de suite
-  const wasListening = useRef(false);
-  useEffect(() => {
-    if (wasListening.current && !listening) {
-      if (target.current === 'cmd' && heard) analyse(heard);
-      if (target.current === 'answer' && answer) applyAnswer(answer);
-    }
-    wasListening.current = listening;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listening]);
 
   /** Réponse à la question posée → on remplit, puis prochaine question. */
   const applyAnswer = (text: string) => {
@@ -272,6 +272,10 @@ export default function VoiceJob() {
     const w = findWhen(wordsToNumbers(t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()), todayISO());
     proceed({ ...draft, date: w.date, time: w.time ?? draft.time, dateSaid: true, noJob: false });
   };
+
+  // Dernières versions des fonctions (le micro les appelle à la fin, après plusieurs rendus)
+  const latest = useRef({ analyse, applyAnswer });
+  latest.current = { analyse, applyAnswer };
 
   const create = async () => {
     if (!draft) return;
