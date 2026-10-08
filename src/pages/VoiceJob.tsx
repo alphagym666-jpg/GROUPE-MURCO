@@ -22,7 +22,8 @@ import { ConfirmList } from '../components/ConfirmList';
 import { RelanceModal } from '../components/RelanceModal';
 import { MicButton } from '../components/MicButton';
 import { Link } from 'react-router-dom';
-import { AiAssistant, aiConfigured, aiErrorMessage, type AiDoc } from '../lib/ai';
+import { AiAssistant, aiConfigured, aiErrorMessage, type AiDoc, type AiResult } from '../lib/ai';
+import { liveSupported, startLive } from '../lib/live';
 import { createOrder } from '../lib/orders';
 
 const EXAMPLE = '« Véronique Girard, 12 rue des Pins à Laval, entretien de gouttières 60 pieds linéaires mardi à 9 h »';
@@ -104,6 +105,10 @@ export default function VoiceJob() {
   const services = useLiveQuery(() => db.services.orderBy('order').toArray(), []) ?? [];
   const clients = useLiveQuery(() => db.clients.toArray(), []) ?? [];
   const [listening, setListening] = useState(false);
+  const [live, setLive] = useState(false); // conversation à voix haute avec l'IA (comme ChatGPT)
+  const liveRef = useRef<{ stop: () => Promise<void> } | null>(null);
+  const liveTurn = useRef<(r: AiResult) => void>(() => undefined);
+  useEffect(() => () => void liveRef.current?.stop(), []);
   const [heard, setHeard] = useState('');
   const [draft, setDraft] = useState<Draft | null>(null);
   const [found, setFound] = useState<{ label: string; geo: GeoPoint } | null>(null);
@@ -197,7 +202,7 @@ export default function VoiceJob() {
     };
   };
 
-  const aiTurn = async (text: string) => {
+  const aiTurn = async (text: string, preset?: AiResult) => {
     setProp(null);
     setDone(null);
     setHeard('');
@@ -213,7 +218,7 @@ export default function VoiceJob() {
           model: s?.aiModel || undefined,
         });
       }
-      const r = await aiRef.current.send(text);
+      const r = preset ?? (await aiRef.current.send(text));
       if (r.text) setConvo((c) => [...c, { me: false, text: r.text }]);
       if (r.kind === 'say') {
         say(r.text, () => { if (voiceMode.current && speechSupported()) latest.current.mic('cmd', true); });
@@ -338,6 +343,38 @@ export default function VoiceJob() {
       say(QUESTIONS[next](d), () => { if (voiceMode.current && speechSupported()) mic('answer', true); });
     } else {
       say(d.docType === 'invoice' ? 'Parfait. Vérifie, puis crée la facture.' : 'Parfait. Vérifie, puis confirme.');
+    }
+  };
+
+  liveTurn.current = (r) => void aiTurn('À voix haute…', r);
+  const toggleLive = async () => {
+    if (liveRef.current) {
+      const h = liveRef.current;
+      liveRef.current = null;
+      setLive(false);
+      await h.stop();
+      return;
+    }
+    window.speechSynthesis?.cancel();
+    setLive(true);
+    try {
+      liveRef.current = await startLive({
+        company: s?.companyName ?? '',
+        today: todayISO(),
+        services: services.map((x) => ({ code: x.code, name: x.name, unit: x.unit, price: x.price })),
+        clients: () => clientsRef.current.map((c) => ({ id: c.id, name: c.name, address: c.address, phone: c.phone })),
+        onResult: (r) => liveTurn.current(r),
+        onClose: () => {
+          liveRef.current = null;
+          setLive(false);
+        },
+      });
+    } catch (e) {
+      liveRef.current = null;
+      setLive(false);
+      const m = e instanceof Error ? e.message : String(e);
+      const nm = (e as { name?: string })?.name ?? '';
+      notify(/NotAllowed|Permission|denied/i.test(nm + ' ' + m) ? 'Micro refusé: autorise le micro pour l’app.' : 'Mode conversation indisponible: ' + m.slice(0, 160), 'err');
     }
   };
 
@@ -559,7 +596,13 @@ export default function VoiceJob() {
               {thinking && <div className="vj-msg typing" aria-label="Je réfléchis"><i /><i /><i /></div>}
             </div>
           )}
-          {speechSupported() && (
+          {aiOn && liveSupported() && (
+            <button type="button" className={`btn ${live ? 'danger' : 'accent'} big`} onClick={() => void toggleLive()}>
+              <Mic size={18} /> {live ? 'Terminer la conversation' : 'Parler librement'}
+            </button>
+          )}
+          {live && <div className="vj-hint">Je t’écoute — parle naturellement, tu peux m’interrompre.</div>}
+          {speechSupported() && !live && (
             <MicButton listening={listening} onClick={() => mic('cmd')} />
           )}
           <div className="vj-hint">{listening ? 'J’écoute… prends ton temps, appuie sur « Arrêter » quand t’as fini.' : speechSupported() ? 'Dis tout d’un coup, ou écris-le :' : 'Écris la phrase :'}</div>
