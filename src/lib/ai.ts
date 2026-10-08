@@ -40,7 +40,7 @@ export type AiResult =
   | { kind: 'doc'; doc: AiDoc; text: string }
   | { kind: 'intent'; intent: Intent; text: string };
 
-const TOOLS: FunctionDeclaration[] = [
+export const TOOLS: FunctionDeclaration[] = [
   {
     name: 'chercher_client',
     description: 'Cherche un client existant par son nom (la dictée peut mal écrire le nom: le résultat tolère les fautes). À utiliser dès qu’un nom de client est dit.',
@@ -114,7 +114,7 @@ const TOOLS: FunctionDeclaration[] = [
   },
 ];
 
-function systemPrompt(company: string, services: AiService[], today: string): string {
+export function systemPrompt(company: string, services: AiService[], today: string): string {
   const d = new Date(today + 'T12:00:00');
   const day = d.toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const list = services.map((s) => `${s.code}: ${s.name} (${s.price} $ / ${s.unit})`).join('\n');
