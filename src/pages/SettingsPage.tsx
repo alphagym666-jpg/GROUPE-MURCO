@@ -442,7 +442,7 @@ function SyncSection() {
       {!st.configured ? (
         <>
           <p className="small muted">Synchronise automatiquement factures, clients, km, reçus (avec photos) et paramètres entre tous tes appareils, en temps réel. Ça marche aussi sans Internet: tout se met à jour au retour du réseau.</p>
-          <label className="field">Configuration Firebase (copiée de la console)
+          <label className="field">Configuration Firebase (copiée de la console) — ou colle le lien « Connecter ton téléphone » d’un autre appareil
             <textarea rows={6} value={cfgText} placeholder={'const firebaseConfig = {\n  apiKey: "…",\n  authDomain: "…",\n  projectId: "…",\n  appId: "…"\n};'} onChange={(e) => setCfgText(e.target.value)} />
           </label>
           <button className="btn primary" style={{ marginTop: 8 }} onClick={saveCfg}>Enregistrer la configuration</button>

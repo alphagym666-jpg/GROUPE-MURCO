@@ -142,12 +142,25 @@ export default function VoiceJob() {
 
   // ── Assistant IA (Gemini via Firebase): comprend la phrase, pose les questions, propose ──
   const aiRef = useRef<AiAssistant | null>(null);
-  const aiOff = useRef(false); // l'IA a échoué dans cette session: assistant de base
+  // IA en pause après une erreur (limite, réseau…): l'assistant de base prend le relais, puis l'IA se reconnecte toute seule
+  const [aiPause, setAiPause] = useState<{ until: number; why: string } | null>(null);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!aiPause) return;
+    const t = setTimeout(() => tick((n) => n + 1), Math.max(0, aiPause.until - Date.now()) + 50);
+    return () => clearTimeout(t);
+  }, [aiPause]);
   const clientsRef = useRef(clients);
   clientsRef.current = clients;
   const [convo, setConvo] = useState<{ me: boolean; text: string }[]>([]);
   const [thinking, setThinking] = useState(false);
-  const aiOn = !!s && aiConfigured(s.aiAssistant) && !aiOff.current;
+  const aiReady = !!s && aiConfigured(s.aiAssistant);
+  const aiOn = aiReady && (!aiPause || Date.now() >= aiPause.until);
+  const reconnectAi = () => {
+    setAiPause(null);
+    aiRef.current = null;
+    setConvo([]);
+  };
   const resetAi = () => {
     aiRef.current = null;
     setConvo([]);
@@ -219,10 +232,13 @@ export default function VoiceJob() {
       }
     } catch (e) {
       // IA pas activée / pas d'Internet: l'assistant de base prend le relais (sans perdre la phrase)
-      aiOff.current = true;
+      const msg = aiErrorMessage(e);
+      // Pause courte: une connexion lente ou la limite du moment ne coupent plus l'IA jusqu'à la fermeture de l'app
+      const ms = /limite/i.test(msg) ? 10 * 60_000 : /pas encore activé/i.test(msg) ? 2 * 60_000 : /Internet|délai/i.test(msg) ? 30_000 : 60_000;
+      setAiPause({ until: Date.now() + ms, why: msg.replace(/^Assistant IA: /, '').replace(/ ?J’utilise l’assistant de base\.?/, '') });
       aiRef.current = null;
       setConvo([]);
-      notify(aiErrorMessage(e), 'err');
+      notify(msg, 'err');
       basicAnalyse(text);
     } finally {
       setThinking(false);
@@ -243,6 +259,13 @@ export default function VoiceJob() {
   const basicAnalyse = (text: string) => {
     if (!text.trim()) return;
     setProp(null);
+    // « Bonjour », « allo », « merci »: rien à faire — on ne crée pas un client nommé « Bonjour »
+    if (/^\s*(bonjour|bonsoir|salut|allo|all[ôo]|hey|yo|hello|coucou|merci|ok|test)\b[\s!.,?]*(toi|l[aà]|ma belle|mon chum)?[\s!.,?]*$/i.test(text)) {
+      setDraft(null);
+      setDone(null);
+      show({ title: '', say: 'Salut! Dis-moi ce que tu veux faire: planifier une job, faire une facture, noter un paiement, une dépense…' });
+      return;
+    }
     const intent = detectIntent(text, clients, todayISO());
     // « Facture pour Nathalie Bouchard… » (nouveau client): on crée tout
     // Le nom dit ne correspond à aucun client (« Nathalie Bouchard » ≠ « Clinique Bouchard »): nouveau client
@@ -494,6 +517,12 @@ export default function VoiceJob() {
         </div>
       </div>
 
+      {aiReady && !aiOn && aiPause && (
+        <div className="vj-ai-pause">
+          <span><b>Assistant de base</b> — l’IA est en pause: {aiPause.why}</span>
+          <button className="btn small" onClick={reconnectAi}><RotateCcw size={13} /> Reconnecter l’IA</button>
+        </div>
+      )}
       <div ref={topRef} style={{ scrollMarginTop: 72 }} />
       {prop && (
         <div className="card vj-prop">

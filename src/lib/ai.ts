@@ -9,7 +9,8 @@ import { firebaseApp, getFirebaseConfig } from './sync';
 export { findClients };
 
 /** Modèles essayés dans l'ordre (le premier qui existe pour le projet). */
-const MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash'];
+// Le dernier (« lite ») a la plus grande limite gratuite: il prend le relais quand les autres sont à bout.
+const MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 
 /** Délai max d'une réponse de l'IA: sans ça, une connexion bloquée (app mobile) attend sans fin. */
 export const AI_TIMEOUT_MS = 20000;
@@ -144,7 +145,7 @@ export function aiConfigured(enabled?: boolean): boolean {
 export function aiErrorMessage(e: unknown): string {
   const m = e instanceof Error ? e.message : String(e);
   const code = (e as { code?: string })?.code ?? '';
-  if (/quota|429|RESOURCE_EXHAUSTED/i.test(m)) return 'La limite gratuite de l’IA est atteinte pour aujourd’hui (20 demandes par jour). Elle revient demain. J’utilise l’assistant de base.';
+  if (/quota|429|RESOURCE_EXHAUSTED/i.test(m)) return 'La limite gratuite de l’IA est atteinte pour le moment (tous les modèles essayés). Elle se reconnecte toute seule plus tard. J’utilise l’assistant de base.';
   if (/api-not-enabled|firebasevertexai|generativelanguage|AI Logic|PERMISSION_DENIED|403/i.test(code + m)) return 'L’assistant IA n’est pas encore activé dans Firebase (Paramètres → Assistant IA). J’utilise l’assistant de base.';
   if (/timeout|timed out|abort/i.test(m)) return 'L’IA ne répond pas (délai dépassé): la connexion à Google est bloquée ou trop lente. J’utilise l’assistant de base.';
   if (/fetch|network|Failed to fetch|offline/i.test(m)) return 'Pas d’Internet: j’utilise l’assistant de base.';

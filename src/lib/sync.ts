@@ -105,6 +105,9 @@ export function useSyncState(): SyncState {
 export function parseFirebaseConfig(text: string): FirebaseConfig | null {
   const t = text.trim();
   if (!t) return null;
+  // Le lien « Connecter ton téléphone » collé tel quel (l'app Android n'ouvre pas les liens web)
+  const link = t.match(/[?&]sync=([^&\s]+)/);
+  if (link) return configFromLink(link[1]);
   try {
     const j = JSON.parse(t);
     if (j.apiKey && j.projectId) return j;
