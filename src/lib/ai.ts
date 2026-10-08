@@ -10,7 +10,7 @@ export { findClients };
 
 /** Modèles essayés dans l'ordre (le premier qui existe pour le projet). */
 // Le dernier (« lite ») a la plus grande limite gratuite: il prend le relais quand les autres sont à bout.
-const MODELS = ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'];
+const MODELS = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
 
 /** Délai max d'une réponse de l'IA: sans ça, une connexion bloquée (app mobile) attend sans fin. */
 export const AI_TIMEOUT_MS = 20000;
