@@ -1,7 +1,7 @@
 // Assistant IA: Gemini Flash via Firebase AI Logic (pas de clé à gérer, pas de serveur à nous).
 // L'IA comprend la phrase, cherche le client, pose les questions qui manquent, puis PROPOSE:
 // rien n'est créé sans que l'utilisateur confirme dans l'app.
-import { getAI, getGenerativeModel, GoogleAIBackend, Schema, type ChatSession, type FunctionCall, type FunctionDeclaration, type Part } from 'firebase/ai';
+import { getAI, getGenerativeModel, VertexAIBackend, Schema, type ChatSession, type FunctionCall, type FunctionDeclaration, type Part } from 'firebase/ai';
 import type { Intent, IntentKind } from './assistant';
 import { findClients } from './fuzzy';
 import { firebaseApp, getFirebaseConfig } from './sync';
@@ -167,7 +167,7 @@ export class AiAssistant {
   private open(model: string) {
     const app = firebaseApp();
     if (!app) throw new Error('Firebase n’est pas configuré');
-    const ai = getAI(app, { backend: new GoogleAIBackend() });
+    const ai = getAI(app, { backend: new VertexAIBackend('global') });
     const gm = getGenerativeModel(ai, {
       model,
       systemInstruction: systemPrompt(this.ctx.company, this.ctx.services, this.ctx.today),
@@ -288,7 +288,7 @@ export class AiAssistant {
 export async function aiWrite(opts: { company: string; owner: string; client: string; channel: 'texto' | 'courriel'; intent: string; history: string[]; model?: string }): Promise<string> {
   const app = firebaseApp();
   if (!app) throw new Error('Firebase n’est pas configuré');
-  const ai = getAI(app, { backend: new GoogleAIBackend() });
+  const ai = getAI(app, { backend: new VertexAIBackend('global') });
   const prompt = `Tu rédiges un ${opts.channel === 'texto' ? 'texto (2 ou 3 phrases maximum)' : 'courriel court (sans objet)'} de ${opts.owner || 'le patron'} de ${opts.company || 'l’entreprise'} à son client ${opts.client}.
 Ton: professionnel, chaleureux, français du Québec, vouvoiement. Pas de markdown, pas de placeholder entre crochets, signe avec le prénom${opts.channel === 'courriel' ? ' et le nom de l’entreprise' : ''}.
 Derniers échanges (du plus ancien au plus récent):
