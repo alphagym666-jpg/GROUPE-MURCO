@@ -11,6 +11,7 @@ import { db, getSettings, takeNextNumber, type Doc, type GeoPoint, type LineItem
 import { suggestAddresses } from '../lib/geo';
 import { useSettings } from '../lib/hooks';
 import { listen, speechSupported, type Listening } from '../lib/speech';
+import { hearingSupported, listenCloud, setHearingHints } from '../lib/hearing';
 import { addDays, docTotals, lineAmount, money, todayISO } from '../lib/utils';
 import { parseDictation } from '../lib/voice';
 import { findWhen, parseJobCommand } from '../lib/voiceJob';
@@ -352,7 +353,10 @@ export default function VoiceJob() {
       setDone(null);
     } else setAnswer('');
     window.speechSynthesis?.cancel();
-    const r = listen(
+    // Écoute intelligente: la voix est transcrite par Gemini (bien plus juste que la dictée du téléphone)
+    setHearingHints([...clientsRef.current.map((c) => c.name), ...services.map((x) => x.name)]);
+    const useCloud = aiOn && hearingSupported();
+    const r = (useCloud ? listenCloud : listen)(
       (text) => (to === 'cmd' ? setHeard(text) : setAnswer(text)),
       (err, text) => {
         listeningRef.current = false;
