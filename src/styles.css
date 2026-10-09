@@ -1588,3 +1588,22 @@ button.agh-ring:hover .fg { stroke: var(--amber-ink); }
 .modal-head .btn { flex: none; }
 .vj-ai-pause { width: 100%; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--amber) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--amber) 35%, var(--line)); text-align: left; font-size: 0.88rem; }
 .vj-ai-pause span { flex: 1; min-width: 180px; }
+
+
+/* ===================== Lisibilité et simplicité (refonte) ===================== */
+/* Blocs de job: couleur franche, texte plus gros, bien contrasté */
+.jb { background: color-mix(in srgb, var(--c) 24%, var(--surface)); border: 1px solid color-mix(in srgb, var(--c) 45%, var(--line)); border-left: 6px solid var(--c); font-size: 0.82rem; padding: 6px 9px; }
+.jb:hover { background: color-mix(in srgb, var(--c) 34%, var(--surface)); }
+.jb .jb-name { font-size: 0.9rem; font-weight: 700; }
+.jb .jb-time { color: var(--ink); font-size: 0.78rem; }
+.jb .jb-s { color: color-mix(in srgb, var(--ink) 80%, var(--muted)); font-size: 0.78rem; }
+.jb .jb-money { color: var(--ink); }
+.jb.fait, .jb.facture { opacity: 0.7; }
+.type-ico { color: color-mix(in srgb, var(--tc, var(--muted)) 90%, var(--ink)); }
+/* Légende des couleurs de l'agenda */
+.ag-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 14px; font-size: 0.84rem; color: var(--ink); }
+.ag-legend > span { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; }
+.ag-legend .dot { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+/* Menu de gauche: sections */
+.nav-group-box + .nav-group-box { margin-top: 6px; }
+.nav-group { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); padding: 14px 14px 5px; }
