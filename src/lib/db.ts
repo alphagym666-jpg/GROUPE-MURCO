@@ -743,9 +743,16 @@ export const DEFAULT_SERVICES: Omit<Service, 'id'>[] = [
   { code: 'DEP', name: 'Frais de déplacement', unit: 'forfait', price: 25, minimum: 0, notes: 'Clients plus loin.' },
 ].map((x, i) => ({ ...x, order: i }));
 
+// Réglages propres à Groupe Murco, remis automatiquement si un appareil neuf les a vides (identifiants publics, pas des secrets).
+const MURCO_GOOGLE_CLIENT_ID = '488580024294-i1n3gktj5jksahre2j08gomkfia411ds.apps.googleusercontent.com';
+const MURCO_PAYMENTS_ENDPOINT = 'https://northamerica-northeast1-murco-9658e.cloudfunctions.net';
+export function withMurcoDefaults(s: Settings): Settings {
+  return { ...s, googleClientId: s.googleClientId || MURCO_GOOGLE_CLIENT_ID, paymentsEndpoint: s.paymentsEndpoint || MURCO_PAYMENTS_ENDPOINT };
+}
+
 export async function getSettings(): Promise<Settings> {
   const s = await db.settings.get('main');
-  return { ...DEFAULT_SETTINGS, ...(s ?? {}) };
+  return withMurcoDefaults({ ...DEFAULT_SETTINGS, ...(s ?? {}) });
 }
 
 export async function saveSettings(patch: Partial<Settings>): Promise<void> {
