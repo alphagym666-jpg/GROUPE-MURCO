@@ -39,6 +39,8 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- Dictée de la facture -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Exigée par Capacitor (avec RECORD_AUDIO) pour donner le micro à la page web: sans elle, le micro est toujours refusé -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />

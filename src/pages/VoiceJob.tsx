@@ -12,6 +12,7 @@ import { suggestAddresses } from '../lib/geo';
 import { useSettings } from '../lib/hooks';
 import { listen, speechSupported, type Listening } from '../lib/speech';
 import { hearingSupported, listenCloud, setHearingHints } from '../lib/hearing';
+import { isNative } from '../lib/native';
 import { addDays, docTotals, lineAmount, money, todayISO } from '../lib/utils';
 import { parseDictation } from '../lib/voice';
 import { findWhen, parseJobCommand } from '../lib/voiceJob';
@@ -374,7 +375,9 @@ export default function VoiceJob() {
       setLive(false);
       const m = e instanceof Error ? e.message : String(e);
       const nm = (e as { name?: string })?.name ?? '';
-      notify(/NotAllowed|Permission|denied/i.test(nm + ' ' + m) ? 'Micro refusé: autorise le micro pour l’app.' : 'Mode conversation indisponible: ' + m.slice(0, 160), 'err');
+      const denied = /NotAllowed|Permission|denied/i.test(nm + ' ' + m);
+      // L'ancienne app Android bloque le micro de la page même si tu l'as accepté: il faut installer la nouvelle version
+      notify(denied && isNative() ? 'Le mode conversation demande la nouvelle version de l’app (réinstalle-la). En attendant, « Commencer à parler » marche.' : denied ? 'Micro refusé: autorise le micro pour l’app.' : 'Mode conversation indisponible: ' + m.slice(0, 160), 'err');
     }
   };
 

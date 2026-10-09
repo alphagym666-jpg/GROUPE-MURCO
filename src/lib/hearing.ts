@@ -2,10 +2,12 @@
 // surtout en français québécois, avec les noms de clients et de services).
 import { getAI, getGenerativeModel, VertexAIBackend } from 'firebase/ai';
 import { firebaseApp } from './sync';
-import type { Listening, OnEnd } from './speech';
+import { listen, type Listening, type OnEnd } from './speech';
 
 const MODELS = ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.8-flash'];
 let hints: string[] = [];
+// Micro web refusé (ex.: ancienne app Android): on reste sur la dictée du téléphone pour le reste de la session.
+let webMicDenied = false;
 
 /** Noms de clients et de services: aident Gemini à bien écrire ce qu'il entend. */
 export function setHearingHints(list: string[]) {
@@ -13,7 +15,7 @@ export function setHearingHints(list: string[]) {
 }
 
 export function hearingSupported(): boolean {
-  return typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined';
+  return !webMicDenied && typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined';
 }
 
 function toBase64(blob: Blob): Promise<string> {
@@ -52,6 +54,7 @@ async function transcribe(blob: Blob): Promise<string> {
 export function listenCloud(onText: (text: string, final: boolean) => void, onEnd: OnEnd): Listening | null {
   let rec: MediaRecorder | null = null;
   let stream: MediaStream | null = null;
+  let fallback: Listening | null = null;
   let stopRequested = false;
   const chunks: Blob[] = [];
   const release = () => stream?.getTracks().forEach((t) => t.stop());
@@ -80,11 +83,18 @@ export function listenCloud(onText: (text: string, final: boolean) => void, onEn
       mr.start();
       if (stopRequested) mr.stop();
     })
-    .catch(() => onEnd('Micro refusé: autorise le micro pour cette app.'));
+    .catch(() => {
+      // Le téléphone bloque l'enregistrement web: on passe à sa dictée à lui, sans rien demander de plus.
+      webMicDenied = true;
+      if (stopRequested) return onEnd('Je n’ai rien entendu.');
+      fallback = listen(onText, onEnd);
+      if (!fallback) onEnd('Micro refusé: autorise le micro pour cette app dans les réglages du téléphone.');
+    });
   return {
     stop: () => {
       stopRequested = true;
-      if (rec && rec.state !== 'inactive') rec.stop();
+      if (fallback) fallback.stop();
+      else if (rec && rec.state !== 'inactive') rec.stop();
     },
   };
 }
