@@ -35,9 +35,11 @@ export default function SettingsPage() {
   const st = useSyncState();
   const [params] = useSearchParams();
   // Arrivée depuis la liste « Démarrage »: aller directement à la bonne section
+  const scrolled = useRef('');
   useEffect(() => {
     const sec = params.get('s');
-    if (!sec || !s) return;
+    if (!sec || !s || scrolled.current === sec) return; // une seule fois: sinon la page remonte à chaque lettre tapée
+    scrolled.current = sec;
     const t = setTimeout(() => document.getElementById(sec)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
     return () => clearTimeout(t);
   }, [params, s]);
