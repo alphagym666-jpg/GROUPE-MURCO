@@ -488,6 +488,29 @@ async function applyRemote(table: SyncTable, remote: Rec) {
   const local = (await t.get(key)) as Rec | undefined;
   const ru = remote._u ?? 0;
   const lu = local?._u ?? -1;
+  // Un appareil neuf envoie des réglages vides, jugés plus récents: ils ne doivent jamais effacer une clé déjà enregistrée
+  // (clé Google Maps, ID Gmail, adresse du paiement par carte).
+  if (table === 'settings' && local && !remote._deleted) {
+    const PROTECTED = /(Key|ClientId|Endpoint)$/;
+    const newer = lu > ru ? local : remote;
+    const older = lu > ru ? remote : local;
+    const merged: Rec = { ...newer };
+    let changed = false;
+    for (const k of Object.keys(older)) {
+      const nv = merged[k];
+      const ov = older[k];
+      if (PROTECTED.test(k) && (nv === '' || nv === null || nv === undefined) && typeof ov === 'string' && ov !== '') {
+        merged[k] = ov;
+        changed = true;
+      }
+    }
+    if (changed) {
+      const fixed: Rec = { ...merged, id: key, _u: Math.max(lu, ru) + 1 };
+      await remoteTx([t], () => t.put(fixed));
+      await pushRecord(table, fixed);
+      return;
+    }
+  }
   if (local && lu > ru && !remote._deleted) {
     await pushRecord(table, local); // la copie locale est plus récente (modifiée hors-ligne)
     return;
