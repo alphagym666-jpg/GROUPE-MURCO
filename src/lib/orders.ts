@@ -35,6 +35,7 @@ export const TRADE_TOOLS: Record<string, ToolKey[]> = {
   plomberie: ['hourly'],
   electricite: ['hourly'],
   toiture: ['roof', 'hourly'],
+  calfeutrage: ['paint', 'hourly'],
   piscine: ['pool'],
   arboriculture: ['mulch', 'hourly'],
   extermination: ['hourly'],
