@@ -175,13 +175,15 @@ export default function Agenda() {
 
   if (!data) return null;
 
+  // Sans employés, colorer « par employé » ne sert à rien: on colore par type de travail (avec légende)
+  const eff = prefs.colorBy === 'employe' && data.memberList.length === 0 ? { ...prefs, colorBy: 'type' as const } : prefs;
   const memberColor = (m?: Member) => (!m ? OWNER_COLOR : m.color === '#e0901f' ? MEMBER_COLORS[m.id! % MEMBER_COLORS.length] : m.color); // ancien orange = couleur du patron
   const typeOf = (j: Job) => guessType(j, prefs.types);
   const colorOf = (j: Job) => {
     if (j.color) return j.color;
-    if (prefs.colorBy === 'type') return typeOf(j)?.color ?? '#8b8f98';
-    if (prefs.colorBy === 'statut') return STATUS_COLOR[j.status] ?? '#8b8f98';
-    if (prefs.colorBy === 'client') return clientColor(j.clientId);
+    if (eff.colorBy === 'type') return typeOf(j)?.color ?? '#8b8f98';
+    if (eff.colorBy === 'statut') return STATUS_COLOR[j.status] ?? '#8b8f98';
+    if (eff.colorBy === 'client') return clientColor(j.clientId);
     return j.assignees?.length ? memberColor(data.members.get(j.assignees[0])) : OWNER_COLOR;
   };
   const ql = q.trim().toLowerCase();
@@ -248,7 +250,7 @@ export default function Agenda() {
     `À partir du ${dayLabel(sel, { day: 'numeric', month: 'long' })}`;
 
   const money$ = showMoney && prefs.showMoney;
-  const ctx: Ctx = { data, colorOf, typeOf, memberColor, conflictIds, weather, showMoney: money$, canEdit, dragProps, dropProps, leadsOn, nav, prefs, hourPx: DENSITY_PX[prefs.density] };
+  const ctx: Ctx = { data, colorOf, typeOf, memberColor, conflictIds, weather, showMoney: money$, canEdit, dragProps, dropProps, leadsOn, nav, prefs: eff, hourPx: DENSITY_PX[prefs.density] };
   const doneN = inRange.filter((j) => j.status !== 'planifie').length;
   const firstName = (isEmp ? data.members.get(st.memberId!)?.name : s.ownerName)?.split(' ')[0] ?? '';
   const hr = new Date().getHours();
@@ -361,8 +363,14 @@ export default function Agenda() {
           </>
         )}
         <button className={`chip-btn ${!showDone ? 'on' : ''}`} onClick={() => setShowDone((x) => !x)}>{showDone ? 'Cacher les jobs faits' : 'Jobs faits cachés'}</button>
-        {!isEmp && <button className={`chip-btn ${showLeads ? 'on' : ''}`} onClick={() => setShowLeads((x) => !x)}><Inbox size={14} /> Relances</button>}
+        {!isEmp && <button className={`chip-btn ${showLeads ? 'on' : ''}`} onClick={() => setShowLeads((x) => !x)}><Inbox size={14} /> Demandes à rappeler</button>}
       </div>
+
+      {eff.colorBy === 'type' && prefs.types.length > 0 && (
+        <div className="ag-legend" aria-label="Légende des couleurs">
+          {prefs.types.map((t) => <span key={t.key}><span className="dot" style={{ background: t.color }} /> {t.label}</span>)}
+        </div>
+      )}
 
       {data.toRemind.length > 0 && mobile && !remindOpen && (
         <button className="ag-remind-mini" onClick={() => setRemindOpen(true)}>
@@ -661,7 +669,7 @@ function DayView({ ctx, date, jobs, trips, busy, run, s, onRemind, onPostpone, i
           <div className={`wx-banner ${badWeather(w) ? 'bad' : ''}`}>
             <WeatherChip w={w} full />
             {badWeather(w) && planned.length > 0 && ctx.canEdit && (
-              <button className="btn small" onClick={() => onPostpone(planned, `les ${planned.length} job${planned.length > 1 ? 's' : ''} du ${formatDate(date)}`)}><CalendarClock size={14} /> Reporter la journée</button>
+              <button className="btn small" onClick={() => onPostpone(planned, `les ${planned.length} job${planned.length > 1 ? 's' : ''} du ${formatDate(date)}`)}><CalendarClock size={14} /> Déplacer la journée</button>
             )}
           </div>
         )}
@@ -673,30 +681,30 @@ function DayView({ ctx, date, jobs, trips, busy, run, s, onRemind, onPostpone, i
           <div className={`wx-banner ${badWeather(w) ? 'bad' : ''}`}>
             <WeatherChip w={w} full />
             {badWeather(w) && planned.length > 0 && ctx.canEdit && (
-              <button className="btn small" onClick={() => onPostpone(planned, `les ${planned.length} job${planned.length > 1 ? 's' : ''} du ${formatDate(date)}`)}><CalendarClock size={14} /> Reporter la journée</button>
+              <button className="btn small" onClick={() => onPostpone(planned, `les ${planned.length} job${planned.length > 1 ? 's' : ''} du ${formatDate(date)}`)}><CalendarClock size={14} /> Déplacer la journée</button>
             )}
           </div>
         )}
         <div className="card-head">
           <div>
-            <h2 style={{ marginBottom: 2 }}>{mobile ? 'Ma journée' : 'Route du jour'}</h2>
+            <h2 style={{ marginBottom: 2 }}>{mobile ? 'Ma journée' : 'Ordre de la journée'}</h2>
             <div className="small muted">{jobs.length} job{jobs.length > 1 ? 's' : ''}{dayKm ? ` · ${km(dayKm)} de route` : ''}{leads.length ? ` · ${leads.length} relance${leads.length > 1 ? 's' : ''}` : ''}</div>
           </div>
           {!mobile && ctx.canEdit && planned.length > 0 && (
-            <button className="btn small" onClick={() => onPostpone(planned, `les ${planned.length} job${planned.length > 1 ? 's' : ''} du ${formatDate(date)}`)}><CalendarClock size={14} /> Reporter</button>
+            <button className="btn small" onClick={() => onPostpone(planned, `les ${planned.length} job${planned.length > 1 ? 's' : ''} du ${formatDate(date)}`)}><CalendarClock size={14} /> Déplacer</button>
           )}
         </div>
         {mobile && jobs.length > 0 && (
           <div className="ag-day-tools">
             {jobs.length > 1 && <button className="btn small" onClick={() => run('Route', async () => { const l = await dayRouteLink(date); if (l) window.open(l, '_blank'); else notify('Ajoute des adresses aux jobs.', 'err'); })}><Navigation size={15} /> Route</button>}
             {ctx.canEdit && jobs.length > 1 && <button className="btn small" disabled={!!busy} onClick={() => run('Optimiser', async () => { await optimizeDay(date); notify('Ordre optimisé'); })}><Shuffle size={15} /> Optimiser</button>}
-            {ctx.canEdit && planned.length > 0 && <button className="btn small" onClick={() => onPostpone(planned, `les ${planned.length} job${planned.length > 1 ? 's' : ''} du ${formatDate(date)}`)}><CalendarClock size={15} /> Reporter</button>}
+            {ctx.canEdit && planned.length > 0 && <button className="btn small" onClick={() => onPostpone(planned, `les ${planned.length} job${planned.length > 1 ? 's' : ''} du ${formatDate(date)}`)}><CalendarClock size={15} /> Déplacer</button>}
           </div>
         )}
         {!mobile && jobs.length > 1 && (
           <div className="row" style={{ marginBottom: 12 }}>
-            {ctx.canEdit && <button className="btn small" disabled={!!busy} onClick={() => run('Optimiser', async () => { await optimizeDay(date); notify(jobs.some((x) => x.time) ? 'Ordre optimisé (les jobs avec une heure gardent leur heure)' : 'Ordre optimisé (trajet le plus court)'); })}><Shuffle size={15} /> Optimiser l’ordre</button>}
-            <button className="btn small" onClick={() => run('Route', async () => { const l = await dayRouteLink(date); if (l) window.open(l, '_blank'); else notify('Ajoute des adresses aux jobs.', 'err'); })}><Navigation size={15} /> Route dans Google Maps</button>
+            {ctx.canEdit && <button className="btn small" disabled={!!busy} onClick={() => run('Optimiser', async () => { await optimizeDay(date); notify(jobs.some((x) => x.time) ? 'Ordre optimisé (les jobs avec une heure gardent leur heure)' : 'Ordre optimisé (trajet le plus court)'); })}><Shuffle size={15} /> Mettre dans le meilleur ordre</button>}
+            <button className="btn small" onClick={() => run('Route', async () => { const l = await dayRouteLink(date); if (l) window.open(l, '_blank'); else notify('Ajoute des adresses aux jobs.', 'err'); })}><Navigation size={15} /> Ouvrir le trajet dans Maps</button>
           </div>
         )}
         {!mobile && leads.map((l) => (
@@ -759,7 +767,7 @@ function DayView({ ctx, date, jobs, trips, busy, run, s, onRemind, onPostpone, i
                           <button className="btn small" disabled={!!busy} onClick={() => invoice(j)}><FileText size={15} /> Facturer</button>
                         ))}
                         {ctx.canEdit && j.status === 'planifie' && <button className="btn small" onClick={() => onRemind(j)}><Bell size={15} /> Rappel</button>}
-                        {ctx.canEdit && j.status === 'planifie' && <button className="btn small" onClick={() => onPostpone([j], c?.name ?? 'ce job')}><CalendarClock size={15} /> Reporter</button>}
+                        {ctx.canEdit && j.status === 'planifie' && <button className="btn small" onClick={() => onPostpone([j], c?.name ?? 'ce job')}><CalendarClock size={15} /> Déplacer</button>}
                         {ctx.canEdit && (
                           <>
                             <span className="spacer" />
@@ -955,7 +963,7 @@ function PostponeModal({ jobs, label, from, weather, onClose }: { jobs: Job[]; l
   };
 
   return (
-    <Modal title={`Reporter ${label}`} onClose={onClose}>
+    <Modal title={`Déplacer ${label}`} onClose={onClose}>
       <div className="chips" style={{ marginBottom: 12 }}>
         {options.map(([d, l]) => (
           <button key={l} className={`chip-btn ${date === d ? 'on' : ''}`} onClick={() => setDate(d)}>
@@ -970,7 +978,7 @@ function PostponeModal({ jobs, label, from, weather, onClose }: { jobs: Job[]; l
       {weather[date] && <div className={`notice ${badWeather(weather[date]) ? 'err' : 'ok'}`} style={{ marginTop: 12 }}>Météo prévue le {formatDate(date)}: <WeatherChip w={weather[date]} full /></div>}
       <div className="row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
         <button className="btn" onClick={onClose}>Annuler</button>
-        <button className="btn accent" onClick={() => void apply()}><CalendarClock size={16} /> Reporter</button>
+        <button className="btn accent" onClick={() => void apply()}><CalendarClock size={16} /> Déplacer</button>
       </div>
     </Modal>
   );
