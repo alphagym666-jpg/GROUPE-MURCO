@@ -65,24 +65,24 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { to: '/', label: 'Tableau de bord', short: 'Accueil', icon: Home, end: true },
+  { to: '/', label: 'Accueil', short: 'Accueil', icon: Home, end: true },
   { to: '/demandes', label: 'Demandes', short: 'Demandes', icon: Inbox, roles: ['vendeur'] },
   { to: '/agenda', label: 'Agenda', short: 'Agenda', icon: CalendarDays, roles: ['employe', 'vendeur'] },
-  { to: '/pointage', label: 'Pointage', short: 'Pointage', icon: Clock, roles: ['employe', 'vendeur'] },
+  { to: '/pointage', label: 'Heures (pointage)', short: 'Pointage', icon: Clock, roles: ['employe', 'vendeur'] },
   { to: '/factures', label: 'Factures', short: 'Factures', icon: FileText },
   { to: '/soumissions', label: 'Soumissions', short: 'Soumissions', icon: ClipboardList, roles: ['vendeur'] },
   { to: '/clients', label: 'Clients', short: 'Clients', icon: Users, roles: ['vendeur'] },
   { to: '/projets', label: 'Projets', short: 'Projets', icon: Briefcase },
   { to: '/equipe', label: 'Équipe', short: 'Équipe', icon: UsersRound },
-  { to: '/rapports', label: 'Rapports', short: 'Rapports', icon: TrendingUp },
-  { to: '/metier', label: 'Mon métier', short: 'Métier', icon: Wrench },
-  { to: '/achats', label: 'Commandes fournisseur', short: 'Achats', icon: Truck },
-  { to: '/codes', label: 'Codes et prix', short: 'Codes', icon: Tag, sep: true },
-  { to: '/km', label: 'Journal de bord', short: 'Km', icon: Car },
-  { to: '/depenses', label: 'Reçus et dépenses', short: 'Reçus', icon: Camera },
-  { to: '/classeur', label: 'Classeur', short: 'Classeur', icon: FolderOpen },
+  { to: '/rapports', label: 'Chiffres et taxes', short: 'Chiffres', icon: TrendingUp },
+  { to: '/metier', label: 'Calculs et matériaux', short: 'Calculs', icon: Wrench },
+  { to: '/achats', label: 'Achats de matériaux', short: 'Achats', icon: Truck },
+  { to: '/codes', label: 'Mes prix et services', short: 'Prix', icon: Tag, sep: true },
+  { to: '/km', label: 'Kilométrage', short: 'Km', icon: Car },
+  { to: '/depenses', label: 'Dépenses et reçus', short: 'Reçus', icon: Camera },
+  { to: '/classeur', label: 'Mes documents', short: 'Documents', icon: FolderOpen },
   { to: '/gmail', label: 'Gmail', short: 'Gmail', icon: Mail },
-  { to: '/comptable', label: 'Dossier comptable', short: 'Comptable', icon: Package },
+  { to: '/comptable', label: 'Pour le comptable', short: 'Comptable', icon: Package },
   { to: '/abonnement', label: 'Abonnement', short: 'Abonnement', icon: Crown },
   { to: '/parametres', label: 'Paramètres', short: 'Paramètres', icon: Settings, roles: ['employe', 'vendeur'] },
 ];
@@ -104,6 +104,15 @@ const MENU_GROUPS: { title: string; items: string[] }[] = [
   { title: 'Terrain', items: ['/agenda', '/pointage', '/metier', '/achats', '/equipe', '/temps'] },
   { title: 'Argent et papiers', items: ['/depenses', '/km', '/classeur', '/rapports', '/comptable'] },
   { title: 'Outils', items: ['/', '/codes', '/gmail', '/abonnement', '/parametres'] },
+];
+
+// Menu de gauche (ordi): les sections, dans l'ordre où on s'en sert
+const SIDE_GROUPS: { title: string; items: string[] }[] = [
+  { title: '', items: ['/'] },
+  { title: 'Mes ventes', items: ['/demandes', '/soumissions', '/factures', '/clients', '/projets'] },
+  { title: 'Mon travail', items: ['/agenda', '/pointage', '/equipe', '/metier', '/achats'] },
+  { title: 'Mon argent', items: ['/depenses', '/km', '/classeur', '/rapports', '/comptable'] },
+  { title: 'Réglages', items: ['/codes', '/gmail', '/abonnement', '/parametres'] },
 ];
 
 const PAGE_TITLE: [RegExp, string][] = [
@@ -284,15 +293,21 @@ function Shell() {
             </button>
           )}
           <nav className="nav">
-            {NAV.filter((n) => canSee(n, role)).map((n) => (
-              <div key={n.to}>
-                {n.sep && <div className="nav-sep" />}
-                <NavLink to={n.to} end={n.end}>
-                  <span className="ico"><n.icon size={18} /></span>
-                  {n.label}
-                </NavLink>
-              </div>
-            ))}
+            {SIDE_GROUPS.map((g) => {
+              const items = g.items.map((to) => NAV.find((n) => n.to === to)).filter((n): n is NavItem => !!n && canSee(n, role));
+              if (!items.length) return null;
+              return (
+                <div key={g.title || 'accueil'} className="nav-group-box">
+                  {g.title && <div className="nav-group">{g.title}</div>}
+                  {items.map((n) => (
+                    <NavLink key={n.to} to={n.to} end={n.end}>
+                      <span className="ico"><n.icon size={18} /></span>
+                      {n.label}
+                    </NavLink>
+                  ))}
+                </div>
+              );
+            })}
           </nav>
           <div className="side-foot">
             <button className="side-btn" onClick={() => setCmd(true)}>
