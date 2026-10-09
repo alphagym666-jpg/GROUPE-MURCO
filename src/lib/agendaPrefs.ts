@@ -28,7 +28,7 @@ export interface AgendaPrefs {
 }
 
 /** Palette sobre (lisible sur fond clair et sombre, jamais criarde). */
-export const JOB_COLORS = ['#3d5a99', '#2f7d6d', '#a4572b', '#6b5b95', '#9b3d4a', '#4a7a35', '#8a6d2c', '#2d6e8e', '#5f6b7a'];
+export const JOB_COLORS = ['#3b82f6', '#12b886', '#f97316', '#8b5cf6', '#ef4444', '#22c55e', '#f59e0b', '#0ea5e9', '#94a3b8'];
 
 export const DEFAULT_TYPES: JobType[] = [
   { key: 'entretien', label: 'Entretien', icon: 'sparkles', color: '#2f7d6d' },
@@ -38,6 +38,9 @@ export const DEFAULT_TYPES: JobType[] = [
   { key: 'urgence', label: 'Urgence', icon: 'siren', color: '#9b3d4a' },
 ];
 // Premières couleurs offertes (trop vives): remplacées par la palette sobre
+// Les teintes ternes des premières versions deviennent des couleurs franches, bien visibles sur fond sombre comme clair
+const VIVID: Record<string, string> = { '#2f7d6d': '#12b886', '#3d5a99': '#3b82f6', '#2c6e8f': '#06b6d4', '#7a6a2f': '#eab308', '#5f6b7a': '#94a3b8', '#a4572b': '#f97316', '#9b3d4a': '#ef4444', '#4f6b3a': '#84cc16', '#6b5b95': '#8b5cf6', '#8a6d2c': '#f59e0b', '#2d6e8e': '#0ea5e9', '#4a7a35': '#22c55e' };
+const vivid = (c?: string) => (c ? VIVID[c.toLowerCase()] ?? c : c);
 const OLD_DEFAULT: Record<string, string> = { '#0ea5a4': '#2f7d6d', '#6d5dfc': '#3d5a99', '#f97316': '#a4572b', '#2563eb': '#5f6b7a', '#e11d48': '#9b3d4a', '#14b8a6': '#2f7d6d' };
 
 export const DEFAULT_AGENDA: AgendaPrefs = {
@@ -82,7 +85,7 @@ export function agendaPrefs(s: Settings): AgendaPrefs {
   a.types = a.types.map((t) => ({
     ...t,
     icon: t.icon ?? DEFAULT_TYPES.find((d) => d.key === t.key)?.icon ?? 'circle',
-    color: OLD_DEFAULT[t.color?.toLowerCase()] ?? t.color,
+    color: vivid(OLD_DEFAULT[t.color?.toLowerCase()] ?? t.color) as string,
   }));
   if (a.endHour <= a.startHour) a.endHour = Math.min(24, a.startHour + 1);
   return a;
