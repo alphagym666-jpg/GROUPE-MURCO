@@ -182,6 +182,7 @@ export interface Doc extends Synced {
   convertedInvoiceId?: number;
   tripId?: number;
   jobId?: number; // job de l'agenda d'où vient la facture
+  relancedAt?: string; // dernière relance envoyée (ISO)
   depositMediaId?: number; // photo du dépôt reçu
   pdfPhotos?: boolean; // joindre les photos avant/après au PDF
   hoursWorked?: number; // heures travaillées (rentabilité)
