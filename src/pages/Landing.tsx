@@ -1,5 +1,5 @@
 import {
-  ArrowRight, CalendarDays, Camera, Check, CircleCheck, Clock, CreditCard, FileText, Inbox, MapPin, ShieldCheck, Smartphone, Sparkles, TrendingUp, Users, Zap,
+  ArrowRight, CalendarDays, Camera, Check, CircleCheck, Clock, CreditCard, FileText, Inbox, MapPin, ShieldCheck, Sparkles, TrendingUp, Users, X, Zap,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -16,7 +16,7 @@ const FEATURES_FR = [
   { icon: Users, t: 'Ton équipe sur leur cell', d: 'Employés et vendeurs: leurs jobs, pointage GPS, photos avant/après. Feuilles de temps et commissions calculées.' },
   { icon: Inbox, t: 'Demandes qui deviennent des clients', d: 'Formulaire en ligne et code QR pour tes pubs. Chaque demande arrive dans ton CRM avec sa source et un rappel de suivi.' },
   { icon: TrendingUp, t: 'Tes chiffres, enfin clairs', d: 'Rentabilité par job, rapport TPS/TVQ, seuil des 30 000 $, dossier complet pour le comptable en un clic.' },
-  { icon: Smartphone, t: 'Ordi, Android et iPhone', d: 'Tout est synchronisé en temps réel. Fonctionne même sans réseau dans un sous-sol, puis se met à jour tout seul.' },
+  { icon: Sparkles, t: 'Estime n’importe quelle job', d: 'Prends une photo, réponds à quelques questions: la liste complète des matériaux, les quantités, le coût estimé et les liens pour acheter chez Home Depot, Rona, Canac et BMR.' },
 ];
 const FEATURES_EN = [
   { icon: Zap, t: 'Just say it', d: 'Say “invoice for Nathalie, 60 feet of gutters” and the assistant prepares everything. Or type a code and quantity: taxes included.' },
@@ -26,7 +26,7 @@ const FEATURES_EN = [
   { icon: Users, t: 'Your crew on their phones', d: 'Employees and sales reps: their jobs, GPS time clock, before/after photos. Timesheets and commissions calculated.' },
   { icon: Inbox, t: 'Leads that become clients', d: 'Online form and QR code for your ads. Every request lands in your CRM with its source and a follow-up reminder.' },
   { icon: TrendingUp, t: 'Your numbers, finally clear', d: 'Profit per job, GST/QST report, small-supplier threshold, full accountant package in one click.' },
-  { icon: Smartphone, t: 'Desktop, Android and iPhone', d: 'Everything syncs in real time. Works offline in a basement, then catches up on its own.' },
+  { icon: Sparkles, t: 'Estimate any job', d: 'Snap a photo, answer a few questions: the full materials list, quantities, estimated cost and links to buy at Home Depot, Rona, Canac and BMR.' },
 ];
 
 /** Page de présentation du logiciel (visiteurs qui n'ont pas encore de compte). */
@@ -72,6 +72,7 @@ export default function Landing() {
             <span><Check size={15} /> {en ? 'No credit card' : 'Sans carte de crédit'}</span>
             <span><Check size={15} /> {en ? 'Ready in 2 minutes' : 'Prêt en 2 minutes'}</span>
             <span><Check size={15} /> {en ? 'Cancel anytime' : 'Annulable en tout temps'}</span>
+            <span><Check size={15} /> {en ? 'Phone, tablet, computer' : 'Cell, tablette, ordi'}</span>
           </div>
         </div>
         <div className="lp-phone" aria-hidden="true">
@@ -98,6 +99,30 @@ export default function Landing() {
         ).map(([n, t, d]) => (
           <div key={n}><span>{n}</span><h3>{t}</h3><p>{d}</p></div>
         ))}
+      </section>
+
+      <section className="lp-versus">
+        <h2>{en ? 'Your week, before and after' : 'Ta semaine, avant et après'}</h2>
+        <div className="lp-vs-grid">
+          <div className="lp-vs lp-vs-no">
+            <h3>{en ? 'Without' : 'Sans'} {PRODUCT.name}</h3>
+            <ul>
+              {(en
+                ? ['Quotes typed at the kitchen table at night', 'Receipts lost in the truck', 'Invoices that wait a week', 'Clients you forgot to follow up', 'Guessing the materials and the price']
+                : ['Des soumissions tapées le soir à la table', 'Des reçus perdus dans le camion', 'Des factures qui attendent une semaine', 'Des clients oubliés, jamais relancés', 'Des matériaux et des prix devinés'])
+                .map((x) => <li key={x}><X size={16} /> {x}</li>)}
+            </ul>
+          </div>
+          <div className="lp-vs lp-vs-yes">
+            <h3>{en ? 'With' : 'Avec'} {PRODUCT.name}</h3>
+            <ul>
+              {(en
+                ? ['Quote sent from the driveway in 30 seconds', 'Receipt photographed, taxes read for you', 'Invoice and card payment right after the job', 'Follow-ups drafted for you', 'Materials list and cost from one photo']
+                : ['Soumission envoyée du stationnement en 30 secondes', 'Reçu pris en photo, taxes lues pour toi', 'Facture et paiement par carte juste après la job', 'Relances préparées pour toi', 'Liste de matériaux et coût à partir d’une photo'])
+                .map((x) => <li key={x}><Check size={16} /> {x}</li>)}
+            </ul>
+          </div>
+        </div>
       </section>
 
       <section className="lp-features" id="fonctions">
@@ -160,6 +185,10 @@ export default function Landing() {
         <h2>{en ? 'Try it on your next job.' : 'Essaie-le sur ta prochaine job.'}</h2>
         <Link to="/demarrer" className="btn accent big">{en ? 'Start free' : 'Commencer gratuitement'} <ArrowRight size={18} /></Link>
       </section>
+
+      <div className="lp-sticky">
+        <Link to="/demarrer" className="btn accent big block">{en ? `Try it free for ${PRODUCT.trialDays} days` : `Essayer gratuitement ${PRODUCT.trialDays} jours`} <ArrowRight size={18} /></Link>
+      </div>
 
       <footer className="lp-foot">
         <div><FileText size={14} /> {PRODUCT.name} — {OPERATOR.legalName}</div>
