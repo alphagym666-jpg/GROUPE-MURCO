@@ -70,6 +70,7 @@ export interface Settings extends Synced {
   agenda?: Partial<AgendaPrefs>; // personnalisation de l'agenda
   brandColor?: string; // couleur de l'entreprise (#rrggbb)
   monthlyGoal?: number; // objectif de revenus du mois
+  materialBook?: MaterialPrice[]; // catalogue de prix des matériaux (estimateur)
   dashTiles?: string[]; // tuiles cachées du tableau de bord
   wantedPlan?: string; // forfait choisi sur la page de vente
   accountCreatedAt?: string; // création du compte du propriétaire (début de l'essai; employés compris)
@@ -107,6 +108,17 @@ export interface Client extends Synced {
   lang?: 'fr' | 'en'; // langue des documents envoyés à ce client
   snowContract?: boolean; // déneigement: client sous contrat de saison (dans la tournée)
   createdAt: string;
+}
+
+/** Prix d'un matériau noté par l'entrepreneur (réel, chez un fournisseur précis). */
+export interface MaterialPrice {
+  key: string; // nom normalisé (sert à retrouver le prix dans une prochaine estimation)
+  name: string;
+  store: string;
+  price: number;
+  unit: string;
+  url?: string; // lien du produit chez le fournisseur
+  at: string; // date de la mise à jour (YYYY-MM-DD)
 }
 
 export interface LineItem {

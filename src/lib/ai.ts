@@ -10,7 +10,7 @@ export { findClients };
 
 /** Modèles essayés dans l'ordre (le premier qui existe pour le projet). */
 // Le dernier (« lite ») a la plus grande limite gratuite: il prend le relais quand les autres sont à bout.
-const MODELS = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
+export const MODELS = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
 
 /** Délai max d'une réponse de l'IA: sans ça, une connexion bloquée (app mobile) attend sans fin. */
 export const AI_TIMEOUT_MS = 20000;
@@ -153,8 +153,8 @@ export function aiErrorMessage(e: unknown): string {
   if (/quota|429|RESOURCE_EXHAUSTED/i.test(m)) return 'Limite de l’IA atteinte pour le moment: j’utilise l’assistant de base.';
   return `Assistant IA: ${code ? `[${code}] ` : ''}${m}`;
 }
-const overQuota = (e: unknown) => /quota|429|RESOURCE_EXHAUSTED/i.test(`${(e as { code?: string })?.code ?? ''} ${e instanceof Error ? e.message : e}`);
-const notFound = (e: unknown) => /not found|404|NOT_FOUND|is not supported|no-model/i.test(`${(e as { code?: string })?.code ?? ''} ${e instanceof Error ? e.message : e}`);
+export const overQuota = (e: unknown) => /quota|429|RESOURCE_EXHAUSTED/i.test(`${(e as { code?: string })?.code ?? ''} ${e instanceof Error ? e.message : e}`);
+export const notFound = (e: unknown) => /not found|404|NOT_FOUND|is not supported|no-model/i.test(`${(e as { code?: string })?.code ?? ''} ${e instanceof Error ? e.message : e}`);
 
 const INTENTS: Record<string, IntentKind> = { payee: 'payee', relancer: 'relancer', depense: 'depense', deplacer: 'deplacer', fini: 'fini', combien: 'combien', horaire: 'horaire', afaire: 'afaire', facturer_job: 'facturer' };
 
