@@ -26,6 +26,7 @@ export function RelanceModal({ doc, client, onClose }: { doc: Doc; client?: Clie
     ? `Bonjour ${who}, petit rappel: la facture ${doc.number} de ${money(docTotals(doc, s).balance)} était payable le ${formatDate(doc.dueDate)}. ${s.paymentInstructions} Merci! ${first}`
     : `Bonjour ${who}, je fais un suivi pour la soumission ${doc.number}${doc.title ? ` (${doc.title})` : ''}. Avez-vous des questions? Je peux vous céduler rapidement. ${first} — ${s.phone}`;
   const kind = doc.type === 'invoice' ? 'facture' : 'soumission';
+  const mark = async () => { if (doc.id) await db.docs.update(doc.id, { relancedAt: new Date().toISOString() }); };
 
   if (pdf) {
     return (
@@ -38,6 +39,7 @@ export function RelanceModal({ doc, client, onClose }: { doc: Doc; client?: Clie
         onClose={onClose}
         onSent={async ({ gmailId, to, subject }) => {
           await db.emails.add({ date: new Date().toISOString(), to, subject, clientId: doc.clientId, docId: doc.id, gmailId, kind });
+          await mark();
           notify('Relance envoyée');
         }}
       />
@@ -47,7 +49,7 @@ export function RelanceModal({ doc, client, onClose }: { doc: Doc; client?: Clie
     <Modal title={`Relancer — ${doc.number}`} onClose={onClose}>
       <p style={{ marginTop: 0 }}>{text}</p>
       <div className="row" style={{ justifyContent: 'flex-end' }}>
-        {client?.phone && <a className="btn" href={smsLink(client.phone, text)} onClick={() => setTimeout(onClose, 300)}>Texto</a>}
+        {client?.phone && <a className="btn" href={smsLink(client.phone, text)} onClick={() => { void mark(); setTimeout(onClose, 300); }}>Texto</a>}
         <button className="btn accent" onClick={async () => setPdf(await makeDocPdf(doc, client, s))}>Courriel avec la {kind}</button>
       </div>
     </Modal>
