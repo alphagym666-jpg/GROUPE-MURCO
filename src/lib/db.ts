@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type { AgendaPrefs } from './agendaPrefs';
+import { MURCO_LOGO } from './murcoLogo';
 
 export interface GeoPoint {
   lat: number;
@@ -747,7 +748,9 @@ export const DEFAULT_SERVICES: Omit<Service, 'id'>[] = [
 const MURCO_GOOGLE_CLIENT_ID = '488580024294-i1n3gktj5jksahre2j08gomkfia411ds.apps.googleusercontent.com';
 const MURCO_PAYMENTS_ENDPOINT = 'https://northamerica-northeast1-murco-9658e.cloudfunctions.net';
 export function withMurcoDefaults(s: Settings): Settings {
-  return { ...s, googleClientId: s.googleClientId || MURCO_GOOGLE_CLIENT_ID, paymentsEndpoint: s.paymentsEndpoint || MURCO_PAYMENTS_ENDPOINT };
+  // Seulement pour le compte de Groupe Murco: le produit sert aussi à d'autres entreprises, qui ne doivent rien en hériter
+  if (!/@groupemurco\.com$/i.test(s.email ?? '')) return s;
+  return { ...s, googleClientId: s.googleClientId || MURCO_GOOGLE_CLIENT_ID, paymentsEndpoint: s.paymentsEndpoint || MURCO_PAYMENTS_ENDPOINT, logo: s.logo || MURCO_LOGO };
 }
 
 export async function getSettings(): Promise<Settings> {
