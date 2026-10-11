@@ -375,7 +375,10 @@ table.list tr.click:hover td { background: var(--surface-2); }
 .big-item .grow { flex: 1; min-width: 0; }
 .big-item .t { font-weight: 700; }
 .code-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-.code-tile { display: flex; flex-direction: column; gap: 3px; padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; min-height: 86px; position: relative; }
+.code-tile { display: flex; flex-direction: column; gap: 3px; padding: 0; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); color: var(--ink); font: inherit; text-align: left; overflow: hidden; min-height: 86px; position: relative; }
+.code-tile .tile-main { display: flex; flex-direction: column; gap: 3px; padding: 12px 12px 8px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; flex: 1; }
+.code-tile .tile-qty { margin: 0 8px 8px; width: calc(100% - 16px); text-align: center; font-weight: 700; padding: 6px 8px; min-height: 38px; }
+.code-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .code-tile b { font-family: var(--font-display); font-stretch: 112%; font-size: 1.25rem; color: var(--amber-ink); }
 .code-tile .n { font-size: 0.8rem; line-height: 1.25; }
 .code-tile .p { font-size: 0.75rem; color: var(--muted); margin-top: auto; }
