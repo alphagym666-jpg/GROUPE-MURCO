@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { CircleCheck, Copy, MessageSquare, Plus, Share2, UserMinus, Users } from 'lucide-react';
-import { useState } from 'react';
+import QRCode from 'qrcode';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Modal } from '../components/Modal';
 import { errMsg, useConfirm, useToast } from '../components/Toast';
@@ -128,6 +129,7 @@ function MemberModal({ m, onClose }: { m: Member; onClose: () => void }) {
                 {x.phone && <a className="btn small" href={smsLink(x.phone, msg + link)}><MessageSquare size={14} /> Texto</a>}
                 <button className="btn small" onClick={() => void shareLink('Invitation', msg, link)}><Share2 size={14} /> Partager</button>
               </div>
+              <InviteSteps link={link} punchOnly={x.role === 'employe' && x.access !== 'complet'} />
             </>
           ) : (
             <div className="small muted">Active la synchronisation pour créer le lien d’invitation.</div>
@@ -154,5 +156,24 @@ function MemberModal({ m, onClose }: { m: Member; onClose: () => void }) {
         <button className="btn accent" onClick={save}>{x.id ? 'Enregistrer' : 'Créer et inviter'}</button>
       </div>
     </Modal>
+  );
+}
+
+/** Code QR + marche à suivre pour l'employé (il scanne avec la caméra de son cell). */
+function InviteSteps({ link, punchOnly }: { link: string; punchOnly: boolean }) {
+  const [qr, setQr] = useState('');
+  useEffect(() => {
+    QRCode.toDataURL(link, { width: 420, margin: 1, errorCorrectionLevel: 'L', color: { dark: '#23262b', light: '#ffffff' } }).then(setQr).catch(() => setQr(''));
+  }, [link]);
+  return (
+    <div className="invite-steps">
+      {qr && <img src={qr} alt="Code QR de l’invitation" />}
+      <ol className="small">
+        <li>L’employé scanne le code avec la caméra de son cell (ou ouvre le lien reçu par texto).</li>
+        <li>Il choisit son courriel et un mot de passe: c’est son accès personnel.</li>
+        <li>{punchOnly ? 'Il voit un gros bouton « Punch in / Punch out ».' : 'Il voit son agenda, ses photos et son pointage.'}</li>
+        <li>Pour l’avoir sur l’écran d’accueil: iPhone → Partager → « Sur l’écran d’accueil »; Android → ⋮ → « Installer ».</li>
+      </ol>
+    </div>
   );
 }

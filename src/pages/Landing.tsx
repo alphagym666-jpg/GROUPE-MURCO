@@ -125,6 +125,59 @@ export default function Landing() {
         </div>
       </section>
 
+      <section className="lp-show">
+        <div className="lp-row">
+          <div className="lp-copy">
+            <span className="lp-tag">{en ? 'Photo estimator' : 'Estimateur photo'}</span>
+            <h2>{en ? 'One photo. The whole materials list.' : 'Une photo. Toute la liste de matériaux.'}</h2>
+            <p>{en
+              ? 'Snap the bathroom, the siding or the soffit. The app recognizes what it is, asks what you want to change, you give the dimensions, and it works out every material, the quantities, the estimated cost and where to buy.'
+              : 'Prends la salle de bain, le revêtement ou le soffit en photo. L’app reconnaît ce que c’est, demande ce que tu veux changer, tu donnes les dimensions, et elle calcule chaque matériau, les quantités, le coût estimé et où l’acheter.'}</p>
+            <ul className="lp-ticks">
+              {(en
+                ? ['Recognizes the room or the job from the photo', 'Asks only what it can’t see', 'Links to Home Depot, Rona, Canac, BMR', 'Your own real prices remembered for next time']
+                : ['Reconnaît la pièce ou la job sur la photo', 'Ne demande que ce qu’elle ne voit pas', 'Liens vers Home Depot, Rona, Canac, BMR', 'Tes vrais prix retenus pour la prochaine fois']).map((x) => <li key={x}><Check size={16} /> {x}</li>)}
+            </ul>
+          </div>
+          <div className="lp-mock" aria-hidden="true">
+            <div className="lp-mock-top"><Camera size={15} /> {en ? 'Recognized' : 'Reconnu'}: <b>{en ? 'Bathroom' : 'Salle de bain'}</b></div>
+            <div className="lp-mock-chips">{(en ? ['Tub', 'Vanity', 'Vinyl floor', 'Painted walls'] : ['Bain', 'Vanité', 'Plancher de vinyle', 'Murs peints']).map((x) => <span key={x}>{x}</span>)}</div>
+            <div className="lp-mock-q">{en ? 'What do you want to change?' : 'Qu’est-ce que tu veux changer?'}</div>
+            <div className="lp-mock-chips pick">{(en ? ['✓ Tub → shower', '✓ Floor', 'Vanity'] : ['✓ Bain → douche', '✓ Plancher', 'Vanité']).map((x, i) => <span key={x} className={i < 2 ? 'on' : ''}>{x}</span>)}</div>
+            <div className="lp-mock-list">
+              <div><span>{en ? 'Waterproof membrane' : 'Membrane d’étanchéité'}</span><b>1 {en ? 'roll' : 'rouleau'}</b></div>
+              <div><span>{en ? 'Ceramic tile (+10 %)' : 'Céramique (+10 %)'}</span><b>14 {en ? 'boxes' : 'boîtes'}</b></div>
+              <div><span>{en ? 'Thinset, grout, drain…' : 'Colle, coulis, drain…'}</span><b>…</b></div>
+            </div>
+            <div className="lp-mock-total"><span>{en ? 'Estimated total' : 'Total estimé'}</span><b>{en ? 'in 1 minute' : 'en 1 minute'}</b></div>
+          </div>
+        </div>
+
+        <div className="lp-row rev">
+          <div className="lp-copy">
+            <span className="lp-tag">{en ? 'Your crew' : 'Ton équipe'}</span>
+            <h2>{en ? 'Your guys punch in. You see it live.' : 'Tes gars punchent. Toi, tu vois tout.'}</h2>
+            <p>{en
+              ? 'Send each employee a link or a QR code. They set their own password, then get one big Punch in / Punch out button. Hours, GPS and photos land in your timesheets.'
+              : 'Envoie à chaque employé un lien ou un code QR. Il choisit son mot de passe, puis il a un gros bouton Punch in / Punch out. Les heures, le GPS et les photos arrivent dans tes feuilles de temps.'}</p>
+            <ul className="lp-ticks">
+              {(en
+                ? ['One link or QR per employee', 'Punch-only app, or schedule + photos', 'Hours and costs per job, calculated', 'Remove access in one tap']
+                : ['Un lien ou un code QR par employé', 'App pointage seulement, ou agenda + photos', 'Heures et coûts par job, calculés', 'Retire un accès en un clic']).map((x) => <li key={x}><Check size={16} /> {x}</li>)}
+            </ul>
+          </div>
+          <div className="lp-mock lp-mock-punch" aria-hidden="true">
+            <div className="lp-mock-top"><Clock size={15} /> Marc — {en ? 'Roofing job, Laval' : 'Job de toiture, Laval'}</div>
+            <div className="lp-punch-btn">Punch in</div>
+            <div className="lp-punch-time">07:32 · {en ? 'on site' : 'sur le chantier'}</div>
+            <div className="lp-mock-list">
+              <div><span>{en ? 'Today' : 'Aujourd’hui'}</span><b>8 h 15</b></div>
+              <div><span>{en ? 'This week' : 'Cette semaine'}</span><b>31 h 40</b></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="lp-features" id="fonctions">
         <h2>{en ? 'Everything a contractor needs. Nothing extra.' : 'Tout ce qu’un entrepreneur a besoin. Rien de trop.'}</h2>
         <div className="lp-grid">

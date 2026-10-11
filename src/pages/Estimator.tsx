@@ -32,6 +32,10 @@ export default function Estimator() {
   const [busy, setBusy] = useState('');
   const [summary, setSummary] = useState('');
   const [questions, setQuestions] = useState<EstQuestion[]>([]);
+  const [detected, setDetected] = useState('');
+  const [observed, setObserved] = useState<string[]>([]);
+  const [changeOptions, setChangeOptions] = useState<string[]>([]);
+  const [toChange, setToChange] = useState<string[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [extra, setExtra] = useState('');
   const [res, setRes] = useState<EstResult | null>(null);
@@ -56,12 +60,16 @@ export default function Estimator() {
   };
 
   const start = async () => {
-    if (!job.trim()) return notify('Décris la job en quelques mots (ex.: « salle de bain complète, douche en céramique »).', 'err');
-    setBusy('Je regarde le projet…');
+    if (!job.trim() && !photos.length) return notify('Prends une photo, ou décris la job en quelques mots.', 'err');
+    setBusy(photos.length ? 'Je regarde les photos…' : 'Je regarde le projet…');
     try {
       const r = await askQuestions(job.trim(), photos);
       setSummary(r.summary);
       setQuestions(r.questions);
+      setDetected(r.detected);
+      setObserved(r.observed);
+      setChangeOptions(r.changeOptions);
+      setToChange([]);
       setAnswers({});
       setStep(1);
     } catch (e) {
@@ -75,7 +83,7 @@ export default function Estimator() {
     setBusy('Je calcule les matériaux…');
     try {
       const a = questions.map((q) => ({ question: q.question + (q.unit ? ` (${q.unit})` : ''), answer: (answers[q.id] ?? '').trim() })).filter((x) => x.answer);
-      const r = await estimateMaterials(job.trim(), photos, a, extra.trim());
+      const r = await estimateMaterials(job.trim(), photos, a, extra.trim(), toChange, detected);
       const book = s.materialBook;
       setRes(r);
       setRows(r.materials.map((m) => {
@@ -173,7 +181,7 @@ export default function Estimator() {
       <div className="page-head">
         <div>
           <div className="eyebrow"><Sparkles size={14} /> Estimateur de projet</div>
-          <h1>{step === 0 ? 'Quelle job veux-tu estimer?' : step === 1 ? 'Quelques questions' : 'Matériaux à acheter'}</h1>
+          <h1>{step === 0 ? 'Prends une photo' : step === 1 ? 'Ce que j’ai détecté' : 'Matériaux à acheter'}</h1>
         </div>
         {step > 0 && <button className="btn" onClick={() => { setStep(0); setRes(null); }}>Nouveau projet</button>}
       </div>
@@ -182,32 +190,45 @@ export default function Estimator() {
 
       {step === 0 && (
         <div className="card">
-          <div className="fix-chips" style={{ marginBottom: 10 }}>
-            {IDEAS.map((x) => <button key={x} onClick={() => setJob((j) => (j.trim() ? j : `${x}: `))}>{x}</button>)}
+          <p style={{ marginTop: 0 }} className="muted">Prends en photo la pièce ou le mur à refaire. L’app reconnaît ce que c’est (salle de bain, revêtement, toiture…), te demande ce que tu veux changer, puis calcule tout.</p>
+          <div className="est-photos">
+            {photos.map((p, i) => (
+              <div key={i} className="est-ph est-ph-big"><img src={p} alt={`Photo ${i + 1}`} /><button aria-label="Retirer la photo" onClick={() => setPhotos((l) => l.filter((_, j) => j !== i))}><X size={14} /></button></div>
+            ))}
+            {photos.length < 6 && (
+              <label className="est-add est-add-big"><Camera size={30} /><span>{photos.length ? 'Ajouter une photo' : 'Prendre une photo'}</span><input type="file" accept="image/*" multiple hidden onChange={(e) => { void addPhotos(e.target.files); e.target.value = ''; }} /></label>
+            )}
           </div>
-          <label className="field">Décris la job (n’importe quel type de travaux)
-            <textarea rows={4} value={job} onChange={(e) => setJob(e.target.value)} placeholder="ex.: Salle de bain 5 x 8 pi, remplacer le bain par une douche en céramique, nouveau plancher, vanité 30 po" />
+          <div className="small muted" style={{ margin: '6px 0 12px' }}>Jusqu’à 6 photos: plus l’IA en voit (angles différents), plus l’estimation est juste.</div>
+          <label className="field">Une précision? (facultatif)
+            <textarea rows={2} value={job} onChange={(e) => setJob(e.target.value)} placeholder="ex.: Salle de bain du sous-sol, client veut une douche en céramique" />
           </label>
-          <div style={{ marginTop: 12 }}>
-            <div className="small muted" style={{ marginBottom: 6 }}>Photos (facultatif, jusqu’à 6): l’IA voit l’état actuel, les murs, les obstacles</div>
-            <div className="est-photos">
-              {photos.map((p, i) => (
-                <div key={i} className="est-ph"><img src={p} alt={`Photo ${i + 1}`} /><button aria-label="Retirer la photo" onClick={() => setPhotos((l) => l.filter((_, j) => j !== i))}><X size={14} /></button></div>
-              ))}
-              {photos.length < 6 && (
-                <label className="est-add"><Camera size={22} /><span>Ajouter</span><input type="file" accept="image/*" multiple hidden onChange={(e) => { void addPhotos(e.target.files); e.target.value = ''; }} /></label>
-              )}
+          <details style={{ marginTop: 8 }}>
+            <summary className="small muted" style={{ cursor: 'pointer' }}>Pas de photo? Choisis un type de job</summary>
+            <div className="fix-chips" style={{ marginTop: 8 }}>
+              {IDEAS.map((x) => <button key={x} onClick={() => setJob((j) => (j.trim() ? j : `${x}: `))}>{x}</button>)}
             </div>
-          </div>
+          </details>
           <div className="row" style={{ marginTop: 14, justifyContent: 'flex-end' }}>
-            <button className="btn accent big" disabled={!!busy || !aiOn} onClick={start}>{busy ? <><Loader2 size={18} className="spin" /> {busy}</> : <>Continuer</>}</button>
+            <button className="btn accent big" disabled={!!busy || !aiOn} onClick={start}>{busy ? <><Loader2 size={18} className="spin" /> {busy}</> : <><Sparkles size={18} /> Analyser</>}</button>
           </div>
         </div>
       )}
 
       {step === 1 && (
         <div className="card">
-          {summary && <p style={{ marginTop: 0 }}><strong>J’ai compris:</strong> {summary}</p>}
+          {detected && <div className="est-detected"><span className="small muted">J’ai reconnu</span><strong>{detected}</strong></div>}
+          {observed.length > 0 && <div className="est-stores" style={{ marginBottom: 10 }}>{observed.map((o) => <span key={o} className="est-store est-seen">{o}</span>)}</div>}
+          {summary && <p style={{ marginTop: 0 }}>{summary}</p>}
+          {changeOptions.length > 0 && (
+            <div className="field full" style={{ marginBottom: 14 }}>
+              <strong>Qu’est-ce que tu veux changer ou refaire?</strong>
+              <div className="est-stores" style={{ marginTop: 8 }}>
+                {changeOptions.map((o) => <button key={o} type="button" className={`est-pick ${toChange.includes(o) ? 'on' : ''}`} onClick={() => setToChange((l) => (l.includes(o) ? l.filter((x) => x !== o) : [...l, o]))}>{toChange.includes(o) ? '✓ ' : ''}{o}</button>)}
+                <button type="button" className={`est-pick ${toChange.length === changeOptions.length ? 'on' : ''}`} onClick={() => setToChange((l) => (l.length === changeOptions.length ? [] : [...changeOptions]))}>Tout refaire</button>
+              </div>
+            </div>
+          )}
           <div className="form-grid">
             {questions.map((q) => (
               <label key={q.id} className="field full">{q.question}{q.unit ? ` (${q.unit})` : ''}
@@ -220,7 +241,7 @@ export default function Estimator() {
                 )}
               </label>
             ))}
-            <label className="field full">Autre chose à savoir? (facultatif)<textarea rows={2} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="ex.: client veut du matériel haut de gamme, maison de 1960, accès difficile…" /></label>
+            <label className="field full">Autre chose à changer ou à savoir? (facultatif)<textarea rows={2} value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="ex.: client veut du matériel haut de gamme, maison de 1960, accès difficile…" /></label>
           </div>
           <div className="row" style={{ marginTop: 14, justifyContent: 'space-between' }}>
             <button className="btn" onClick={() => setStep(0)}>Retour</button>
