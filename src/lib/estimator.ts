@@ -117,10 +117,21 @@ export async function shrinkPhoto(file: File): Promise<string> {
 }
 
 /** Étape 1: l'IA regarde les photos, lit la description et pose les questions qui manquent. */
-export async function askQuestions(job: string, photos: string[]): Promise<{ summary: string; questions: EstQuestion[] }> {
+export interface Detection {
+  summary: string;
+  detected: string; // ex.: « Salle de bain »
+  observed: string[]; // ce que l'IA voit sur les photos (bain, vanité, plancher de vinyle…)
+  changeOptions: string[]; // éléments qu'on peut changer ou refaire
+  questions: EstQuestion[];
+}
+
+export async function askQuestions(job: string, photos: string[]): Promise<Detection> {
   const schema = Schema.object({
     properties: {
       summary: Schema.string({ description: 'Ce que tu as compris du projet, en une ou deux phrases' }),
+      detected: Schema.string({ description: 'Type de pièce ou de travaux reconnu sur les photos, ex.: Salle de bain, Façade avec revêtement de vinyle, Toiture, Cuisine' }),
+      observed: Schema.array({ items: Schema.string(), description: 'Ce que tu vois sur les photos: éléments, matériaux, état (4 à 12 éléments courts)' }),
+      change_options: Schema.array({ items: Schema.string(), description: 'Les éléments que l’entrepreneur pourrait vouloir changer ou refaire (4 à 12 choix courts, selon ce que tu vois)' }),
       questions: Schema.array({
         items: Schema.object({
           properties: {
@@ -136,18 +147,21 @@ export async function askQuestions(job: string, photos: string[]): Promise<{ sum
     },
   });
   const prompt = `Projet décrit par l'entrepreneur:
-« ${job} »
+« ${job.trim() || '(aucune description: base-toi sur les photos)'} »
 ${photos.length ? `${photos.length} photo(s) jointe(s): observe l'état actuel, les matériaux en place, les obstacles et ce qu'on peut estimer.\n` : ''}
-Pose entre 4 et 10 questions COURTES et utiles pour calculer les matériaux avec précision (dimensions: longueurs, hauteurs, nombre d'ouvertures; choix de matériaux ou de finition; options comme plancher chauffant, isolation, type de support; état actuel). Ne repose pas une information déjà donnée ou visible sur les photos. Pour un choix, donne 2 à 5 options. Pour une dimension, type « nombre » avec l'unité.`;
-  const r = (await generate([prompt, ...imgParts(photos)], schema)) as { summary?: string; questions?: EstQuestion[] };
+D'abord, RECONNAIS ce que montrent les photos (type de pièce ou de travaux) et liste ce que tu vois. Propose les éléments qu'on peut changer. Ensuite pose entre 3 et 8 questions COURTES et utiles pour calculer les matériaux avec précision: commence par les DIMENSIONS dont tu as besoin (longueurs, hauteurs, largeurs, nombre d'ouvertures; type « nombre » avec l'unité), puis les choix de matériaux ou de finition et les options (plancher chauffant, isolation, type de support…). NE pose PAS de question sur ce que l'entrepreneur voudra changer: l'app le demande déjà avec change_options. Ne repose pas une information déjà donnée ou visible sur les photos. Pour un choix, donne 2 à 5 options. Pour une dimension, type « nombre » avec l'unité.`;
+  const r = (await generate([prompt, ...imgParts(photos)], schema)) as { summary?: string; detected?: string; observed?: string[]; change_options?: string[]; questions?: EstQuestion[] };
   return {
     summary: r.summary ?? '',
+    detected: r.detected ?? '',
+    observed: (r.observed ?? []).slice(0, 14),
+    changeOptions: (r.change_options ?? []).slice(0, 14),
     questions: (r.questions ?? []).filter((q) => q.question).slice(0, 12).map((q, i) => ({ ...q, id: q.id || `q${i}` })),
   };
 }
 
 /** Étape 2: la liste complète des matériaux avec quantités, prix estimés et heures. */
-export async function estimateMaterials(job: string, photos: string[], answers: { question: string; answer: string }[], extra = ''): Promise<EstResult> {
+export async function estimateMaterials(job: string, photos: string[], answers: { question: string; answer: string }[], extra = '', toChange: string[] = [], detected = ''): Promise<EstResult> {
   const schema = Schema.object({
     properties: {
       summary: Schema.string(),
@@ -171,8 +185,10 @@ export async function estimateMaterials(job: string, photos: string[], answers: 
     },
   });
   const prompt = `Projet:
-« ${job} »
-
+« ${job.trim() || detected || '(voir les photos)'} »
+${detected ? `Reconnu sur les photos: ${detected}
+` : ''}${toChange.length ? `À CHANGER / REFAIRE (seulement ça, le reste reste en place): ${toChange.join(', ')}
+` : ''}
 Réponses de l'entrepreneur:
 ${answers.map((a) => `- ${a.question} → ${a.answer || '(non précisé)'}`).join('\n') || '(aucune)'}
 ${extra ? `\nPrécisions: ${extra}\n` : ''}${photos.length ? `\n${photos.length} photo(s) jointe(s).\n` : ''}
