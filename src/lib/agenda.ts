@@ -274,3 +274,50 @@ export async function ensureDayRoute(date: string): Promise<void> {
   const covered = new Set(legs.map((t) => t.jobId));
   if (done.some((j) => !covered.has(j.id))) await syncDayRoute(date).catch(() => undefined);
 }
+
+/** La « date des travaux » d'une facture ou soumission apparaît dans l'agenda: on crée (ou met à jour) la job liée. */
+export async function syncJobFromDoc(docId: number): Promise<void> {
+  const d = await db.docs.get(docId);
+  if (!d || !d.jobDate || d.status === 'cancelled' || d.status === 'refused' || !d.clientId) return;
+  const existing = d.jobId ? await db.jobs.get(d.jobId) : undefined;
+  const isInvoice = d.type === 'invoice';
+  if (existing) {
+    if (existing.status === 'annule') return;
+    const patch: Partial<Job> = {};
+    if (existing.date !== d.jobDate) patch.date = d.jobDate;
+    if (d.jobAddress && existing.address !== d.jobAddress) {
+      patch.address = d.jobAddress;
+      patch.geo = d.jobGeo;
+    }
+    if (isInvoice && existing.status === 'planifie' && d.status === 'paid') patch.status = 'facture';
+    if (Object.keys(patch).length) {
+      await db.jobs.update(existing.id!, patch);
+      try {
+        await syncDayRoute(d.jobDate);
+        if (patch.date && existing.date !== patch.date) await syncDayRoute(existing.date);
+      } catch {
+        /* adresse du domicile manquante */
+      }
+    }
+    return;
+  }
+  const j = blankJob(d.jobDate, d.clientId);
+  j.address = d.jobAddress;
+  j.geo = d.jobGeo;
+  j.title = d.title || d.items.map((i) => i.description).filter(Boolean).join(', ').slice(0, 80);
+  j.items = d.items.map((i) => ({ ...i }));
+  j.status = isInvoice ? 'facture' : 'planifie';
+  if (isInvoice) {
+    j.docId = docId;
+    j.doneAt = new Date().toISOString();
+  }
+  const id = await db.jobs.add(j);
+  // Le trajet est maintenant compté dans la route du jour (agenda): on retire celui de la facture pour ne pas le doubler
+  if (d.tripId) await db.trips.delete(d.tripId);
+  await db.docs.update(docId, { jobId: id, tripId: undefined });
+  try {
+    await syncDayRoute(d.jobDate);
+  } catch {
+    /* adresse du domicile manquante */
+  }
+}
