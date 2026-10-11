@@ -19,7 +19,7 @@ import { publishPortal, reviewLink } from '../lib/portal';
 import { profitOfDoc } from '../lib/profit';
 import { syncLeadFromDoc } from '../lib/crm';
 import { useSyncState } from '../lib/sync';
-import { smsLink } from '../lib/agenda';
+import { smsLink, syncJobFromDoc } from '../lib/agenda';
 import { MediaGallery, ProofPhoto } from '../components/MediaGallery';
 import { Banknote, Check, CircleCheck, CreditCard, Pencil, TriangleAlert, Copy, Download, Eye, Link2, Mail, MessageSquare, Plus, Save, Send, Share2, Star, Trash2, Navigation, RefreshCw, TrendingUp } from 'lucide-react';
 import { deleteDocCascade, syncTripForDoc } from '../lib/trips';
@@ -185,6 +185,13 @@ export default function DocEditor() {
         } else if (!quiet) notify(`${kind} enregistrée`);
       } catch (e) {
         notify(`${kind} enregistrée, mais km non calculés: ${errMsg(e)}`, 'err');
+      }
+      try {
+        await syncJobFromDoc(newId);
+        const fresh = await db.docs.get(newId);
+        if (fresh) saved = { ...fresh, id: newId };
+      } catch {
+        /* l'agenda se mettra à jour plus tard */
       }
       setDoc(saved);
       setDirty(false);
