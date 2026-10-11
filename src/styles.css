@@ -1610,3 +1610,19 @@ button.agh-ring:hover .fg { stroke: var(--amber-ink); }
 /* Menu de gauche: sections */
 .nav-group-box + .nav-group-box { margin-top: 6px; }
 .nav-group { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); padding: 14px 14px 5px; }
+
+/* ---------- Accueil: 4 gros boutons + relances ---------- */
+.home-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 16px; }
+.home-actions button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 96px; padding: 14px 8px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 1rem; font-weight: 700; line-height: 1.15; text-align: center; cursor: pointer; box-shadow: var(--shadow); transition: transform 0.12s ease, box-shadow 0.15s; }
+.home-actions button:active { transform: scale(0.97); }
+.home-actions .ha-main { background: var(--amber); border-color: var(--amber); color: var(--on-amber); }
+@media (min-width: 861px) { .home-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); } .home-actions button { min-height: 84px; flex-direction: row; gap: 10px; font-size: 1.02rem; } }
+.followups .fu-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.followups .fu-row:last-child { border-bottom: 0; }
+
+.lp-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; max-width: 980px; margin: 0 auto; padding: 36px 16px 8px; }
+.lp-steps > div { text-align: center; padding: 20px 14px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); }
+.lp-steps span { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--amber); color: var(--on-amber); font-weight: 800; }
+.lp-steps h3 { margin: 10px 0 4px; font-size: 1.15rem; }
+.lp-steps p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+@media (max-width: 700px) { .lp-steps { grid-template-columns: 1fr; padding-top: 24px; } }
