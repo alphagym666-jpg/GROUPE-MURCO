@@ -15,6 +15,7 @@ import { useSettings } from '../lib/hooks';
 import { docFileName } from '../lib/pdf';
 import { listen, speechSupported, type Listening } from '../lib/speech';
 import { syncTripForDoc } from '../lib/trips';
+import { TRADES } from '../lib/templates';
 import { syncDayRoute } from '../lib/agenda';
 import { publishPortal } from '../lib/portal';
 import { shareFiles } from '../lib/native';
@@ -49,6 +50,8 @@ export default function Express() {
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<{ doc: Doc; client?: Client; trip?: number } | null>(null);
   const [mailPdf, setMailPdf] = useState<Blob | null>(null);
+  const [grp, setGrp] = useState(() => { try { return localStorage.getItem('express.grp') || ''; } catch { return ''; } });
+  const [cq, setCq] = useState('');
   const [heard, setHeard] = useState('');
   const [listening, setListening] = useState(false);
   const rec = useRef<Listening | null>(null);
@@ -90,6 +93,37 @@ export default function Express() {
       return [...ls, lineFromService(sv, qty)];
     });
   };
+
+  /** Écrire la quantité directement sur la tuile (0 = retirer la ligne). */
+  const setQtyByCode = (code: string, qty: number) => {
+    const sv = services.find((x) => x.code === code);
+    if (!sv) return;
+    setLines((ls) => {
+      const i = ls.findIndex((l) => l.code === code);
+      if (qty <= 0) return i >= 0 ? ls.filter((_, j) => j !== i) : ls;
+      if (i >= 0) return ls.map((l, j) => (j === i ? { ...l, quantity: qty } : l));
+      return [...ls, lineFromService(sv, qty)];
+    });
+  };
+
+  // Métiers qui ont au moins un code dans la liste: on n'affiche que ceux de la job en cours (les codes perso restent toujours visibles)
+  const tradeChips = useMemo(() => {
+    const mine = (s.trades?.length ? s.trades : s.trade ? [s.trade] : []) as string[];
+    const list = TRADES.filter((t) => t.services.some((x) => services.some((sv) => sv.code === x.code)));
+    return [...list.filter((t) => mine.includes(t.key)), ...list.filter((t) => !mine.includes(t.key))];
+  }, [services, s.trades, s.trade]);
+  const activeGrp = grp === 'all' || tradeChips.some((t) => t.key === grp) ? grp : tradeChips.length > 1 ? tradeChips[0].key : 'all';
+  const pickGrp = (g: string) => { setGrp(g); try { localStorage.setItem('express.grp', g); } catch { /* ok */ } };
+  const visibleServices = useMemo(() => {
+    const n = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const known = new Set(TRADES.flatMap((t) => t.services.map((x) => x.code)));
+    const inTrade = new Set(TRADES.find((t) => t.key === activeGrp)?.services.map((x) => x.code) ?? []);
+    const needle = n(cq.trim());
+    return services.filter((sv) => {
+      if (needle) return n(`${sv.code} ${sv.name}`).includes(needle);
+      return activeGrp === 'all' || inTrade.has(sv.code) || !known.has(sv.code) || lines.some((l) => l.code === sv.code);
+    });
+  }, [services, activeGrp, cq, lines]);
 
   const setQty = (i: number, qty: number) => setLines((ls) => (qty <= 0 ? ls.filter((_, j) => j !== i) : ls.map((l, j) => (j === i ? { ...l, quantity: qty } : l))));
 
@@ -383,19 +417,29 @@ export default function Express() {
 
       {step === 1 && (
         <>
-          <div className="small muted" style={{ marginBottom: 8 }}>{client?.name ?? newClient?.name} — touche un code pour l’ajouter</div>
+          <div className="small muted" style={{ marginBottom: 8 }}>{client?.name ?? newClient?.name} — touche un code pour l’ajouter, ou écris la quantité dans la case</div>
+          {tradeChips.length > 1 && (
+            <div className="seg code-chips">
+              {tradeChips.map((t) => <button key={t.key} className={activeGrp === t.key ? 'on' : ''} onClick={() => pickGrp(t.key)}>{t.emoji} {t.label}</button>)}
+              <button className={activeGrp === 'all' ? 'on' : ''} onClick={() => pickGrp('all')}>Tous</button>
+            </div>
+          )}
+          <input value={cq} onChange={(e) => setCq(e.target.value)} placeholder="Chercher un code ou un service" aria-label="Chercher un code" style={{ marginBottom: 10 }} />
           <div className="code-tiles">
-            {services.map((sv) => {
+            {visibleServices.map((sv) => {
               const line = lines.find((l) => l.code === sv.code);
               return (
-                <button key={sv.id} className={`code-tile ${line ? 'on' : ''}`} onClick={() => addCode(sv.code)}>
-                  {line && <span className="count">{line.quantity}</span>}
-                  <b>{sv.code}</b>
-                  <span className="n">{sv.name}</span>
-                  <span className="p">{money(sv.price)} / {sv.unit}</span>
-                </button>
+                <div key={sv.id} className={`code-tile ${line ? 'on' : ''}`}>
+                  <button className="tile-main" onClick={() => addCode(sv.code)}>
+                    <b>{sv.code}</b>
+                    <span className="n">{sv.name}</span>
+                    <span className="p">{money(sv.price)} / {sv.unit}</span>
+                  </button>
+                  <NumInput className="tile-qty" value={line?.quantity} placeholder="Qté" onChange={(n) => setQtyByCode(sv.code, n)} aria-label={`Quantité ${sv.code}`} />
+                </div>
               );
             })}
+            {visibleServices.length === 0 && <div className="muted small">Aucun code trouvé.</div>}
           </div>
           {lines.length > 0 && (
             <div className="card" style={{ marginTop: 14 }}>
