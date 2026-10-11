@@ -1,5 +1,5 @@
 import { Mic,
-  CalendarDays, Camera, ChevronLeft, Crown, Download, Lock, FolderOpen, TrendingUp, Inbox, Clock, Briefcase, UsersRound, Car, ClipboardList, FileText, Home, LayoutGrid, Mail, Moon, Package, Plus, Search, Settings, Sun, SunMoon, Tag, Timer, Users, X, Zap, ImagePlus, Truck, Wrench, type LucideIcon,
+  CalendarDays, Camera, ChevronLeft, Crown, Download, Lock, FolderOpen, TrendingUp, Inbox, Clock, Briefcase, UsersRound, Car, ClipboardList, FileText, Home, LayoutGrid, Mail, Moon, Package, Plus, Search, Settings, Sparkles, Sun, SunMoon, Tag, Timer, Users, X, Zap, ImagePlus, Truck, Wrench, type LucideIcon,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -21,6 +21,7 @@ import Expenses from './pages/Expenses';
 import Express from './pages/Express';
 import VoiceJob from './pages/VoiceJob';
 import Trade from './pages/Trade';
+import Estimator from './pages/Estimator';
 import Orders from './pages/Orders';
 import GmailPage from './pages/GmailPage';
 import JobEditor from './pages/JobEditor';
@@ -75,6 +76,7 @@ const NAV: NavItem[] = [
   { to: '/projets', label: 'Projets', short: 'Projets', icon: Briefcase },
   { to: '/equipe', label: 'Équipe', short: 'Équipe', icon: UsersRound },
   { to: '/rapports', label: 'Chiffres et taxes', short: 'Chiffres', icon: TrendingUp },
+  { to: '/estimateur', label: 'Estimateur de projet', short: 'Estimer', icon: Sparkles },
   { to: '/metier', label: 'Calculs et matériaux', short: 'Calculs', icon: Wrench },
   { to: '/achats', label: 'Achats de matériaux', short: 'Achats', icon: Truck },
   { to: '/codes', label: 'Mes prix et services', short: 'Prix', icon: Tag, sep: true },
@@ -110,7 +112,7 @@ const MENU_GROUPS: { title: string; items: string[] }[] = [
 const SIDE_GROUPS: { title: string; items: string[] }[] = [
   { title: '', items: ['/'] },
   { title: 'Mes ventes', items: ['/demandes', '/soumissions', '/factures', '/clients', '/projets'] },
-  { title: 'Mon travail', items: ['/agenda', '/pointage', '/equipe', '/metier', '/achats'] },
+  { title: 'Mon travail', items: ['/agenda', '/pointage', '/equipe', '/estimateur', '/metier', '/achats'] },
   { title: 'Mon argent', items: ['/depenses', '/km', '/classeur', '/rapports', '/comptable'] },
   { title: 'Réglages', items: ['/codes', '/gmail', '/abonnement', '/parametres'] },
 ];
@@ -358,6 +360,7 @@ function Shell() {
             <Route path="/job/:id" element={<JobEditor />} />
             <Route path="/express" element={<Express />} />
             <Route path="/dicter" element={<VoiceJob />} />
+            <Route path="/estimateur" element={<Estimator />} />
             <Route path="/metier" element={<Trade />} />
             <Route path="/achats" element={<Orders />} />
             <Route path="/achats/:id" element={<Orders />} />
