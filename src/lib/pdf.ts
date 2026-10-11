@@ -28,45 +28,49 @@ const pct = (n: number) => t(`${new Intl.NumberFormat('fr-CA', { maximumFraction
 
 function header(pdf: jsPDF, s: Settings, title: string, L: DocLang = 'fr') {
   const W = pdf.internal.pageSize.getWidth();
-  let x = 15;
+  // Logo en haut à gauche, sur fond blanc; sans logo, le nom de l'entreprise en gras
+  let y = 23;
+  let hasLogo = false;
   if (s.logo) {
     try {
       const props = pdf.getImageProperties(s.logo);
-      const h = 22;
-      const w = Math.min(60, (props.width / props.height) * h);
-      pdf.addImage(s.logo, 15, 12, w, h);
-      x = 15 + w + 5;
+      const h = 15;
+      const w = Math.min(70, (props.width / props.height) * h);
+      pdf.addImage(s.logo, 15, 9, w, h);
+      hasLogo = true;
+      y = 27;
     } catch {
       /* logo invalide: on l'ignore */
     }
   }
-  pdf.setTextColor(...NAVY);
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(15);
-  pdf.text(t(s.companyName), x, 18);
+  if (!hasLogo) {
+    pdf.setTextColor(...NAVY);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(15);
+    pdf.text(t(s.companyName), 15, 18);
+  }
+  // Coordonnées sur 3 lignes (ça ne déborde jamais sur le trait): adresse, contact, responsable et licence RBQ
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(8.5);
   pdf.setTextColor(60);
+  const rbq = s.rbqNumber ? `${D[L].rbq}: ${s.rbqNumber}` : '';
   const info = [
-    ...companyAddressLines(s),
-    [s.phone, s.email].filter(Boolean).join('  |  '),
-    s.ownerName,
-    s.website,
-    s.rbqNumber ? `${D[L].rbq}: ${s.rbqNumber}` : '',
+    companyAddressLines(s).join(', '),
+    [s.phone, s.email, s.website].filter(Boolean).join('  |  '),
+    [s.ownerName, rbq].filter(Boolean).join('  |  '),
   ].filter(Boolean);
-  info.forEach((line, i) => pdf.text(t(line), x, 23 + i * 4));
+  info.forEach((line, i) => pdf.text(t(line), 15, y + 3 + i * 4));
 
   pdf.setTextColor(...NAVY);
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(20);
+  pdf.setFontSize(22);
   pdf.text(t(title), W - 15, 20, { align: 'right' });
-  pdf.setDrawColor(...accentOf(s));
-  pdf.setLineWidth(1);
-  pdf.line(15, 42, W - 15, 42);
+  pdf.setDrawColor(200);
+  pdf.setLineWidth(0.3);
+  pdf.line(15, 43.5, W - 15, 43.5);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(40);
 }
-
 function footer(pdf: jsPDF, s: Settings, L: DocLang = 'fr') {
   const pages = pdf.getNumberOfPages();
   const W = pdf.internal.pageSize.getWidth();
@@ -74,6 +78,9 @@ function footer(pdf: jsPDF, s: Settings, L: DocLang = 'fr') {
   for (let i = 1; i <= pages; i++) {
     pdf.setPage(i);
     pdf.setFont('helvetica', 'normal');
+    pdf.setDrawColor(200);
+    pdf.setLineWidth(0.3);
+    pdf.line(15, H - 12.5, W - 15, H - 12.5);
     pdf.setFontSize(7.5);
     pdf.setTextColor(120);
     const taxes = [s.neq && `NEQ: ${s.neq}`, s.chargeTaxes && s.tpsNumber && `${D[L].gst}: ${s.tpsNumber}`, s.chargeTaxes && s.tvqNumber && `${D[L].qst}: ${s.tvqNumber}`]
@@ -102,48 +109,65 @@ export function buildDocPdf(doc: Doc, client: Client | undefined, s: Settings, p
   const tx = companyTexts(s, L);
   header(pdf, s, isInvoice ? T.invoice : T.quote, L);
 
-  // Bloc infos document (droite)
-  pdf.setFontSize(9);
-  pdf.setTextColor(40);
+  // Deux blocs sur fond gris pâle: le client (gauche) et les infos du document (droite)
   const meta: [string, string][] = [
     [isInvoice ? T.invoiceNo : T.quoteNo, doc.number],
     [T.date, fd(doc.date)],
     [isInvoice ? T.due : T.validUntil, isInvoice && (!doc.dueDate || doc.dueDate <= doc.date) ? T.onReceipt : fd(doc.dueDate)],
   ];
   if (doc.jobDate) meta.push([T.jobDate, fd(doc.jobDate)]);
-  meta.forEach(([k, v], i) => {
-    pdf.setFont('helvetica', 'bold');
-    pdf.text(t(k), W - 65, 50 + i * 5);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(t(v), W - 15, 50 + i * 5, { align: 'right' });
-  });
-
-  // Client (gauche)
-  pdf.setFont('helvetica', 'bold');
-  pdf.setTextColor(...NAVY);
-  pdf.text(t(isInvoice ? T.billTo : T.preparedFor), 15, 50);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setTextColor(40);
   const clientLines = [client?.name, client?.contact, client?.address, client?.phone, client?.email].filter(Boolean) as string[];
-  let y = 55;
-  clientLines.forEach((l) => {
-    const wrapped = pdf.splitTextToSize(t(l), 95) as string[];
-    pdf.text(wrapped, 15, y);
-    y += wrapped.length * 4.5;
+  pdf.setFontSize(9.5);
+  const wrappedClient = clientLines.map((l, i) => {
+    pdf.setFont('helvetica', i === 0 ? 'bold' : 'normal');
+    return pdf.splitTextToSize(t(l), 88) as string[];
   });
-  if (doc.jobAddress) {
+  const wrappedJob = doc.jobAddress ? (pdf.splitTextToSize(t(doc.jobAddress), 88) as string[]) : [];
+  let leftH = 11 + wrappedClient.reduce((a, w) => a + w.length * 4.5, 0);
+  if (wrappedJob.length) leftH += 8 + wrappedJob.length * 4.5;
+  const boxH = Math.max(leftH, 11 + meta.length * 5.5) + 2;
+  const top = 49;
+  pdf.setFillColor(245, 245, 243);
+  pdf.rect(15, top, 100, boxH, 'F');
+  pdf.rect(W - 80, top, 65, boxH, 'F');
+
+  pdf.setFontSize(7.5);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setTextColor(...hexToRgb(accentPalette(s.brandColor || DEFAULT_ACCENT).inkLight));
+  pdf.text(t((isInvoice ? T.billTo : T.preparedFor).toUpperCase()), 20, top + 5.5);
+  pdf.text(t(isInvoice ? T.invoice : T.quote).toUpperCase(), W - 75, top + 5.5);
+
+  pdf.setFontSize(9.5);
+  pdf.setTextColor(40);
+  let y = top + 11;
+  wrappedClient.forEach((w, i) => {
+    pdf.setFont('helvetica', i === 0 ? 'bold' : 'normal');
+    pdf.text(w, 20, y);
+    y += w.length * 4.5;
+  });
+  if (wrappedJob.length) {
     y += 2;
+    pdf.setFontSize(7.5);
     pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(...NAVY);
-    pdf.text(t(T.jobSite), 15, y);
-    y += 5;
+    pdf.setTextColor(...hexToRgb(accentPalette(s.brandColor || DEFAULT_ACCENT).inkLight));
+    pdf.text(t(T.jobSite.toUpperCase()), 20, y);
+    y += 4.5;
+    pdf.setFontSize(9.5);
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(40);
-    const wrapped = pdf.splitTextToSize(t(doc.jobAddress), 95) as string[];
-    pdf.text(wrapped, 15, y);
-    y += wrapped.length * 4.5;
+    pdf.text(wrappedJob, 20, y);
   }
-  y = Math.max(y, 50 + meta.length * 5) + 4;
+  meta.forEach(([k, v], i) => {
+    const my = top + 11 + i * 5.5;
+    pdf.setFontSize(9);
+    pdf.setTextColor(90);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(t(k), W - 75, my);
+    pdf.setTextColor(30);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(t(v), W - 18, my, { align: 'right' });
+  });
+  y = top + boxH + 8;
 
   if (doc.title) {
     pdf.setFont('helvetica', 'bold');
@@ -167,11 +191,12 @@ export function buildDocPdf(doc: Doc, client: Client | undefined, s: Settings, p
       m(it.unitPrice),
       m(lineAmount(it)),
     ]),
-    theme: 'striped',
-    headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold' },
-    styles: { fontSize: 9, cellPadding: 2.5 },
+    theme: 'plain',
+    headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+    alternateRowStyles: { fillColor: [248, 248, 246] },
+    styles: { fontSize: 9, cellPadding: 2.8, lineColor: [225, 225, 222], lineWidth: { bottom: 0.2 } },
     columnStyles: {
-      0: { cellWidth: 15, fontStyle: 'bold', textColor: [217, 138, 11] },
+      0: { cellWidth: 15, fontStyle: 'bold', textColor: hexToRgb(accentPalette(s.brandColor || DEFAULT_ACCENT).inkLight) },
       2: { halign: 'right', cellWidth: 16 },
       3: { cellWidth: 18 },
       4: { halign: 'right', cellWidth: 26 },
@@ -206,7 +231,7 @@ export function buildDocPdf(doc: Doc, client: Client | undefined, s: Settings, p
   rows.forEach(([k, v, bold]) => {
     if (bold) {
       pdf.setFillColor(...NAVY);
-      pdf.rect(W - 85, ty - 4.5, 70, 7, 'F');
+      pdf.rect(W - 85, ty - 4.8, 70, 7.6, 'F');
       pdf.setTextColor(255);
       pdf.setFont('helvetica', 'bold');
     } else {
@@ -226,6 +251,15 @@ export function buildDocPdf(doc: Doc, client: Client | undefined, s: Settings, p
     isInvoice && tx.paymentInstructions ? `${T.paymentMethods}${L === 'fr' ? ' :' : ':'} ${tx.paymentInstructions}` : '',
     isInvoice ? tx.invoiceConditions : '',
   ].filter((x) => x && x.trim());
+  if (notes.length) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(8);
+    pdf.setTextColor(...hexToRgb(accentPalette(s.brandColor || DEFAULT_ACCENT).inkLight));
+    pdf.text(t((L === 'en' ? 'Terms and notes' : 'Conditions et notes').toUpperCase()), 15, ty);
+    ty += 5;
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(40);
+  }
   notes.forEach((n) => {
     const wrapped = pdf.splitTextToSize(t(n), W - 30) as string[];
     pdf.setFont('helvetica', 'normal');
