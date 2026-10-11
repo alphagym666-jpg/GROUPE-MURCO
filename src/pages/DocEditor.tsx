@@ -262,15 +262,20 @@ export default function DocEditor() {
       applyTvq: q.applyTvq,
       discount: q.discount,
       sourceQuoteId: q.id,
+      // La job déjà planifiée à l'agenda suit la facture
+      ...(q.jobId ? { jobId: q.jobId, jobDate: q.jobDate || todayISO() } : {}),
     };
     inv.number = await takeNextNumber('invoice');
     const invId = await db.docs.add(inv);
     await db.docs.update(q.id, { status: 'accepted', convertedInvoiceId: invId, updatedAt: new Date().toISOString() });
+    if (q.jobId) await db.jobs.update(q.jobId, { docId: invId });
     void syncLeadFromDoc({ ...q, status: 'accepted', convertedInvoiceId: invId });
-    try {
-      await syncTripForDoc(invId);
-    } catch (e) {
-      notify(`Facture créée, km non calculés: ${errMsg(e)}`, 'err');
+    if (!q.jobId) {
+      try {
+        await syncTripForDoc(invId);
+      } catch (e) {
+        notify(`Facture créée, km non calculés: ${errMsg(e)}`, 'err');
+      }
     }
     notify(`Facture ${inv.number} créée à partir de la soumission`);
     nav(`/doc/${invId}`);

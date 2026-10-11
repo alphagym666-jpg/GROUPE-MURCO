@@ -19,6 +19,7 @@ import { addDays, docTotals, km, kmAllowance, lineAmount, money, statusClass, st
 export const DASH_TILES: { key: string; label: string }[] = [
   { key: 'todo', label: 'À confirmer (le travail de bureau préparé pour toi)' },
   { key: 'kpi', label: 'Chiffres clés (ventes, à recevoir, km, taxes)' },
+  { key: 'followups', label: 'À relancer (soumissions sans réponse, factures en retard)' },
   { key: 'today', label: 'Jobs d’aujourd’hui' },
   { key: 'unpaid', label: 'À encaisser' },
   { key: 'revenue', label: 'Revenus des 12 derniers mois' },
@@ -68,6 +69,14 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
   const yKm = data.trips.filter((t) => t.date.startsWith(year)).reduce((a, t) => a + t.totalKm, 0);
   const tpsNet = sum(yInv, 'tps') - yExp.reduce((a, e) => a + e.tps, 0);
   const tvqNet = sum(yInv, 'tvq') - yExp.reduce((a, e) => a + e.tvq, 0);
+  // Relances automatiques: soumission envoyée depuis 3 jours sans réponse, facture en retard (pas relancée depuis 3 jours)
+  const recently = (d: Doc) => !!d.relancedAt && d.relancedAt.slice(0, 10) > addDays(today, -3);
+  const followups: { doc: Doc; why: string }[] = [
+    ...overdue.filter((d) => !recently(d)).map((d) => ({ doc: d, why: `Facture en retard depuis le ${d.dueDate}` })),
+    ...data.docs
+      .filter((d) => d.type === 'quote' && d.status === 'sent' && !d.signature && !recently(d) && (d.sentAt ?? d.date).slice(0, 10) <= addDays(today, -3))
+      .map((d) => ({ doc: d, why: d.viewedAt ? 'Soumission vue, pas de réponse' : 'Soumission sans réponse' })),
+  ].slice(0, 6);
   const jobsToday = data.jobsToday.filter((j) => j.status !== 'annule').sort((a, b) => a.order - b.order);
 
   // Revenus des 12 derniers mois (avant taxes)
@@ -146,11 +155,11 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
         </div>
       </PageHero>
 
-      <div className="quick-tiles">
-        <button onClick={() => nav('/express')}><Zap size={22} /> Facture express</button>
-        <button onClick={() => nav('/job/new')}><CalendarPlus size={22} /> Job</button>
-        <button onClick={() => nav('/depenses/new')}><Camera size={22} /> Reçu</button>
-        <button onClick={() => nav('/dicter')}><Mic size={22} /> Assistant</button>
+      <div className="home-actions">
+        <button className="ha-main" onClick={() => nav('/express')}><Zap size={28} /> Nouvelle facture</button>
+        <button onClick={() => nav('/doc/new?type=quote')}><ClipboardList size={28} /> Nouvelle soumission</button>
+        <button onClick={() => nav('/job/new')}><CalendarPlus size={28} /> Planifier une job</button>
+        <button onClick={() => nav('/dicter')}><Mic size={28} /> Parler à l’assistant</button>
       </div>
 
       <SnowAlert s={s} />
@@ -158,16 +167,23 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
       <Onboarding s={s} />
       {s.setupHidden && missing.length > 0 && <div className="notice">À compléter: <strong>{missing.join(', ')}</strong>. <Link to="/parametres">Paramètres →</Link></div>}
 
-      {show('kpi') && <div className="grid kpi">
-        <div className="card hot"><div className="label">Ventes {year}</div><div className="value"><CountUp value={sum(yInv, 'subtotal')} format={money} /></div><div className="sub">ce mois-ci: {money(sum(mInv, 'subtotal'))}</div></div>
-        <div className="card"><div className="label">À recevoir</div><div className="value"><CountUp value={sum(unpaid, 'balance')} format={money} /></div><div className="sub">{unpaid.length} facture(s){overdue.length ? ` · ${overdue.length} en retard` : ''}</div></div>
-        <div className="card"><div className="label">Km {year}</div><div className="value"><CountUp value={yKm} format={(n) => km(Math.round(n))} /></div><div className="sub">≈ {money(kmAllowance(yKm, s))} déductibles</div></div>
-        <div className="card">
-          <div className="label">{s.chargeTaxes ? 'Taxes à remettre' : `Dépenses ${year}`}</div>
-          <div className="value"><CountUp value={s.chargeTaxes ? tpsNet + tvqNet : yExp.reduce((a, e) => a + e.subtotal, 0)} format={money} /></div>
-          <div className="sub">{s.chargeTaxes ? `TPS ${money(tpsNet)} · TVQ ${money(tvqNet)}` : `${yExp.length} reçu(s)`}</div>
+      {show('followups') && followups.length > 0 && (
+        <div className="card followups">
+          <div className="card-head"><Bell size={18} /><h2>À relancer</h2></div>
+          {followups.map(({ doc: d, why }) => {
+            const c = data.clients.get(d.clientId);
+            return (
+              <div key={d.id} className="fu-row">
+                <div style={{ minWidth: 0 }}>
+                  <div><strong>{c?.name ?? 'Client'}</strong> <span className="small muted">· {d.type === 'invoice' ? 'facture' : 'soumission'} {d.number} · {money(tt(d).balance || tt(d).total)}</span></div>
+                  <div className="small muted">{why}</div>
+                </div>
+                <button className="btn small accent" onClick={() => setRelance({ doc: d, client: c, mode: 'choose' })}><Bell size={14} /> Relancer</button>
+              </div>
+            );
+          })}
         </div>
-      </div>}
+      )}
 
       <div className="grid two auto">
         {show('today') && <div className="card">
@@ -220,6 +236,17 @@ export default function Dashboard({ onSearch }: { onSearch?: () => void }) {
           )}
         </div>}
       </div>
+
+      {show('kpi') && <div className="grid kpi">
+        <div className="card hot"><div className="label">Ventes {year}</div><div className="value"><CountUp value={sum(yInv, 'subtotal')} format={money} /></div><div className="sub">ce mois-ci: {money(sum(mInv, 'subtotal'))}</div></div>
+        <div className="card"><div className="label">À recevoir</div><div className="value"><CountUp value={sum(unpaid, 'balance')} format={money} /></div><div className="sub">{unpaid.length} facture(s){overdue.length ? ` · ${overdue.length} en retard` : ''}</div></div>
+        <div className="card"><div className="label">Km {year}</div><div className="value"><CountUp value={yKm} format={(n) => km(Math.round(n))} /></div><div className="sub">≈ {money(kmAllowance(yKm, s))} déductibles</div></div>
+        <div className="card">
+          <div className="label">{s.chargeTaxes ? 'Taxes à remettre' : `Dépenses ${year}`}</div>
+          <div className="value"><CountUp value={s.chargeTaxes ? tpsNet + tvqNet : yExp.reduce((a, e) => a + e.subtotal, 0)} format={money} /></div>
+          <div className="sub">{s.chargeTaxes ? `TPS ${money(tpsNet)} · TVQ ${money(tvqNet)}` : `${yExp.length} reçu(s)`}</div>
+        </div>
+      </div>}
 
       <div className="grid two auto">
         {show('revenue') && <div className="card">

@@ -750,17 +750,16 @@ function DayView({ ctx, date, jobs, trips, busy, run, s, onRemind, onPostpone, i
                       <div className="small">{j.title}{ctx.showMoney && jobTotal(j) ? ` · ${money(jobTotal(j))}` : ''}</div>
                       {(j.address || c?.address) && <div className="small muted row" style={{ gap: 4 }}><MapPin size={13} /> {j.address || c?.address}</div>}
                       {who.length > 0 && <div className="small row" style={{ gap: 6, marginTop: 2 }}>{who.map((m) => <span key={m.id} className="who"><span className="dot" style={{ background: ctx.memberColor(m) }} /> {m.name.split(' ')[0]}</span>)}</div>}
-                      {mobile && (
+                      {(
                         <div className="jc-main">
                           {j.status === 'planifie' && <button className="btn accent" disabled={!!busy} onClick={() => done(j)}><Check size={17} /> Fait</button>}
+                          {!isEmp && j.status === 'fait' && !j.docId && <button className="btn accent" disabled={!!busy} onClick={() => invoice(j)}><FileText size={17} /> Facturer</button>}
                           {(j.address || c?.address) && <a className="btn" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(j.address || c?.address || '')}`} target="_blank" rel="noreferrer"><Navigation size={17} /> Y aller</a>}
                           {c?.phone && <a className="btn icon-btn" href={`tel:${c.phone}`} aria-label={`Appeler ${c.name}`}><Phone size={17} /></a>}
                           <button className={`btn icon-btn ${more === j.id ? 'on' : ''}`} onClick={() => setMore((m) => (m === j.id ? null : j.id!))} aria-label="Plus d’actions" aria-expanded={more === j.id}>⋯</button>
                         </div>
                       )}
-                      {(!mobile || more === j.id) && <div className="row" style={{ marginTop: 8, gap: 6 }}>
-                        {!mobile && j.status === 'planifie' && <button className="btn small accent" disabled={!!busy} onClick={() => done(j)}><Check size={15} /> Fait</button>}
-                        {!mobile && (j.address || c?.address) && <a className="btn small" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(j.address || c?.address || '')}`} target="_blank" rel="noreferrer"><Navigation size={15} /> Y aller</a>}
+                      {more === j.id && <div className="row" style={{ marginTop: 8, gap: 6 }}>
                         {!isEmp && (j.docId ? (
                           <Link className="btn small" to={`/doc/${j.docId}`}><FileText size={15} /> Facture</Link>
                         ) : (

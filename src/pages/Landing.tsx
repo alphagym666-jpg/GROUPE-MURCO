@@ -9,20 +9,20 @@ import { useLang, setLang } from '../lib/i18n';
 import { PLANS } from '../lib/plans';
 
 const FEATURES_FR = [
-  { icon: Zap, t: 'Facture en 30 secondes', d: 'Tape un code (NDG, LVE…), la quantité, c’est calculé. Minimums, rabais, dépôts et taxes inclus. Dictée vocale sur le chantier.' },
+  { icon: Zap, t: 'Parle, c’est fait', d: 'Dis « facture pour Nathalie, 60 pieds de gouttières » et l’assistant prépare tout. Ou tape un code et une quantité: c’est calculé, taxes incluses.' },
   { icon: CalendarDays, t: 'Agenda qui pense pour toi', d: 'Jour, semaine, mois. Route optimisée, météo sur 16 jours, « reporter la journée » quand il pleut, conflits d’horaire signalés.' },
   { icon: Camera, t: 'Reçus lus tout seuls', d: 'Photo du reçu: montant, taxes, commerce et adresse lus automatiquement. Les km s’ajoutent au journal de bord.' },
-  { icon: CreditCard, t: 'Payé plus vite', d: 'Lien client: le client voit sa soumission, la signe du doigt et paie sa facture par carte. Relances en un glissement.' },
+  { icon: CreditCard, t: 'Payé plus vite', d: 'Le client voit sa soumission, la signe du doigt et paie sa facture par carte. Les relances sont préparées pour toi: tu n’as qu’à envoyer.' },
   { icon: Users, t: 'Ton équipe sur leur cell', d: 'Employés et vendeurs: leurs jobs, pointage GPS, photos avant/après. Feuilles de temps et commissions calculées.' },
   { icon: Inbox, t: 'Demandes qui deviennent des clients', d: 'Formulaire en ligne et code QR pour tes pubs. Chaque demande arrive dans ton CRM avec sa source et un rappel de suivi.' },
   { icon: TrendingUp, t: 'Tes chiffres, enfin clairs', d: 'Rentabilité par job, rapport TPS/TVQ, seuil des 30 000 $, dossier complet pour le comptable en un clic.' },
   { icon: Smartphone, t: 'Ordi, Android et iPhone', d: 'Tout est synchronisé en temps réel. Fonctionne même sans réseau dans un sous-sol, puis se met à jour tout seul.' },
 ];
 const FEATURES_EN = [
-  { icon: Zap, t: 'Invoice in 30 seconds', d: 'Type a code and a quantity, it’s calculated. Minimums, discounts, deposits and taxes included. Voice input on site.' },
+  { icon: Zap, t: 'Just say it', d: 'Say “invoice for Nathalie, 60 feet of gutters” and the assistant prepares everything. Or type a code and quantity: taxes included.' },
   { icon: CalendarDays, t: 'A schedule that thinks for you', d: 'Day, week, month. Optimized route, 16-day weather, “postpone the day” when it rains, scheduling conflicts flagged.' },
   { icon: Camera, t: 'Receipts read automatically', d: 'Snap a receipt: amount, taxes, store and address are read for you. Mileage goes straight into your logbook.' },
-  { icon: CreditCard, t: 'Get paid faster', d: 'Client link: your client views the quote, signs with a finger and pays the invoice by card. Reminders in one swipe.' },
+  { icon: CreditCard, t: 'Get paid faster', d: 'Your client views the quote, signs with a finger and pays by card. Follow-ups are drafted for you: just hit send.' },
   { icon: Users, t: 'Your crew on their phones', d: 'Employees and sales reps: their jobs, GPS time clock, before/after photos. Timesheets and commissions calculated.' },
   { icon: Inbox, t: 'Leads that become clients', d: 'Online form and QR code for your ads. Every request lands in your CRM with its source and a follow-up reminder.' },
   { icon: TrendingUp, t: 'Your numbers, finally clear', d: 'Profit per job, GST/QST report, small-supplier threshold, full accountant package in one click.' },
@@ -62,7 +62,7 @@ export default function Landing() {
       <section className="lp-hero">
         <div className="lp-hero-text">
           <div className="lp-pill"><Sparkles size={14} /> {en ? 'Built in Québec for contractors' : 'Conçu au Québec pour les entrepreneurs'}</div>
-          <h1>{en ? <>Your whole business.<br /><em>In your pocket.</em></> : <>Toute ta business.<br /><em>Dans ta poche.</em></>}</h1>
+          <h1>{en ? <>Quote. Invoice.<br /><em>Get paid.</em></> : <>Soumissionne. Facture.<br /><em>Encaisse.</em></>}</h1>
           <p>{en ? PRODUCT.taglineEn : PRODUCT.tagline}</p>
           <div className="lp-cta">
             <Link to="/demarrer" className="btn accent big">{en ? `Start ${PRODUCT.trialDays}-day free trial` : `Essai gratuit ${PRODUCT.trialDays} jours`} <ArrowRight size={18} /></Link>
@@ -89,6 +89,15 @@ export default function Landing() {
         <div><b>0</b><span>{en ? 'receipts to type' : 'reçu à taper à la main'}</span></div>
         <div><b>100 %</b><span>{en ? 'of km tracked' : 'des km comptés'}</span></div>
         <div><b>3</b><span>{en ? 'devices, always in sync' : 'appareils, toujours à jour'}</span></div>
+      </section>
+
+      <section className="lp-steps">
+        {(en
+          ? [['1', 'Quote', 'On site, in 30 seconds, from your phone'], ['2', 'Schedule', 'The job lands in your calendar by itself'], ['3', 'Get paid', 'Invoice, card payment and follow-ups handled']]
+          : [['1', 'Soumissionne', 'Sur place, en 30 secondes, depuis ton cell'], ['2', 'Planifie', 'La job apparaît toute seule dans ton agenda'], ['3', 'Encaisse', 'Facture, paiement par carte et relances réglés']]
+        ).map(([n, t, d]) => (
+          <div key={n}><span>{n}</span><h3>{t}</h3><p>{d}</p></div>
+        ))}
       </section>
 
       <section className="lp-features" id="fonctions">
