@@ -47,7 +47,7 @@ export default function Estimator() {
   const [rate, setRate] = useState(() => { try { return Number(localStorage.getItem(RATE_KEY)) || 65; } catch { return 65; } });
   const [margin, setMargin] = useState(() => { try { const v = localStorage.getItem(MARGIN_KEY); return v === null ? 15 : Number(v) || 0; } catch { return 15; } });
 
-  const aiOn = aiConfigured(s.aiAssistant);
+  const aiOn = aiConfigured(true);
 
   const addPhotos = async (files: FileList | null) => {
     if (!files?.length) return;
