@@ -186,7 +186,7 @@ export default function Estimator() {
         {step > 0 && <button className="btn" onClick={() => { setStep(0); setRes(null); }}>Nouveau projet</button>}
       </div>
 
-      {!aiOn && <div className="notice">L’assistant IA n’est pas activé: va dans Paramètres → Assistant IA pour l’activer.</div>}
+      {!aiOn && <div className="notice">La synchronisation n’est pas configurée: connecte-toi dans Paramètres → Synchronisation pour utiliser l’analyse photo.</div>}
 
       {step === 0 && (
         <div className="card">
