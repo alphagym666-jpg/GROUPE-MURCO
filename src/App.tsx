@@ -103,7 +103,7 @@ const EXTRA: NavItem[] = [{ to: '/temps', label: 'Feuilles de temps', short: 'He
 
 const MENU_GROUPS: { title: string; items: string[] }[] = [
   { title: 'Ventes', items: ['/demandes', '/soumissions', '/factures', '/clients', '/projets'] },
-  { title: 'Terrain', items: ['/agenda', '/pointage', '/metier', '/achats', '/equipe', '/temps'] },
+  { title: 'Terrain', items: ['/agenda', '/pointage', '/estimateur', '/metier', '/achats', '/equipe', '/temps'] },
   { title: 'Argent et papiers', items: ['/depenses', '/km', '/classeur', '/rapports', '/comptable'] },
   { title: 'Outils', items: ['/', '/codes', '/gmail', '/abonnement', '/parametres'] },
 ];
