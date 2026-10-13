@@ -15,6 +15,7 @@ import { useSettings } from '../lib/hooks';
 import { isNative } from '../lib/native';
 import { connectGmail, isGmailConnected } from '../lib/gmail';
 import { downloadBlob, todayISO } from '../lib/utils';
+import { UpdateCard } from '../components/UpdateCard';
 
 async function logoToPng(file: File): Promise<string> {
   const bmp = await createImageBitmap(file);
@@ -215,6 +216,7 @@ export default function SettingsPage() {
       <MapsSection s={s} up={up} />
 
       <SyncSection />
+      <UpdateCard />
 
       <div className="card">
         <h2>Paiement par carte de crédit (Stripe)</h2>
