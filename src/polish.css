@@ -222,8 +222,14 @@ select { cursor: pointer; }
 .cal .day.today { background: linear-gradient(160deg, color-mix(in srgb, var(--amber) 16%, var(--surface)), var(--surface)); }
 .jb { border-radius: 14px; }
 
-/* Barre du bas du cellulaire: flottante */
-.bottomnav { margin: 0 10px calc(10px + var(--sab)); border-radius: 26px; box-shadow: 0 20px 40px -18px rgba(20, 21, 23, 0.6); }
+/* Barre du bas du cellulaire: collée en bas, coins du haut arrondis, trait ambre sous l'onglet actif */
+@media (max-width: 860px) {
+  .bottomnav { margin: 0; border-radius: 22px 22px 0 0; border-top: 0; background: linear-gradient(180deg, #2c3139 0%, #1b1e23 100%); box-shadow: 0 -12px 32px -14px rgba(20, 21, 23, 0.5); }
+  .bottomnav a, .bottomnav button { position: relative; padding: 11px 2px 9px; font-size: 0.7rem; letter-spacing: 0.01em; }
+  .bottomnav a.active::before, .bottomnav button.active::before { content: ''; position: absolute; top: 0; left: 50%; width: 26px; height: 3px; border-radius: 0 0 4px 4px; background: var(--amber); transform: translateX(-50%); box-shadow: 0 4px 12px rgba(240, 165, 58, 0.6); }
+  .bottomnav .tab-create { padding: 0 0 10px; }
+  .tab-create span { border: 0; border-radius: 20px; background: linear-gradient(150deg, color-mix(in srgb, var(--amber) 100%, #fff 14%), color-mix(in srgb, var(--amber) 90%, #7a3b00)); box-shadow: 0 10px 22px -8px rgba(240, 165, 58, 0.75), 0 0 0 5px #1b1e23; }
+}
 
 /* =====================================================================
  * V3 — plus de relief: tuiles sombres en dégradé, halos dans les cartes,
@@ -324,8 +330,10 @@ select { cursor: pointer; }
   .cal { gap: 4px; }
   .cal .day { min-height: 74px; padding: 6px; border-radius: 12px; }
   .cal .chip { border-radius: 8px; }
-  .agh-stats > div, .agh-stats > a > div, .agh-stat-btn { padding: 0 12px; }
-  .agh-stats b { font-size: 1.1rem; }
+  .agh-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 10px; flex: 1 1 100%; }
+  .agh-stats a { display: block; }
+  .agh-stats > div, .agh-stats > a > div, .agh-stat-btn { padding: 0; border-left: 0; min-width: 0; }
+  .agh-stats b { font-size: 1.2rem; white-space: nowrap; }
   .agh-row { gap: 14px; }
   .home-actions button { padding: 16px 12px; }
 }
