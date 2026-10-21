@@ -319,6 +319,32 @@ select { cursor: pointer; }
 .dash-masonry > .notice, .dash-masonry > .onboard { break-inside: avoid; }
 @media (max-width: 860px) { .dash-masonry { column-count: 1; } }
 
+/* Aucune colonne ne force une largeur plus grande que l'écran (le cell ne défile plus de gauche à droite) */
+.grid.two { grid-template-columns: repeat(auto-fit, minmax(min(330px, 100%), 1fr)); }
+.grid.three { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
+.grid.kpi { grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); }
+.form-grid { grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
+.main, .page-anim { min-width: 0; }
+@media (max-width: 860px) {
+  html, body { max-width: 100%; overflow-x: clip; }
+  .main { overflow-x: clip; }
+  .card, .modal { max-width: 100%; }
+  .chips, .ag-filters, .ag-legend { flex-wrap: wrap; }
+  img, video, canvas, svg { max-width: 100%; }
+}
+
+/* Petit cellulaire: lignes de facture empilées (code + supprimer, description pleine largeur, quantité/prix, unité/montant) */
+@media (max-width: 520px) {
+  .card { padding: 16px; }
+  .modal { padding: 20px; border-radius: 22px; }
+  .items-table tr {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+    grid-template-areas: "code code del" "desc desc desc" "qty price price" "unit amt amt";
+  }
+  .items-table .code-input { width: 100%; }
+  label.field { padding: 8px 12px 5px; }
+}
+
 /* ---------- Téléphone ---------- */
 @media (max-width: 860px) {
   .main { padding: 18px 14px 110px; }

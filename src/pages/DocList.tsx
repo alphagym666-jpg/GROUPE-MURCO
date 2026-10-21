@@ -5,6 +5,7 @@ import { PageHero, Ring } from '../components/PageHero';
 import { celebrate } from '../lib/feel';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PreviewButton } from '../components/DocPreview';
 import { RelanceModal } from '../components/RelanceModal';
 import { SwipeRow } from '../components/SwipeRow';
 import { useToast } from '../components/Toast';
@@ -147,6 +148,7 @@ export default function DocList({ type }: { type: DocType }) {
                       <span className="row" style={{ gap: 6, marginTop: 3 }}>
                         <span className={statusClass(d)}>{statusLabel(d)}</span>
                         {late && <span className="badge red">En retard</span>}
+                        <PreviewButton doc={d} client={c} />
                       </span>
                     </span>
                     <span className="doc-amt">
@@ -171,6 +173,7 @@ export default function DocList({ type }: { type: DocType }) {
                   <th className="hide-mobile">Date</th>
                   <th>Statut</th>
                   <th className="num">Total</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -189,12 +192,13 @@ export default function DocList({ type }: { type: DocType }) {
                         {money(tt.total)}
                         {isInvoice && tt.paid > 0 && tt.balance > 0 && <div className="small muted">solde {money(tt.balance)}</div>}
                       </td>
+                      <td style={{ width: 1 }}><PreviewButton doc={d} client={data.clients.get(d.clientId)} /></td>
                     </tr>
                   );
                 })}
               </tbody>
               <tfoot>
-                <tr><td colSpan={3} className="hide-mobile"></td><td><strong>Total</strong></td><td className="num"><strong>{money(total)}</strong></td></tr>
+                <tr><td colSpan={3} className="hide-mobile"></td><td><strong>Total</strong></td><td className="num"><strong>{money(total)}</strong></td><td></td></tr>
               </tfoot>
             </table>
           </div>

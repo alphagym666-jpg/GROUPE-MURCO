@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ClientFormModal } from '../components/ClientForm';
+import { PreviewButton } from '../components/DocPreview';
 import { SendEmailModal } from '../components/SendEmailModal';
 import { errMsg, useConfirm, useToast } from '../components/Toast';
 import { db } from '../lib/db';
@@ -148,6 +149,7 @@ export default function ClientDetail() {
                   <td className="hide-mobile">{d.date}</td>
                   <td><span className={statusClass(d)}>{statusLabel(d)}</span></td>
                   <td className="num">{money(docTotals(d, s).total)}</td>
+                  <td style={{ width: 1 }}><PreviewButton doc={d} client={data.client} /></td>
                 </tr>
               ))}
             </tbody>
