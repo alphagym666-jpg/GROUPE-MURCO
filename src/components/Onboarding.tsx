@@ -3,6 +3,7 @@ import { ChevronRight, CircleCheck, Circle, Rocket, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { db, saveSettings, type Settings } from '../lib/db';
+import { clearDemo, countDemo, loadDemo } from '../lib/demo';
 import { useSyncState } from '../lib/sync';
 
 interface Step {
@@ -22,6 +23,8 @@ export function Onboarding({ s }: { s: Settings }) {
   const counts = useLiveQuery(async () => ({
     sent: await db.docs.filter((d) => d.status !== 'draft').count(),
     members: await db.members.count(),
+    clients: await db.clients.count(),
+    demo: await countDemo(),
   }), []);
   if (!counts || s.setupHidden) return null;
   const manual = s.setupDone ?? [];
@@ -56,6 +59,15 @@ export function Onboarding({ s }: { s: Settings }) {
         <button className="btn small icon-btn" aria-label="Masquer la liste Démarrage" title="Masquer" onClick={() => void saveSettings({ setupHidden: true })}><X size={16} /></button>
       </div>
       <div className="onboard-bar"><span style={{ width: `${pct}%` }} /></div>
+      {counts.demo > 0 ? (
+        <div className="notice info small">
+          Un exemple (client, soumission et job d’aujourd’hui) est chargé pour que tu essaies l’app. <button type="button" className="btn small" onClick={() => void clearDemo()}>Retirer l’exemple</button>
+        </div>
+      ) : counts.clients === 0 && (
+        <div className="notice small">
+          Pas encore de client? <button type="button" className="btn small accent" onClick={() => void loadDemo()}>Essayer avec un exemple</button> en 1 clic, sans rien perdre.
+        </div>
+      )}
       <div className="onboard-list">
         {steps.filter((x) => showDone || !x.done).map((x) => (
           <Link key={x.key} to={x.to} className={`onboard-step ${x.done ? 'done' : ''} ${x === next ? 'next' : ''}`}>
