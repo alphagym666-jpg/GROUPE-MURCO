@@ -5,6 +5,7 @@ import App from './App';
 import '@fontsource-variable/archivo/wdth.css';
 import '@fontsource-variable/figtree';
 import './styles.css';
+import './polish.css';
 import { applyStoredAccent } from './lib/accent';
 import { applyTheme } from './lib/theme';
 import { isNative } from './lib/native';

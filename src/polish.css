@@ -1,0 +1,134 @@
+/*
+ * Couche de finition « propre et aérée »: mêmes couleurs (graphite + ambre), formes plus douces,
+ * cartes qui respirent, chiffres mis en avant, calendrier net. Chargée après styles.css.
+ */
+:root {
+  --radius: 18px;
+  --radius-sm: 12px;
+  --shadow: 0 1px 2px rgba(29, 31, 34, 0.04), 0 8px 24px -8px rgba(29, 31, 34, 0.10);
+  --shadow-hover: 0 2px 4px rgba(29, 31, 34, 0.05), 0 14px 32px -10px rgba(29, 31, 34, 0.16);
+  --line: color-mix(in srgb, var(--ink) 8%, transparent);
+  --tile: color-mix(in srgb, var(--amber) 14%, var(--surface));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px -10px rgba(0, 0, 0, 0.55);
+    --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.4), 0 16px 34px -12px rgba(0, 0, 0, 0.6);
+    --line: rgba(255, 255, 255, 0.07);
+    --tile: color-mix(in srgb, var(--amber) 16%, var(--surface));
+  }
+}
+:root[data-theme='dark'] {
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px -10px rgba(0, 0, 0, 0.55);
+  --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.4), 0 16px 34px -12px rgba(0, 0, 0, 0.6);
+  --line: rgba(255, 255, 255, 0.07);
+  --tile: color-mix(in srgb, var(--amber) 16%, var(--surface));
+}
+
+/* ---------- Page ---------- */
+.main { padding: 30px 36px 110px; max-width: 1320px; }
+.page-head { margin-bottom: 24px; }
+h1 { font-weight: 800; letter-spacing: -0.02em; }
+.page-head .eyebrow { letter-spacing: 0.1em; font-size: 0.7rem; }
+
+/* ---------- Cartes ---------- */
+.card { border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; margin-bottom: 18px; box-shadow: var(--shadow); transition: box-shadow 0.18s ease, transform 0.18s ease; }
+.card.flat { box-shadow: none; }
+.card-head { gap: 12px; margin-bottom: 16px; }
+.card-head h2 { font-size: 1.02rem; font-weight: 750; letter-spacing: -0.01em; }
+.card-head > svg:first-child { box-sizing: content-box; padding: 8px; width: 18px; height: 18px; border-radius: 12px; background: var(--tile); color: var(--amber-ink); }
+.grid { gap: 18px; }
+.grid .card { margin-bottom: 0; }
+.grid.kpi { margin-bottom: 18px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+
+/* Chiffres clés */
+.kpi .card { padding: 20px 22px; position: relative; overflow: hidden; }
+.kpi .card:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+.kpi .label { font-size: 0.7rem; letter-spacing: 0.09em; }
+.kpi .value { font-size: 1.85rem; font-weight: 800; letter-spacing: -0.02em; margin-top: 8px; line-height: 1.1; }
+.kpi .sub { margin-top: 6px; font-size: 0.8rem; }
+.kpi .card.hot { box-shadow: var(--shadow); background: linear-gradient(160deg, color-mix(in srgb, var(--amber) 16%, var(--surface)) 0%, var(--surface) 62%); }
+.kpi .card.hot::before { content: ''; position: absolute; left: 0; top: 18px; bottom: 18px; width: 4px; border-radius: 0 4px 4px 0; background: var(--amber); }
+
+/* ---------- Boutons, champs, pastilles ---------- */
+.btn { border-radius: var(--radius-sm); border-color: var(--line-strong); min-height: 42px; padding: 9px 16px; }
+.btn.small { min-height: 34px; padding: 5px 13px; border-radius: 10px; }
+.btn.accent { box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--amber) 90%, #000); }
+.agh-btn { border-radius: 11px; height: 38px; border-color: var(--line-strong); }
+input, select, textarea { border-radius: var(--radius-sm); padding: 10px 13px; }
+.badge { padding: 4px 11px; font-size: 0.72rem; letter-spacing: 0.01em; }
+.tabs button { padding: 8px 16px; }
+.seg { border-radius: 14px; padding: 4px; }
+.seg button { border-radius: 10px; }
+.notice { border-radius: 14px; padding: 12px 16px; }
+.modal { border-radius: 22px; padding: 26px; }
+
+/* ---------- Listes: lignes en tuiles aérées ---------- */
+table.list { border-collapse: separate; border-spacing: 0 6px; margin-top: -6px; }
+table.list th { border-bottom: 0; padding: 4px 12px; }
+table.list td { border-bottom: 0; padding: 13px 12px; background: var(--surface-2); }
+table.list td:first-child { border-radius: 12px 0 0 12px; }
+table.list td:last-child { border-radius: 0 12px 12px 0; }
+table.list tr.click { cursor: pointer; }
+table.list tr.click:hover td, table.list tr:hover td { background: color-mix(in srgb, var(--amber) 9%, var(--surface-2)); }
+
+/* ---------- Accueil ---------- */
+.home-actions { gap: 14px; margin-bottom: 22px; }
+.home-actions button { border-radius: 18px; border: 1px solid var(--line); box-shadow: var(--shadow); padding: 20px 16px; transition: box-shadow 0.18s ease, transform 0.18s ease; }
+.home-actions button:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
+.home-actions button svg { padding: 10px; box-sizing: content-box; width: 26px; height: 26px; border-radius: 14px; background: var(--tile); color: var(--amber-ink); }
+.home-actions .ha-main svg { background: rgba(255, 255, 255, 0.28); color: inherit; }
+.agh-stats > div, .agh-stats > a > div, .agh-stat-btn { padding: 0 28px; }
+.agh-stats b { font-size: 1.7rem; font-weight: 800; }
+.agh-row { margin-top: 22px; padding-top: 22px; }
+.job-card { border-radius: 16px; padding: 14px 16px; border-color: var(--line); background: var(--surface-2); }
+.job-card .stop { width: 34px; height: 34px; }
+.fu-row { padding: 12px 14px; border-radius: 14px; background: var(--surface-2); margin-bottom: 8px; border: 0; }
+.bars .bar { border-radius: 8px 8px 3px 3px; }
+.hbar .track { height: 12px; }
+
+/* ---------- Agenda: calendrier net ---------- */
+.cal { gap: 8px; background: transparent; border: 0; border-radius: 0; overflow: visible; }
+.cal .dow { background: transparent; text-align: center; padding: 4px 0 8px; letter-spacing: 0.1em; }
+.cal .day { border-radius: 16px; border: 1px solid var(--line); min-height: 108px; padding: 9px; gap: 4px; background: var(--surface); transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease; }
+.cal .day:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); border-color: color-mix(in srgb, var(--amber) 45%, transparent); }
+.cal .day.out { background: transparent; border-style: dashed; opacity: 0.55; }
+.cal .day.today { background: color-mix(in srgb, var(--amber) 9%, var(--surface)); border-color: color-mix(in srgb, var(--amber) 55%, transparent); }
+.cal .day.sel { box-shadow: 0 0 0 2px var(--amber); }
+.cal .dnum { width: 28px; height: 28px; font-size: 0.88rem; }
+.cal .chip { border-radius: 999px; padding: 3px 9px; font-size: 0.72rem; }
+.cal .more { padding-left: 4px; font-weight: 600; }
+.jb { border: 0; border-left: 4px solid var(--c); border-radius: 12px; background: color-mix(in srgb, var(--c) 12%, var(--surface)); padding: 7px 10px; box-shadow: 0 1px 2px rgba(29, 31, 34, 0.06); }
+.jb:hover { background: color-mix(in srgb, var(--c) 18%, var(--surface)); box-shadow: var(--shadow-hover); }
+.jb .jb-name { font-weight: 700; }
+.tg-day { font-weight: 700; }
+.ag-grid-card { padding: 14px; }
+.ag-legend { gap: 14px; }
+.ag-hero { padding: 24px 26px; }
+.ag-toolbar { gap: 10px; }
+.ag-views button { padding: 7px 16px; }
+
+/* ---------- Menu de gauche ---------- */
+.sidebar { padding: 22px 12px; width: 252px; }
+.nav a { border-radius: 12px; padding: 9px 12px; font-size: 0.9rem; white-space: nowrap; }
+.nav a.active { background: color-mix(in srgb, var(--amber) 16%, transparent); }
+.nav a.active::before { display: none; }
+.nav a.active .ico { color: var(--amber); }
+.side-btn { border-radius: 12px; }
+
+/* ---------- Téléphone ---------- */
+@media (max-width: 860px) {
+  .main { padding: 18px 14px 110px; }
+  .card { padding: 18px; border-radius: 18px; }
+  .grid { gap: 12px; }
+  .grid.kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi .card { padding: 16px; }
+  .kpi .value { font-size: 1.45rem; }
+  .cal { gap: 4px; }
+  .cal .day { min-height: 74px; padding: 6px; border-radius: 12px; }
+  .cal .chip { border-radius: 8px; }
+  .agh-stats > div, .agh-stats > a > div, .agh-stat-btn { padding: 0 12px; }
+  .agh-stats b { font-size: 1.1rem; }
+  .agh-row { gap: 14px; }
+  .home-actions button { padding: 16px 12px; }
+}
