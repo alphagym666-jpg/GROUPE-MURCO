@@ -27,6 +27,17 @@ android {
             keyPassword 'murco-android'
         }
     }
+    // Clé de publication (Google Play): fournie par les secrets GitHub, jamais gardée dans le dépôt.
+    if (System.getenv('RELEASE_KEYSTORE')) {
+        signingConfigs {
+            release {
+                storeFile file(System.getenv('RELEASE_KEYSTORE'))
+                storePassword System.getenv('RELEASE_STORE_PASSWORD')
+                keyAlias System.getenv('RELEASE_KEY_ALIAS')
+                keyPassword System.getenv('RELEASE_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         debug {
             signingConfig signingConfigs.sideload
@@ -34,6 +45,9 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (System.getenv('RELEASE_KEYSTORE')) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
