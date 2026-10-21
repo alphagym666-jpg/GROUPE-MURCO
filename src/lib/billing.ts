@@ -40,6 +40,10 @@ function foundersBefore(): string {
   }
 }
 
+// Le proprietaire de l'app n'a jamais d'essai: toujours "fondateur" (acces complet gratuit).
+const OWNER_EMAILS = ['info@groupemurco.com', 'myriam.austin07@gmail.com'];
+const isOwnerAccount = () => OWNER_EMAILS.includes((currentAccount()?.email ?? '').toLowerCase());
+
 export function useBilling(): BillingInfo {
   const st = useSyncState();
   const s = useSettings();
@@ -53,7 +57,7 @@ export function useBilling(): BillingInfo {
   } catch {
     /* ignore */
   }
-  return billingState({ signedIn, accountCreatedAt: created, record: r, foundersBefore: foundersBefore(), trialDays });
+  return billingState({ signedIn, accountCreatedAt: created, record: r, foundersBefore: isOwnerAccount() ? '2999-01-01T00:00:00Z' : foundersBefore(), trialDays });
 }
 
 /** Adresse des fonctions (intégrée à la compilation pour la version vendue, sinon celle des paramètres). */
