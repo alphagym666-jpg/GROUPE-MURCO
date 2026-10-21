@@ -109,7 +109,7 @@ export default function Accountant() {
           </div>
           <p className="small muted">
             Le dossier ZIP contient: <strong>Sommaire comptable (PDF)</strong>, toutes les <strong>factures en PDF</strong>, les <strong>reçus classés par catégorie</strong>,
-            le <strong>journal de bord</strong> (PDF + Excel) et les fichiers <strong>Factures.csv / Depenses.csv</strong> qui s’ouvrent dans Excel ou s’importent dans le logiciel du comptable.
+            le <strong>journal de bord</strong> (PDF + Excel) et les fichiers <strong>Factures.csv / Depenses.csv</strong> qui s’ouvrent dans Excel, et un dossier <strong>Import comptable</strong> (factures, paiements et dépenses prêts à importer dans QuickBooks, Sage ou Acomba).
           </p>
         </div>
       )}

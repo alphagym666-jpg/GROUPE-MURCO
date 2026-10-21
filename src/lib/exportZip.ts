@@ -72,6 +72,23 @@ export async function buildAccountantZip(o: ExportOptions): Promise<{ blob: Blob
   }
   root.file('Depenses.csv', toCSV(expRows));
 
+  // Fichiers d'importation comptable (QuickBooks, Sage, Acomba, Excel): une ligne par ligne de facture, paiements et dépenses séparés.
+  const fImp = root.folder('06_Import_comptable')!;
+  const impInv: unknown[][] = [['InvoiceNo', 'Customer', 'InvoiceDate', 'DueDate', 'Memo', 'Item(Product/Service)', 'ItemDescription', 'ItemQuantity', 'ItemRate', 'ItemAmount', 'TaxCode']];
+  const impPay: unknown[][] = [['Date', 'InvoiceNo', 'Customer', 'Amount', 'PaymentMethod', 'Reference']];
+  for (const d of invoices.filter((x) => x.status !== 'draft' && x.status !== 'cancelled')) {
+    const c = clients.get(d.clientId);
+    const code = d.applyTps && d.applyTvq ? 'GST/QST' : d.applyTps ? 'GST' : d.applyTvq ? 'QST' : 'Exempt';
+    for (const it of d.items) {
+      impInv.push([d.number, c?.name ?? '', d.date, d.dueDate, d.title, it.code || it.description, it.description, it.quantity, it.unitPrice, Math.round(it.quantity * it.unitPrice * 100) / 100, code]);
+    }
+    for (const p of d.payments ?? []) impPay.push([p.date, d.number, c?.name ?? '', p.amount, p.method, p.ref ?? '']);
+  }
+  fImp.file('Factures_a_importer.csv', toCSV(impInv));
+  fImp.file('Paiements_recus.csv', toCSV(impPay));
+  fImp.file('Depenses_a_importer.csv', toCSV([['Date', 'Vendor', 'Category', 'Amount', 'GST', 'QST', 'Total', 'PaymentMethod'], ...expenses.map((e) => [e.date, e.vendor, e.category, e.subtotal, e.tps, e.tvq, e.total, e.paymentMethod])]));
+  fImp.file('LISEZ-MOI.txt', 'Fichiers prêts pour l’importation dans un logiciel comptable (QuickBooks en ligne, Sage, Acomba) ou Excel.\r\nLes colonnes suivent le gabarit d’importation de factures de QuickBooks en ligne; les autres logiciels permettent de faire correspondre les colonnes à l’importation.\r\nFais valider le format par ton comptable avant la première importation.\r\n');
+
   // Journal de bord
   const fKm = root.folder('04_Journal_de_bord')!;
   fKm.file('Journal_de_bord.pdf', buildLogbookPdf(trips, s, period));
