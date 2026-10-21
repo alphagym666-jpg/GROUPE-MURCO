@@ -303,6 +303,16 @@ select { cursor: pointer; }
 .page-anim > :nth-child(n + 6) { animation-delay: 0.2s; }
 @media (prefers-reduced-motion: reduce) { .page-anim > *, .page-anim .grid > * { animation: none; } }
 
+/* Accueil: cartes en colonnes à hauteurs variées (comme un vrai tableau de bord) */
+.dash-masonry { column-count: 2; column-gap: 18px; }
+@media (min-width: 1680px) { .dash-masonry { column-count: 3; } }
+.dash-masonry > .grid { display: contents; }
+.dash-masonry > .grid.kpi { display: grid; column-span: all; margin-bottom: 18px; }
+.dash-masonry .card { break-inside: avoid; margin: 0 0 18px; }
+.dash-masonry .kpi .card { margin: 0; }
+.dash-masonry > .notice, .dash-masonry > .onboard { break-inside: avoid; }
+@media (max-width: 860px) { .dash-masonry { column-count: 1; } }
+
 /* ---------- Téléphone ---------- */
 @media (max-width: 860px) {
   .main { padding: 18px 14px 110px; }
